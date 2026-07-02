@@ -623,20 +623,34 @@
             font-family: 'Inter', sans-serif;
             font-size: 11px;
             background: rgba(255,255,255,0.01);
+            table-layout: auto; /* Dynamic sizing based on text length */
         }
         .excel-table th, .excel-table td {
-            border: 1px solid var(--border);
+            border: 1px solid rgba(255, 255, 255, 0.3);
             padding: 3px 6px;
             text-align: left;
             transition: background 0.15s ease; /* Fast response for active hover highlights */
         }
         .excel-table th {
-            background: rgba(255,255,255,0.03);
+            background: #0f172a; /* Dark solid slate background so scrolled cells don't bleed underneath */
             color: var(--text-dim);
             font-weight: 600;
             font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            z-index: 10;
+        }
+        /* Sticky frozen header row style */
+        .excel-table.headers-frozen thead th {
+            position: sticky;
+            top: -20px; /* Offset the parent padding value of 20px on the scrollable container */
+            box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3); /* Maintain border borders under sticky overlay */
+            background: #080c14 !important; /* Matches main theme background */
+            z-index: 100;
+        }
+        /* Prevent dimension value wrapping in Pivot Table */
+        .pivot-dim-cell {
+            white-space: nowrap !important;
         }
         /* Alternating zebra stripes for table rows (only active if .zebra-enabled class exists on table) */
         .excel-table.zebra-enabled tbody tr.row-even {
@@ -2016,11 +2030,28 @@ let hideDoneFilter = localStorage.getItem('idealog_hide_done_filter') || 'none';
 let showTimestamps = localStorage.getItem('idealog_show_timestamps') === 'true'; // false by default
 let highlightDurationDays = parseFloat(localStorage.getItem('idealog_highlight_duration_days') || '1.0'); // default to 1 day highlight fade course
 let pivotZebraStripes = localStorage.getItem('idealog_pivot_zebra_stripes') !== 'false'; // default to true
+let freezeHeaders = localStorage.getItem('idealog_freeze_headers') !== 'false'; // default to true frozen header row
+
+// Global pivot table sort mode option
+// Value can be: 'alpha_asc', 'alpha_desc', 'created_desc' (newest first), 'created_asc' (newest last), 'modified_desc' (modified latest first), 'modified_asc' (modified latest last)
+let globalPivotSort = localStorage.getItem('idealog_global_pivot_sort') || 'alpha_asc';
+
+function setGlobalPivotSort(val) {
+    globalPivotSort = val;
+    localStorage.setItem('idealog_global_pivot_sort', val);
+    renderPivotTable();
+}
 
 function setPivotZebraStripes(val) {
     pivotZebraStripes = val;
     localStorage.setItem('idealog_pivot_zebra_stripes', val);
     renderPivotTable();
+}
+
+function setFreezeHeaders(val) {
+    freezeHeaders = val;
+    localStorage.setItem('idealog_freeze_headers', val);
+    renderSheet();
 }
 
 function setHighlightDurationDays(val) {
@@ -2304,6 +2335,11 @@ function renderTaskSheet() {
                 <input type="number" min="0" step="0.1" value="${highlightDurationDays}" onchange="setHighlightDurationDays(this.value)" style="width: 50px; background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; text-align: center;">
             </div>
 
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 32px;">
+                <input type="checkbox" ${freezeHeaders ? 'checked' : ''} onchange="setFreezeHeaders(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
+                Freeze Headers
+            </label>
+
             <div style="flex: 1; min-width: 200px; display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; height: 32px;">
                 <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Google Sheet URL:</span>
                 <input id="gspread-url-input" type="text" placeholder="Paste Web App URL..." value="${savedUrl}" onchange="saveGSpreadUrl(this.value)" style="flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-size: 11px;">
@@ -2427,7 +2463,7 @@ function renderTaskSheet() {
 
     area.innerHTML = `
         ${toolbarHtml}
-        <table class="excel-table">
+        <table class="excel-table ${freezeHeaders ? 'headers-frozen' : ''}">
             <thead>
                 <tr>
                     <th>Project</th>
@@ -3764,12 +3800,27 @@ function renderPivotTable() {
                     </select>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
+                    <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Sort Order:</span>
+                    <select onchange="setGlobalPivotSort(this.value)" style="background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; cursor: pointer;">
+                        <option value="alpha_asc" ${globalPivotSort === 'alpha_asc' ? 'selected' : ''} style="background:#080c14;color:#fff;">Alphabetical Ascending</option>
+                        <option value="alpha_desc" ${globalPivotSort === 'alpha_desc' ? 'selected' : ''} style="background:#080c14;color:#fff;">Alphabetical Descending</option>
+                        <option value="created_desc" ${globalPivotSort === 'created_desc' ? 'selected' : ''} style="background:#080c14;color:#fff;">Newest First</option>
+                        <option value="created_asc" ${globalPivotSort === 'created_asc' ? 'selected' : ''} style="background:#080c14;color:#fff;">Newest Last</option>
+                        <option value="modified_desc" ${globalPivotSort === 'modified_desc' ? 'selected' : ''} style="background:#080c14;color:#fff;">Modified Latest First</option>
+                        <option value="modified_asc" ${globalPivotSort === 'modified_asc' ? 'selected' : ''} style="background:#080c14;color:#fff;">Modified Latest Last</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
                     <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Highlight (Days):</span>
                     <input type="number" min="0" step="0.1" value="${highlightDurationDays}" onchange="setHighlightDurationDays(this.value)" style="width: 50px; background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; text-align: center;">
                 </div>
                 <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
                     <input type="checkbox" ${pivotZebraStripes ? 'checked' : ''} onchange="setPivotZebraStripes(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
                     Zebra Stripes
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
+                    <input type="checkbox" ${freezeHeaders ? 'checked' : ''} onchange="setFreezeHeaders(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
+                    Freeze Headers
                 </label>
             </div>
         </div>
@@ -3783,8 +3834,38 @@ function renderPivotTable() {
     // Cascading data construction based on dynamic activePivotHierarchy sequence
     const buildHierarchyMap = (tasksList, levelIndex) => {
         if (levelIndex >= activePivotHierarchy.length) {
-            return tasksList;
+            // Sort tasks array at the leaf node level using globalPivotSort
+            const sortedTasks = [...tasksList];
+            sortedTasks.sort((a, b) => {
+                let valA = a.title || '';
+                let valB = b.title || '';
+                
+                if (globalPivotSort === 'created_desc') {
+                    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return timeB - timeA;
+                } else if (globalPivotSort === 'created_asc') {
+                    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return timeA - timeB;
+                } else if (globalPivotSort === 'modified_desc') {
+                    const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+                    const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+                    return timeB - timeA;
+                } else if (globalPivotSort === 'modified_asc') {
+                    const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+                    const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+                    return timeA - timeB;
+                } else if (globalPivotSort === 'alpha_desc') {
+                    return valB.localeCompare(valA);
+                } else {
+                    // Default alphabetical ascending
+                    return valA.localeCompare(valB);
+                }
+            });
+            return sortedTasks;
         }
+
         const dim = activePivotHierarchy[levelIndex];
         const group = {};
         tasksList.forEach(t => {
@@ -3796,10 +3877,78 @@ function renderPivotTable() {
             group[key].push(t);
         });
 
-        // Recursively group nested layers
-        const result = {};
-        Object.entries(group).forEach(([key, items]) => {
-            result[key] = buildHierarchyMap(items, levelIndex + 1);
+        // Recursively group and sort nested layers
+        const result = new Map();
+        const entries = Object.entries(group);
+        
+        // Sort the dimension bucket keys at this level using globalPivotSort
+        entries.sort((a, b) => {
+            const keyA = a[0];
+            const keyB = b[0];
+            
+            // Check chronological dates matching dimension
+            const isDateCol = dim === 'created_on' || dim === 'modified_on';
+            if (isDateCol) {
+                const timeA = keyA && keyA !== 'Unassigned' ? new Date(keyA).getTime() : 0;
+                const timeB = keyB && keyB !== 'Unassigned' ? new Date(keyB).getTime() : 0;
+                if (globalPivotSort === 'created_desc' || globalPivotSort === 'modified_desc' || globalPivotSort === 'alpha_desc') {
+                    return timeB - timeA;
+                } else {
+                    return timeA - timeB;
+                }
+            }
+            
+            // For chronological global sorts on categorical dimensions (like project, assignee, etc.),
+            // sort the groups based on the time properties of the tasks contained within them.
+            if (globalPivotSort === 'created_desc' || globalPivotSort === 'created_asc' || 
+                globalPivotSort === 'modified_desc' || globalPivotSort === 'modified_asc') {
+                
+                const getEpoch = (t, type) => {
+                    const dateStr = (type === 'created') ? t.createdAt : t.updatedAt;
+                    return dateStr ? new Date(dateStr).getTime() : 0;
+                };
+                
+                const type = globalPivotSort.startsWith('created') ? 'created' : 'modified';
+                
+                // Get the extreme timestamp of tasks inside each bucket (representing the group's time)
+                const itemsA = a[1];
+                const itemsB = b[1];
+                
+                // Helper to flatten D3 tree levels or sorted tasks array to resolve leaf tasks
+                const getTasksFromNode = (n) => {
+                    if (Array.isArray(n)) return n;
+                    if (n instanceof Map) {
+                        let flat = [];
+                        n.forEach(val => flat = flat.concat(getTasksFromNode(val)));
+                        return flat;
+                    }
+                    return [];
+                };
+                
+                const tasksA = getTasksFromNode(itemsA);
+                const tasksB = getTasksFromNode(itemsB);
+                
+                const timesA = tasksA.map(t => getEpoch(t, type));
+                const timesB = tasksB.map(t => getEpoch(t, type));
+                
+                // Use max timestamp (most recent task) or min timestamp depending on order
+                const isDesc = globalPivotSort.endsWith('desc');
+                const valA = timesA.length > 0 ? (isDesc ? Math.max(...timesA) : Math.min(...timesA)) : 0;
+                const valB = timesB.length > 0 ? (isDesc ? Math.max(...timesB) : Math.min(...timesB)) : 0;
+                
+                return isDesc ? valB - valA : valA - valB;
+            }
+            
+            // Default alphabetical sort for normal dimension values
+            if (globalPivotSort === 'alpha_desc') {
+                return keyB.localeCompare(keyA);
+            } else {
+                return keyA.localeCompare(keyB);
+            }
+        });
+
+        entries.forEach(([key, items]) => {
+            result.set(key, buildHierarchyMap(items, levelIndex + 1));
         });
         return result;
     };
@@ -3813,7 +3962,7 @@ function renderPivotTable() {
 
     const generateRows = (node, depth, currentPath = {}) => {
         if (depth === activePivotHierarchy.length) {
-            // Leaf level: node is the array of matching tasks
+            // Leaf level: node is the sorted array of matching tasks
             node.forEach(t => {
                 // Calculate fade background tint based on modified age using highlightDurationDays input (10% max opacity)
                 let cellStyle = '';
@@ -3880,31 +4029,41 @@ function renderPivotTable() {
             return;
         }
 
-        Object.entries(node).forEach(([key, childNode]) => {
-            levelStates[depth] = true;
-            const pathCopy = { ...currentPath, [activePivotHierarchy[depth]]: key };
-            generateRows(childNode, depth + 1, pathCopy);
-        });
+        // Apply sorted key sequence matching tree Map construction order
+        const dim = activePivotHierarchy[depth];
+        if (node instanceof Map) {
+            node.forEach((childNode, key) => {
+                levelStates[depth] = true;
+                const pathCopy = { ...currentPath, [dim]: key };
+                generateRows(childNode, depth + 1, pathCopy);
+            });
+        }
     };
 
     generateRows(tree, 0, {});
 
-    // Render table headers with HTML5 drag and drop handlers
+    // Render table headers with HTML5 drag and drop handlers only
     let theadHtml = '<tr>';
     activePivotHierarchy.forEach((h, idx) => {
         theadHtml += `
             <th class="pivot-th-drag" draggable="true" 
                 ondragstart="handlePivotDragStart(event, ${idx})" 
                 ondragover="event.preventDefault()" 
-                ondrop="handlePivotDrop(event, ${idx})">
-                ${hierarchyLabels[h]}
+                ondrop="handlePivotDrop(event, ${idx})"
+                style="width: 1%; white-space: nowrap; cursor: grab;">
+                <span>${hierarchyLabels[h]}</span>
             </th>`;
     });
-    theadHtml += '<th>Task</th></tr>';
+
+    theadHtml += `
+        <th style="width: auto;">
+            <span>Task</span>
+        </th>
+    </tr>`;
 
     area.innerHTML = `
         ${configBarHtml}
-        <table class="excel-table ${pivotZebraStripes ? 'zebra-enabled' : ''}">
+        <table class="excel-table ${pivotZebraStripes ? 'zebra-enabled' : ''} ${freezeHeaders ? 'headers-frozen' : ''}">
             <thead>
                 ${theadHtml}
             </thead>
