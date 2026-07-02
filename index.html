@@ -2749,9 +2749,9 @@ function addSheetTaskRow() {
         title: 'New Task',
         status: 'todo',
         assignee: '',
-        system: systemNode ? systemNode.title : '',
-        subsystem: subsystemNode ? subsystemNode.title : '',
-        project: projectNode.title,
+        system: '',
+        subsystem: '',
+        project: '',
         tags: [],
         notes: '',
         createdAt: nowIso,
@@ -2762,10 +2762,7 @@ function addSheetTaskRow() {
 
     // Initialize custom dynamic column properties
     sheetColumns.forEach(col => {
-        const lowerL = col.label.toLowerCase();
-        if (lowerL === 'system') newTask[col.key] = systemNode ? systemNode.title : '';
-        else if (lowerL === 'subsystem') newTask[col.key] = subsystemNode ? subsystemNode.title : '';
-        else newTask[col.key] = '';
+        newTask[col.key] = '';
     });
 
     projectNode.children.push(newTask);
