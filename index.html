@@ -886,18 +886,18 @@
         <div id="spreadsheet-view" style="display: none; width: 100%; height: 100%; flex-direction: column;">
             <div class="sheet-tabs" style="justify-content: space-between; align-items: center; padding-right: 16px;">
                 <div style="display: flex; gap: 4px; align-items: center;">
-                    <button class="btn-secondary btn-sm" id="btn-toggle-sidebar" onclick="toggleSidebarDrawer()" style="max-width: 130px; height: 28px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 6px; padding: 0 10px; margin-bottom: 4px; margin-right: 12px;">
-                        📂 Hide Sidebar
-                    </button>
                     <button class="sheet-tab active" id="stab-tasks" onclick="switchSheetTab('tasks')">Task Sheet</button>
                     <button class="sheet-tab" id="stab-pivot" onclick="switchSheetTab('pivot')">Pivot Table</button>
                     <button class="sheet-tab" id="stab-lists" onclick="switchSheetTab('lists')">Object Lists</button>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    <button class="btn-add" onclick="addSheetTaskRow()" style="height: 28px; font-size: 11px; padding: 0 12px; margin-bottom: 8px;">+ Add Task Row</button>
+                    <button class="btn-secondary btn-sm" id="btn-toggle-sidebar" onclick="toggleSidebarDrawer()" style="max-width: 130px; height: 28px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 6px; padding: 0 10px; margin-bottom: 8px;">
+                        📂 Hide Sidebar
+                    </button>
                     <button class="btn-secondary btn-sm" id="btn-toggle-controls" onclick="toggleActiveSheetControls()" style="max-width: 140px; height: 28px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 6px; padding: 0 10px; margin-bottom: 8px;">
                         🔧 Hide Controls
                     </button>
+                    <button class="btn-add" onclick="addSheetTaskRow()" style="height: 28px; font-size: 11px; padding: 0 12px; margin-bottom: 8px; margin-left: 12px;">+ Add Task Row</button>
                 </div>
             </div>
             <div class="sheet-content" id="sheet-content-area"></div>
@@ -2785,6 +2785,9 @@ function addSheetTaskRow() {
     renderSheet();
     
     // Auto-open sidebar details panel for the newly created task
+    isSidebarDrawerCollapsed = false;
+    localStorage.setItem('idealog_sidebar_collapsed', 'false');
+    updateSidebarDrawerVisibility();
     selectNode(newTask.id);
 }
 
