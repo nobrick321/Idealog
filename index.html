@@ -4063,6 +4063,7 @@ function renderPivotTable() {
 
     area.innerHTML = `
         ${configBarHtml}
+        <button class="btn-add" onclick="addSheetTaskRow()" style="margin-bottom: 12px; align-self: flex-start;">+ Add Task Row</button>
         <table class="excel-table ${pivotZebraStripes ? 'zebra-enabled' : ''} ${freezeHeaders ? 'headers-frozen' : ''}">
             <thead>
                 ${theadHtml}
