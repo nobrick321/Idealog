@@ -2783,6 +2783,9 @@ function addSheetTaskRow() {
 
     save();
     renderSheet();
+    
+    // Auto-open sidebar details panel for the newly created task
+    selectNode(newTask.id);
 }
 
 function addSheetColumn() {
