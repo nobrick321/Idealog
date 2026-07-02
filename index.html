@@ -1,0 +1,4293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Idealog — Project Mind Map</title>
+    <meta name="description" content="A mind map project manager — every node carries properties, every view tells a different story.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #080c14;
+            --surface: rgba(255,255,255,0.04);
+            --surface-hover: rgba(255,255,255,0.07);
+            --border: rgba(255,255,255,0.08);
+            --border-bright: rgba(255,255,255,0.16);
+            --text: #e2e8f0;
+            --text-muted: #64748b;
+            --text-dim: #94a3b8;
+            --accent: #6366f1;
+            --todo: #6366f1;
+            --inprogress: #f59e0b;
+            --done: #10b981;
+        }
+
+        html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; }
+
+        #app { display: flex; flex-direction: column; height: 100vh; }
+
+        body::before {
+            content: '';
+            position: fixed; inset: 0; pointer-events: none;
+            background:
+                radial-gradient(ellipse at 15% 15%, rgba(99,102,241,0.07) 0%, transparent 55%),
+                radial-gradient(ellipse at 85% 85%, rgba(139,92,246,0.05) 0%, transparent 55%);
+        }
+
+        /* Header */
+        #header {
+            display: flex; align-items: center; padding: 0 20px; height: 56px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(8,12,20,0.85);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            flex-shrink: 0; gap: 12px; position: relative; z-index: 100;
+        }
+        .logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; color: var(--text); margin-right: 12px; }
+        .logo-icon {
+            width: 30px; height: 30px;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border-radius: 8px; display: flex; align-items: center; justify-content: center;
+            font-size: 15px; box-shadow: 0 0 12px rgba(99,102,241,0.4);
+        }
+        .view-switcher {
+            display: flex; gap: 2px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border); border-radius: 10px; padding: 3px;
+        }
+        .view-btn {
+            display: flex; align-items: center; gap: 5px; padding: 5px 13px;
+            border: none; background: transparent; color: var(--text-muted);
+            font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500;
+            border-radius: 7px; cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
+        }
+        .view-btn:hover { color: var(--text-dim); background: var(--surface-hover); }
+        .view-btn.active { background: var(--accent); color: white; box-shadow: 0 0 10px rgba(99,102,241,0.35); }
+        .header-spacer { flex: 1; }
+        .btn-add {
+            display: flex; align-items: center; gap: 6px; padding: 6px 14px;
+            background: linear-gradient(135deg, #6366f1, #7c3aed);
+            color: white; border: none; border-radius: 8px;
+            font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500;
+            cursor: pointer; transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+        }
+        .btn-add:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(99,102,241,0.45); }
+
+        /* Main */
+        #main { flex: 1; position: relative; overflow: hidden; display: flex; }
+
+        /* Mind Map */
+        #mindmap-view { flex: 1; position: relative; overflow: hidden; }
+        #mindmap-view svg { width: 100%; height: 100%; display: block; }
+        .mm-link { fill: none; stroke-width: 1.5px; }
+        .mm-node { cursor: pointer; }
+        .mm-node circle { stroke-width: 2px; }
+        .mm-node text { font-family: 'Inter', sans-serif; fill: #cbd5e1; pointer-events: none; user-select: none; }
+        .mm-node .add-btn { opacity: 0; transition: opacity 0.15s; cursor: pointer; }
+        .mm-node:hover .add-btn { opacity: 1; }
+
+        /* Outline */
+        #outline-view { flex: 1; overflow-y: auto; padding: 28px 36px; display: none; }
+        .outline-node { position: relative; }
+        .outline-row {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 10px; border-radius: 8px; cursor: pointer;
+            transition: background 0.1s; border: 1px solid transparent;
+        }
+        .outline-row:hover { background: var(--surface-hover); }
+        .outline-row.selected { background: rgba(99,102,241,0.08); border-color: rgba(99,102,241,0.2); }
+        .outline-toggle {
+            width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;
+            color: var(--text-muted); flex-shrink: 0; font-size: 9px;
+            cursor: pointer; transition: transform 0.15s; user-select: none;
+        }
+        .outline-toggle.collapsed { transform: rotate(-90deg); }
+        .outline-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .outline-title { flex: 1; font-size: 13px; font-weight: 500; }
+        .outline-chips { display: flex; gap: 5px; flex-shrink: 0; }
+        .outline-children { padding-left: 22px; border-left: 1px solid rgba(255,255,255,0.06); margin-left: 16px; }
+
+        /* Kanban */
+        #kanban-view { flex: 1; padding: 24px; display: none; gap: 14px; overflow-x: auto; overflow-y: hidden; }
+        .kanban-col {
+            min-width: 280px; flex: 1;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid var(--border); border-radius: 14px;
+            display: flex; flex-direction: column; max-height: 100%; overflow: hidden;
+        }
+        .kanban-col-header {
+            padding: 14px 16px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 8px;
+            font-weight: 600; font-size: 12px; letter-spacing: 0.02em; flex-shrink: 0;
+        }
+        .kanban-col-dot { width: 7px; height: 7px; border-radius: 50%; }
+        .kanban-count { margin-left: auto; background: var(--surface-hover); padding: 1px 7px; border-radius: 20px; font-size: 11px; color: var(--text-muted); }
+        .kanban-cards { padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 7px; }
+        .kanban-card {
+            background: rgba(255,255,255,0.025);
+            border: 1px solid var(--border); border-radius: 10px;
+            padding: 12px; cursor: pointer; transition: all 0.15s;
+        }
+        .kanban-card:hover { background: var(--surface-hover); border-color: var(--border-bright); transform: translateY(-1px); }
+        .kanban-card.selected { border-color: rgba(99,102,241,0.5); background: rgba(99,102,241,0.06); }
+        .card-title { font-size: 13px; font-weight: 500; margin-bottom: 8px; line-height: 1.4; }
+        .card-meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+        .card-assignee { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+        .card-due { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+        .card-due.overdue { color: #f87171; }
+
+        /* Timeline */
+        #timeline-view { flex: 1; overflow-y: auto; padding: 28px 36px; display: none; }
+        .timeline-group { margin-bottom: 28px; }
+        .timeline-month { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; padding-left: 26px; }
+        .timeline-items { display: flex; flex-direction: column; gap: 6px; }
+        .timeline-item {
+            display: flex; align-items: flex-start; gap: 14px;
+            cursor: pointer; padding: 10px 14px; border-radius: 10px;
+            transition: background 0.15s; border: 1px solid transparent;
+        }
+        .timeline-item:hover { background: var(--surface-hover); border-color: var(--border); }
+        .timeline-item.selected { background: rgba(99,102,241,0.06); border-color: rgba(99,102,241,0.25); }
+        .timeline-dot-wrap { display: flex; align-items: center; padding-top: 3px; }
+        .timeline-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .timeline-content { flex: 1; }
+        .timeline-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+        .timeline-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .timeline-due { font-size: 11px; color: var(--text-muted); }
+
+        /* Chips */
+        .chip { padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .chip-todo { background: rgba(99,102,241,0.15); color: #818cf8; }
+        .chip-inprogress { background: rgba(245,158,11,0.15); color: #fbbf24; }
+        .chip-done { background: rgba(16,185,129,0.15); color: #34d399; }
+        .chip-person { background: rgba(255,255,255,0.07); color: var(--text-dim); }
+        .chip-tag { background: rgba(139,92,246,0.1); color: #a78bfa; }
+
+        /* Avatar */
+        .avatar {
+            width: 20px; height: 20px; border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 8px; font-weight: 700; color: white; flex-shrink: 0;
+        }
+
+        /* Properties Panel */
+        #properties-panel {
+            width: 300px; border-left: 1px solid var(--border);
+            background: rgba(8,12,20,0.75);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            display: flex; flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.28s cubic-bezier(0.16,1,0.3,1);
+            flex-shrink: 0; overflow: hidden;
+        }
+        #properties-panel.open { transform: translateX(0); }
+        .panel-header {
+            display: flex; align-items: center;
+            padding: 16px 16px 14px; border-bottom: 1px solid var(--border); gap: 8px;
+        }
+        .panel-title-input {
+            flex: 1; background: transparent; border: none; color: var(--text);
+            font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; outline: none;
+        }
+        .panel-close {
+            width: 26px; height: 26px; border-radius: 6px;
+            border: 1px solid var(--border); background: transparent;
+            color: var(--text-muted); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; transition: all 0.15s; flex-shrink: 0;
+        }
+        .panel-close:hover { background: var(--surface-hover); color: var(--text); }
+        .panel-body { padding: 16px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; flex: 1; }
+        .prop-group { display: flex; flex-direction: column; gap: 5px; }
+        .prop-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+        .prop-input {
+            width: 100%; background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border); border-radius: 8px;
+            color: var(--text); font-family: 'Inter', sans-serif;
+            font-size: 13px; padding: 7px 10px; outline: none;
+            transition: border-color 0.15s;
+        }
+        .prop-input:focus { border-color: rgba(99,102,241,0.6); }
+        .status-row { display: flex; gap: 6px; }
+        .status-pill {
+            flex: 1; padding: 6px 0; border-radius: 7px; border: 1px solid var(--border);
+            background: var(--surface); cursor: pointer; font-size: 11px; font-weight: 600;
+            transition: all 0.15s; text-align: center; font-family: 'Inter', sans-serif;
+            color: var(--text-muted);
+        }
+        .status-pill:hover { border-color: var(--border-bright); background: var(--surface-hover); }
+        .status-pill.active-todo { background: rgba(99,102,241,0.2); border-color: rgba(99,102,241,0.5); color: #818cf8; }
+        .status-pill.active-inprogress { background: rgba(245,158,11,0.2); border: 1px solid rgba(245,158,11,0.5); color: #fbbf24; }
+        .status-pill.active-inprogress_bg { background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.5); color: #a78bfa; }
+        .status-pill.active-done { background: rgba(16,185,129,0.2); border: 1px solid rgba(16,185,129,0.5); color: #34d399; }
+        .tags-input-wrap {
+            display: flex; flex-wrap: wrap; gap: 5px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border); border-radius: 8px;
+            padding: 7px; min-height: 38px; align-items: center;
+            transition: border-color 0.15s;
+        }
+        .tags-input-wrap:focus-within { border-color: rgba(99,102,241,0.6); }
+        .tag-pill { display: flex; align-items: center; gap: 3px; background: rgba(99,102,241,0.15); color: #818cf8; border-radius: 4px; padding: 2px 6px; font-size: 11px; }
+        .tag-pill button { background: none; border: none; color: inherit; cursor: pointer; padding: 0; font-size: 13px; line-height: 1; opacity: 0.7; }
+        .tag-pill button:hover { opacity: 1; }
+        .tags-input { border: none; background: transparent; color: var(--text); font-family: 'Inter', sans-serif; font-size: 12px; outline: none; flex: 1; min-width: 70px; }
+        .panel-actions { display: flex; gap: 7px; padding: 14px 16px; border-top: 1px solid var(--border); }
+        .btn-sm { flex: 1; padding: 7px; border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+        .btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+        .btn-secondary:hover { background: var(--surface-hover); color: var(--text); }
+        .btn-danger { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.18); color: #f87171; }
+        .btn-danger:hover { background: rgba(239,68,68,0.16); }
+
+        /* Tooltip */
+        .tooltip {
+            position: fixed; background: rgba(12,17,30,0.95);
+            border: 1px solid var(--border-bright); border-radius: 9px;
+            padding: 8px 12px; font-size: 12px; color: var(--text);
+            pointer-events: none; opacity: 0; transition: opacity 0.12s;
+            z-index: 2000; max-width: 220px; line-height: 1.5;
+        }
+        .tooltip.visible { opacity: 1; }
+
+        /* Autocomplete Suggestions */
+        .autocomplete-suggestions {
+            position: absolute;
+            background: #0d131f;
+            border: 1px solid var(--border-bright);
+            border-radius: 6px;
+            max-height: 150px;
+            overflow-y: auto;
+            z-index: 10000;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5);
+        }
+        .autocomplete-suggestion-item {
+            padding: 6px 10px;
+            font-size: 11px;
+            cursor: pointer;
+            color: var(--text-dim);
+        }
+        .autocomplete-suggestion-item:hover {
+            background: var(--accent);
+            color: white;
+        }
+        .autocomplete-suggestion-add {
+            border-top: 1px solid var(--border);
+            color: var(--inprogress);
+            font-weight: 600;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+        }
+        .modal-box {
+            background: #0d131f;
+            border: 1px solid var(--border-bright);
+            border-radius: 12px;
+            width: 520px;
+            max-width: 90%;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
+        .modal-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h3 {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .modal-body {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .modal-footer {
+            padding: 10px 16px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .modal-body textarea {
+            width: 100%;
+            height: 160px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: monospace;
+            font-size: 11px;
+            padding: 8px;
+            outline: none;
+            resize: none;
+        }
+        .modal-body textarea:focus {
+            border-color: var(--accent);
+        }
+
+        /* Empty state */
+        .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); gap: 10px; }
+        .empty-state-icon { font-size: 40px; opacity: 0.4; }
+        .empty-state-title { font-size: 15px; font-weight: 500; color: var(--text-dim); }
+        .empty-state-sub { font-size: 12px; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+    
+        /* ── Git Board ── */
+        #gitboard-view {
+            flex: 1;
+            display: none;
+            position: relative;
+            background: var(--bg);
+            height: 100%;
+            width: 100%;
+        }
+        #gb-graph-container {
+            flex: 1;
+            height: 100%;
+            overflow: auto;
+            position: relative;
+        }
+        #gb-graph-container svg {
+            display: block;
+        }
+        #gb-log-container {
+            width: 420px;
+            border-left: 1px solid var(--border);
+            height: 100%;
+            overflow-y: auto;
+            background: rgba(5,8,15,0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #94a3b8;
+        }
+        .gb-log-commit {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px dashed rgba(255,255,255,0.06);
+        }
+        .gb-log-commit:last-child {
+            border-bottom: none;
+        }
+        .gb-log-header {
+            color: #f59e0b; /* Amber hash/branch info */
+            font-weight: bold;
+        }
+        .gb-log-author {
+            color: #64748b;
+        }
+        .gb-log-date {
+            color: #64748b;
+        }
+        .gb-log-changes {
+            margin-top: 8px;
+            padding-left: 12px;
+        }
+        .gb-diff-add {
+            color: #10b981; /* Emerald/Green */
+        }
+        .gb-diff-mod {
+            color: #fbbf24; /* Amber */
+        }
+        .gb-diff-todo {
+            color: #818cf8; /* Indigo */
+        }
+        .gb-label{cursor:pointer;font-family:Inter,sans-serif}
+        .gb-label:hover{fill:#fff!important}
+        .gb-node{cursor:pointer}
+
+        /* ── Gantt View ── */
+        #gantt-view {
+            flex: 1;
+            display: none;
+            position: relative;
+            background: var(--bg);
+            height: 100%;
+            width: 100%;
+        }
+        #gantt-outline-panel {
+            width: 380px;
+            border-right: 1px solid var(--border);
+            height: 100%;
+            overflow-y: auto;
+            background: rgba(8,12,20,0.5);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        #gantt-timeline-panel {
+            flex: 1;
+            height: 100%;
+            overflow: auto;
+            position: relative;
+        }
+        .gantt-row {
+            height: 38px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.02);
+            cursor: pointer;
+            border-radius: 6px;
+            padding: 0 8px;
+        }
+        .gantt-row:hover {
+            background: var(--surface-hover);
+        }
+        .gantt-row.selected {
+            background: rgba(99,102,241,0.06);
+            border: 1px solid rgba(99,102,241,0.2);
+        }
+        .gantt-outline-title {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .gantt-outline-actions {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+        .gantt-row:hover .gantt-outline-actions {
+            opacity: 1;
+        }
+        .gantt-bar-task {
+            rx: 6px;
+            ry: 6px;
+            cursor: ew-resize;
+        }
+        .gantt-bar-project {
+            rx: 2px;
+            ry: 2px;
+        }
+        .gantt-grid-line {
+            stroke: rgba(255, 255, 255, 0.03);
+            stroke-width: 1;
+        }
+        .gantt-today-line {
+            stroke: #ef4444;
+            stroke-width: 1.5;
+            stroke-dasharray: 4,4;
+        }
+        .btn-gantt-action {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            transition: all 0.15s;
+        }
+        .btn-gantt-action:hover {
+            color: var(--text);
+            background: var(--surface);
+        }
+        /* ── Spreadsheet & Pivot Table View ── */
+        #spreadsheet-view {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            background: var(--bg);
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+        .sheet-tabs {
+            display: flex;
+            background: rgba(255,255,255,0.02);
+            border-bottom: 1px solid var(--border);
+            padding: 8px 16px 0;
+            gap: 4px;
+        }
+        .sheet-tab {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid transparent;
+            border-bottom: none;
+            color: var(--text-muted);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .sheet-tab:hover {
+            color: var(--text-dim);
+            background: rgba(255,255,255,0.02);
+        }
+        .sheet-tab.active {
+            color: var(--accent);
+            background: var(--bg);
+            border-color: var(--border);
+            font-weight: 600;
+        }
+        .sheet-content {
+            flex: 1;
+            padding: 20px;
+            overflow: auto;
+            position: relative;
+        }
+        /* Collapsible Toolbar/Config container styles */
+        .collapsible-control-panel {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 16px;
+            overflow: hidden;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .collapsible-control-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.01);
+            cursor: pointer;
+            user-select: none;
+            border-bottom: 1px solid transparent;
+            transition: border-bottom 0.2s, background 0.2s;
+        }
+        .collapsible-control-header:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .collapsible-control-panel.collapsed .collapsible-control-header {
+            border-bottom-color: transparent !important;
+        }
+        .collapsible-control-panel:not(.collapsed) .collapsible-control-header {
+            border-bottom-color: var(--border);
+        }
+        .collapsible-control-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .collapsible-control-arrow {
+            font-size: 12px;
+            color: var(--text-muted);
+            transition: transform 0.25s ease;
+        }
+        .collapsible-control-panel.collapsed .collapsible-control-arrow {
+            transform: rotate(-90deg);
+        }
+        .collapsible-control-content {
+            padding: 16px;
+            transition: max-height 0.25s ease;
+        }
+        .collapsible-control-panel.collapsed .collapsible-control-content {
+            display: none;
+        }
+        /* Excel Table style */
+        .excel-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            background: rgba(255,255,255,0.01);
+        }
+        .excel-table th, .excel-table td {
+            border: 1px solid var(--border);
+            padding: 3px 6px;
+            text-align: left;
+            transition: background 0.15s ease; /* Fast response for active hover highlights */
+        }
+        .excel-table th {
+            background: rgba(255,255,255,0.03);
+            color: var(--text-dim);
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        /* Alternating zebra stripes for table rows (only active if .zebra-enabled class exists on table) */
+        .excel-table.zebra-enabled tbody tr.row-even {
+            background: rgba(255, 255, 255, 0.015);
+        }
+        .excel-table.zebra-enabled tbody tr.row-odd {
+            background: rgba(0, 0, 0, 0.15);
+        }
+        /* Active path highlights (non-alternating fallback) */
+        .excel-table tbody tr.highlight-path {
+            background: rgba(99, 102, 241, 0.07) !important;
+        }
+        .excel-table tbody tr.highlight-path td.highlight-cell {
+            background: rgba(99, 102, 241, 0.18) !important;
+            color: #fff !important;
+        }
+        /* Alternating highlight path tones when zebra striping is checked */
+        .excel-table.zebra-enabled tbody tr.row-even.highlight-path {
+            background: rgba(99, 102, 241, 0.05) !important; /* Slightly lighter tone on even highlight rows */
+        }
+        .excel-table.zebra-enabled tbody tr.row-even.highlight-path td.highlight-cell {
+            background: rgba(99, 102, 241, 0.15) !important;
+            color: #fff !important;
+        }
+        .excel-table.zebra-enabled tbody tr.row-odd.highlight-path {
+            background: rgba(99, 102, 241, 0.09) !important; /* Slightly darker tone on odd highlight rows */
+        }
+        .excel-table.zebra-enabled tbody tr.row-odd.highlight-path td.highlight-cell {
+            background: rgba(99, 102, 241, 0.22) !important;
+            color: #fff !important;
+        }
+        /* Add pointer style to pivot dimensions cells to make them feel interactive */
+        .excel-table td.pivot-dim-cell {
+            cursor: pointer;
+        }
+        .excel-table td.pivot-dim-cell:hover {
+            background: rgba(255, 255, 255, 0.08) !important;
+        }
+        .sheet-th-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+        }
+        .sheet-th-input {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            font-family: 'Inter', sans-serif;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            outline: none;
+            flex: 1;
+            min-width: 40px;
+        }
+        .sheet-th-input:focus {
+            color: var(--text);
+            background: rgba(255,255,255,0.05);
+            border-radius: 3px;
+        }
+        .sheet-th-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 11px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .excel-table th:hover .sheet-th-btn {
+            opacity: 1;
+        }
+        .sheet-th-btn:hover {
+            color: #f87171;
+        }
+        .sheet-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .pivot-th-drag {
+            cursor: grab;
+            user-select: none;
+            position: relative;
+            transition: background 0.15s;
+        }
+        .pivot-th-drag:hover {
+            background: rgba(255,255,255,0.08) !important;
+            color: var(--text) !important;
+        }
+        .pivot-th-drag:active {
+            cursor: grabbing;
+            background: rgba(99,102,241,0.15) !important;
+        }
+        .pivot-th-drag::after {
+            content: ' ☰';
+            font-size: 8px;
+            opacity: 0.4;
+            margin-left: 2px;
+        }
+        .excel-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            outline: none;
+            padding: 1px 0;
+        }
+        .excel-input:focus {
+            background: rgba(99,102,241,0.08);
+            box-shadow: 0 0 0 2px rgba(99,102,241,0.3);
+            border-radius: 4px;
+        }
+        .excel-select {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            outline: none;
+            cursor: pointer;
+        }
+        .excel-select option {
+            background: var(--bg);
+            color: var(--text);
+        }
+        /* Pivot Config toolbar */
+        .pivot-config-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+        .pivot-select-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .pivot-select {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            padding: 2px 6px;
+            outline: none;
+            cursor: pointer;
+        }
+        .pivot-cell-task {
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: 1px 0;
+            margin-bottom: 0;
+            cursor: pointer;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.15s;
+            color: var(--text);
+        }
+        .pivot-cell-task:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        .pivot-cell-task.done {
+            border-left: 2px solid #10b981;
+            padding-left: 6px;
+        }
+        .pivot-cell-task.inprogress {
+            border-left: 2px solid #f59e0b;
+            padding-left: 6px;
+        }
+        .pivot-cell-task.inprogress_bg {
+            border-left: 2px solid #8b5cf6;
+            padding-left: 6px;
+        }
+        .pivot-cell-task.todo {
+            border-left: 2px solid #6366f1;
+            padding-left: 6px;
+        }
+        .pivot-cell-task.obsolete {
+            border-left: 2px solid #64748b;
+            padding-left: 6px;
+            opacity: 0.4;
+        }
+        .pivot-add-btn {
+            width: 100%;
+            background: rgba(255,255,255,0.02);
+            border: 1px dashed var(--border);
+            border-radius: 6px;
+            color: var(--text-muted);
+            padding: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+        }
+        .pivot-add-btn:hover {
+            background: var(--surface-hover);
+            color: var(--text-dim);
+            border-color: var(--border-bright);
+        }
+</style>
+</head>
+<body>
+<div id="app">
+    <header id="header">
+        <div class="logo"><div class="logo-icon">&#10022;</div>Idealog</div>
+        <div class="view-switcher">
+            <button class="view-btn active" id="btn-spreadsheet" onclick="switchView('spreadsheet')">田 Spreadsheet</button>
+            <button class="view-btn" id="btn-gitboard" onclick="switchView('gitboard')">⇆ Git Board</button>
+        </div>
+        <div class="header-spacer"></div>
+    </header>
+    <div id="main">
+        <div id="gitboard-view" style="display: none; width: 100%; height: 100%;">
+            <div id="gb-graph-container"></div>
+            <div id="gb-log-container"></div>
+        </div>
+        <div id="spreadsheet-view" style="display: none; width: 100%; height: 100%; flex-direction: column;">
+            <div class="sheet-tabs" style="justify-content: space-between; align-items: center; padding-right: 16px;">
+                <div style="display: flex; gap: 4px;">
+                    <button class="sheet-tab active" id="stab-tasks" onclick="switchSheetTab('tasks')">Task Sheet</button>
+                    <button class="sheet-tab" id="stab-pivot" onclick="switchSheetTab('pivot')">Pivot Table</button>
+                    <button class="sheet-tab" id="stab-lists" onclick="switchSheetTab('lists')">Object Lists</button>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn-secondary btn-sm" id="btn-toggle-controls" onclick="toggleActiveSheetControls()" style="max-width: 140px; height: 28px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 6px; padding: 0 10px; margin-bottom: 8px;">
+                        🔧 Hide Controls
+                    </button>
+                    <button class="btn-secondary btn-sm" id="btn-toggle-sidebar" onclick="toggleSidebarDrawer()" style="max-width: 130px; height: 28px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 6px; padding: 0 10px; margin-bottom: 8px;">
+                        📂 Hide Sidebar
+                    </button>
+                </div>
+            </div>
+            <div class="sheet-content" id="sheet-content-area"></div>
+        </div>
+        <aside id="properties-panel">
+            <div class="panel-header">
+                <input class="panel-title-input" id="prop-title" type="text" placeholder="Node title…" oninput="updateTitle(this.value)">
+                <button class="panel-close" onclick="closePanel()">×</button>
+            </div>
+            <div class="panel-body">
+                <div class="prop-group">
+                    <div class="prop-label">Status</div>
+                    <div class="status-row" style="flex-wrap: wrap; gap: 6px;">
+                        <button class="status-pill" id="spill-todo" onclick="setStatus('todo')">Todo</button>
+                        <button class="status-pill" id="spill-inprogress" onclick="setStatus('inprogress')">In Progress</button>
+                        <button class="status-pill" id="spill-inprogress_bg" onclick="setStatus('inprogress_bg')" style="flex-basis: 100%;">In Progress in BG</button>
+                        <button class="status-pill" id="spill-done" onclick="setStatus('done')">Done</button>
+                    </div>
+                </div>
+                <div class="prop-group">
+                     <div class="prop-label">Assignee</div>
+                     <input class="prop-input" id="prop-assignee" type="text" placeholder="@person" onchange="updateProp('assignee', this.value)" oninput="showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })" onfocus="showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })">
+                 </div>
+
+                 <div class="prop-group">
+                     <div class="prop-label">Project</div>
+                     <input class="prop-input" id="prop-project" type="text" placeholder="Project Name" onchange="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }" oninput="showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })" onfocus="showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })">
+                 </div>
+
+                 <div class="prop-group">
+                     <div class="prop-label">System</div>
+                     <input class="prop-input" id="prop-system" type="text" placeholder="e.g. Auth System" onchange="updateProp('system', this.value)" oninput="showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })" onfocus="showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })">
+                 </div>
+                 <div class="prop-group">
+                     <div class="prop-label">Subsystem</div>
+                     <input class="prop-input" id="prop-subsystem" type="text" placeholder="e.g. Session Handler" onchange="updateProp('subsystem', this.value)" oninput="showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })" onfocus="showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })">
+                 </div>
+                
+                <!-- Dynamic Custom Columns Container -->
+                <div id="dynamic-props-container"></div>
+                <div class="prop-group">
+                    <div class="prop-label">Tags</div>
+                    <div class="tags-input-wrap" id="tags-wrap">
+                        <input class="tags-input" id="prop-tags-input" type="text" placeholder="tag, press Enter" onkeydown="handleTagInput(event)">
+                    </div>
+                </div>
+                <div class="prop-group">
+                    <div class="prop-label">Notes</div>
+                    <textarea class="prop-input" id="prop-notes" rows="4" placeholder="Add notes…" oninput="updateProp('notes', this.value)" style="resize:vertical;line-height:1.6"></textarea>
+                </div>
+            </div>
+            <div class="panel-actions">
+                <button class="btn-sm btn-secondary" onclick="addChildToSelected()">+ Child</button>
+                <button class="btn-sm btn-danger" onclick="deleteSelected()">Delete</button>
+            </div>
+        </aside>
+    </div>
+</div>
+<div class="tooltip" id="tooltip"></div>
+
+<!-- Paste Data Import Modal -->
+<div class="modal-overlay" id="import-modal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Import Sheet Data</h3>
+            <button class="panel-close" onclick="closeImportModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:11px;color:var(--text-muted);line-height:1.4;">
+                Paste tab-separated values (TSV) or copy/paste directly from Excel/Google Sheets. The first row should contain headers. If a matching header name exists, values will fill those columns; otherwise, new custom columns will be created.
+            </p>
+            <textarea id="import-paste-area" placeholder="Task Title&#9;Assignee&#9;System&#9;Subsystem&#10;My New Task&#9;@john&#9;Auth&#9;Login DB"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-sm btn-secondary" onclick="closeImportModal()" style="max-width:80px;">Cancel</button>
+            <button class="btn-sm" onclick="processImportedData()" style="max-width:120px;background:var(--accent);color:white;">Import Rows</button>
+        </div>
+    </div>
+</div>
+
+<!-- Object Lists Bulk Importer Modal -->
+<div class="modal-overlay" id="import-lists-modal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3>Import Object Lists Data</h3>
+            <button class="panel-close" onclick="closeListsImportModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:11px;color:var(--text-muted);line-height:1.4;margin-bottom:8px;">
+                Paste a spreadsheet table to extract unique values for **Assignees**, **Systems**, **Subsystems**, and **Projects** simultaneously. The parser will detect columns matching these names (case-insensitive) and import all unique values.
+            </p>
+            <textarea id="import-lists-paste-area" placeholder="Project&#9;Assignee&#9;System&#9;Subsystem&#10;RTM200&#9;Alice&#9;Scooby2&#9;BT Gantry&#10;M400&#9;Bob&#9;Mogli&#9;LP" style="width:100%;height:180px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:monospace;font-size:11px;padding:10px;outline:none;resize:none;"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-sm btn-secondary" onclick="closeListsImportModal()" style="max-width:80px;">Cancel</button>
+            <button class="btn-sm" onclick="processListsImportedData()" style="max-width:140px;background:var(--accent);color:white;">Import Lists</button>
+        </div>
+    </div>
+</div>
+<script>
+const DEFAULT = {
+    id:'root', title:'My Project', status:'inprogress', assignee:'', tags:[], notes:'',
+    children:[
+        { id:'n1', title:'Product Design', status:'inprogress', assignee:'Alice', tags:['design','q3'], notes:'Focus on accessibility.',
+          children:[
+            { id:'n1a', title:'Wireframes', status:'done', assignee:'Alice', tags:['design'], notes:'', children:[] },
+            { id:'n1b', title:'UI Components', status:'inprogress', assignee:'Alice', tags:['design','frontend'], notes:'', children:[] },
+            { id:'n1c', title:'User Testing', status:'todo', assignee:'Bob', tags:['research'], notes:'', children:[] }
+        ]},
+        { id:'n2', title:'Backend', status:'inprogress', assignee:'Charlie', tags:['backend','q3'], notes:'',
+          children:[
+            { id:'n2a', title:'Auth API', status:'inprogress', assignee:'Charlie', tags:['backend','auth'], notes:'', children:[] },
+            { id:'n2b', title:'Data Models', status:'done', assignee:'Charlie', tags:['backend'], notes:'', children:[] },
+            { id:'n2c', title:'REST Endpoints', status:'todo', assignee:'Dana', tags:['backend','api'], notes:'', children:[] }
+        ]},
+        { id:'n3', title:'Marketing', status:'todo', assignee:'Eve', tags:['marketing'], notes:'',
+          children:[
+            { id:'n3a', title:'Landing Page', status:'todo', assignee:'Eve', tags:['marketing','frontend'], notes:'', children:[] },
+            { id:'n3b', title:'Launch Campaign', status:'todo', assignee:'Eve', tags:['marketing'], notes:'', children:[] }
+        ]},
+        { id:'n4', title:'Research', status:'done', assignee:'Bob', tags:['research','q2'], notes:'All interviews complete.',
+          children:[
+            { id:'n4a', title:'Competitor Analysis', status:'done', assignee:'Bob', tags:['research'], notes:'', children:[] },
+            { id:'n4b', title:'User Interviews', status:'done', assignee:'Bob', tags:['research'], notes:'', children:[] }
+        ]}
+    ],
+    history: [
+        { timestamp: '2026-06-10T10:00:00Z', projectId: 'n4', taskId: 'n4a', taskTitle: 'Competitor Analysis', action: 'status_change', fromStatus: 'todo', toStatus: 'done', assignee: 'Bob' },
+        { timestamp: '2026-06-15T14:30:00Z', projectId: 'n4', taskId: 'n4b', taskTitle: 'User Interviews', action: 'status_change', fromStatus: 'todo', toStatus: 'done', assignee: 'Bob' },
+        { timestamp: '2026-06-18T09:15:00Z', projectId: 'n2', taskId: 'n2b', taskTitle: 'Data Models', action: 'status_change', fromStatus: 'todo', toStatus: 'done', assignee: 'Charlie' },
+        { timestamp: '2026-06-20T16:00:00Z', projectId: 'n1', taskId: 'n1a', taskTitle: 'Wireframes', action: 'status_change', fromStatus: 'todo', toStatus: 'done', assignee: 'Alice' },
+        { timestamp: '2026-06-22T09:30:00Z', projectId: 'n1', taskId: 'n1b', taskTitle: 'UI Components', action: 'status_change', fromStatus: 'todo', toStatus: 'inprogress', assignee: 'Alice' },
+        { timestamp: '2026-06-22T11:00:00Z', projectId: 'n2', taskId: 'n2a', taskTitle: 'Auth API', action: 'status_change', fromStatus: 'todo', toStatus: 'inprogress', assignee: 'Charlie' }
+    ]
+};
+
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('resetMock') === 'true') {
+    localStorage.removeItem('idealog');
+}
+
+const LONG_MOCK = {
+    id:'root', title:'My Megastructure Project with an Extraordinarily Long Title to Test Layout Constraints and Overflow Handling', status:'inprogress', assignee:'', tags:[], notes:'',
+    children:[
+        { id:'n1', title:'Product Design & User Experience Research Phase 1', status:'inprogress', assignee:'Alice', tags:['design','ux'], notes:'Focus on accessibility.',
+          children:[
+            { id:'n1a', title:'High-fidelity Wireframes and Interactive Clickable Prototype Mockups for Stakeholder Presentation', status:'done', assignee:'Alice', tags:['design'], notes:'', children:[] },
+            { id:'n1b', title:'Reusable Design System Components with Complex Layout Rules and Adaptive Styling Sheets', status:'inprogress', assignee:'Alice', tags:['design','frontend'], notes:'', children:[] },
+            { id:'n1c', title:'User Testing Interviews and Usability Reports for Mobile Interfaces under Slow Network Conditions', status:'todo', assignee:'Bob', tags:['research'], notes:'', children:[] }
+        ]},
+        { id:'n2', title:'Backend Services, Distributed Database Infrastructure, and RESTful API Orchestration Middleware Layer', status:'inprogress', assignee:'Charlie', tags:['backend','infra'], notes:'',
+          children:[
+            { id:'n2a', title:'OAuth2 Single Sign-On and Multi-factor Authentication Protocol Implementation with JWT Tokens', status:'inprogress', assignee:'Charlie', tags:['backend','auth'], notes:'', children:[] },
+            { id:'n2b', title:'PostgreSQL Database Schemas, Data Partitioning Strategies, and Index Optimizations for Heavy Analytics Queries', status:'done', assignee:'Charlie', tags:['backend'], notes:'', children:[] },
+            { id:'n2c', title:'Implementing REST Endpoints, Rate Limiting Middleware, and CORS Verification Filters', status:'todo', assignee:'Dana', tags:['backend','api'], notes:'', children:[] }
+        ]},
+        { id:'n3', title:'Growth Marketing, SEO Optimization, Content Strategy, and Product Launch Campaigns', status:'todo', assignee:'Eve', tags:['marketing'], notes:'',
+          children:[
+            { id:'n3a', title:'Optimized Landing Page Copywriting, A/B Testing, and Tracking Pixel Setup', status:'todo', assignee:'Eve', tags:['marketing','frontend'], notes:'', children:[] },
+            { id:'n3b', title:'Social Media Blitz and Multi-channel Paid Advertisement Campaigns on Major Tech Platforms', status:'todo', assignee:'Eve', tags:['marketing'], notes:'', children:[] }
+        ]},
+        { id:'n4', title:'Research, Competitive Market Analysis, and Technical Feasibility Investigation Projects', status:'done', assignee:'Bob', tags:['research'], notes:'',
+          children:[
+            { id:'n4a', title:'Competitor Product Benchmarking and Core Capabilities Matrix', status:'done', assignee:'Bob', tags:['research'], notes:'', children:[] },
+            { id:'n4b', title:'User Demographics Research and Target Audience Segment Definitions', status:'done', assignee:'Bob', tags:['research'], notes:'', children:[] }
+        ]},
+        { id:'n5', title:'DevOps Pipeline Automation, Continuous Integration, Quality Assurance Testing, and Server Deployments', status:'todo', assignee:'Frank', tags:['devops'], notes:'',
+          children:[
+            { id:'n5a', title:'Configure Jenkins Pipeline for Auto-building Docker Images and Pushing to Private Registry Container Repository', status:'todo', assignee:'Frank', tags:['devops','ci'], notes:'', children:[] },
+            { id:'n5b', title:'Writing Unit and Integration Tests for Core API Business Logic to Guarantee 90 Percent Coverage', status:'todo', assignee:'Frank', tags:['qa'], notes:'', children:[] },
+            { id:'n5c', title:'Deploying Kubernetes Clusters on Virtual Private Clouds and Configuring Ingress Rules', status:'todo', assignee:'Frank', tags:['cloud'], notes:'', children:[] }
+        ]}
+    ],
+    history: [
+        { timestamp: '2026-06-10T10:00:00Z', projectId: 'n4', taskId: 'n4a', taskTitle: 'Competitor Product Benchmarking', action: 'status_change', fromStatus: 'todo', toStatus: 'done', assignee: 'Bob' },
+        { timestamp: '2026-06-15T14:30:00Z', projectId: 'n4', taskId: 'n4b', taskTitle: 'User Demographics Research', action: 'status_change', fromStatus: 'todo', toStatus: 'done', assignee: 'Bob' },
+        { timestamp: '2026-06-18T09:15:00Z', projectId: 'n2', taskId: 'n2b', taskTitle: 'PostgreSQL Database Schemas', action: 'status_change', fromStatus: 'todo', toStatus: 'done', assignee: 'Charlie' },
+        { timestamp: '2026-06-20T16:00:00Z', projectId: 'n1', taskId: 'n1a', taskTitle: 'High-fidelity Wireframes', action: 'status_change', fromStatus: 'todo', toStatus: 'done', assignee: 'Alice' }
+    ]
+};
+
+const EMPTY_PROJECT = {
+    id: 'root',
+    title: 'My Project',
+    status: 'inprogress',
+    assignee: '',
+    tags: [],
+    notes: '',
+    children: [
+        {
+            id: 'sys1',
+            title: 'Default System',
+            status: 'inprogress',
+            assignee: '',
+            tags: [],
+            notes: '',
+            children: [
+                {
+                    id: 'sub1',
+                    title: 'Default Subsystem',
+                    status: 'inprogress',
+                    assignee: '',
+                    tags: [],
+                    notes: '',
+                    children: [
+                        {
+                            id: 'proj1',
+                            title: 'Default Project',
+                            status: 'inprogress',
+                            assignee: '',
+                            tags: [],
+                            notes: '',
+                            children: []
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    history: []
+};
+
+let data = JSON.parse(localStorage.getItem('idealog') || 'null') || EMPTY_PROJECT;
+let selectedId = null;
+let currentView = 'mindmap';
+let showMerged = localStorage.getItem('idealog_show_merged') === 'true';
+const collapsed = new Set();
+
+const save = () => localStorage.setItem('idealog', JSON.stringify(data));
+const uid  = () => 'n' + Math.random().toString(36).slice(2,9);
+
+function allNodes(node, out=[]) { out.push(node); (node.children||[]).forEach(c=>allNodes(c,out)); return out; }
+function findNode(id, node=data) {
+    if(node.id===id) return node;
+    for(const c of (node.children||[])) { const f=findNode(id,c); if(f) return f; }
+    return null;
+}
+function findParent(id, node=data) {
+    for(const c of (node.children||[])) {
+        if(c.id===id) return node;
+        const f=findParent(id,c); if(f) return f;
+    }
+    return null;
+}
+
+const sColor = s => ({todo:'#6366f1',inprogress:'#f59e0b',inprogress_bg:'#8b5cf6',done:'#10b981',obsolete:'#64748b'}[s]||'#6366f1');
+const sLabel = s => ({todo:'Todo',inprogress:'In Progress',inprogress_bg:'In Progress in BG',done:'Done',obsolete:'Obsolete'}[s]||s);
+const escapeHtml = s => s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : '';
+const initials = n => n ? n.trim().split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() : '?';
+const fmtDate = d => {
+    if (!d) return '';
+    if (d instanceof Date) return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    return new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+};
+const isOverdue = d => d && new Date(d) < new Date();
+const trunc = (s,n) => s.length>n ? s.slice(0,n-1)+'\u2026' : s;
+
+// --- MIND MAP ---
+let mmSvg, mmG;
+
+function renderMindMap() {
+    const el = document.getElementById('mindmap-view');
+    el.innerHTML = '';
+    const W = el.clientWidth, H = el.clientHeight;
+    if(!W || !H) return;
+
+    mmSvg = d3.select('#mindmap-view').append('svg').attr('width',W).attr('height',H);
+
+    const defs = mmSvg.append('defs');
+    const glowF = defs.append('filter').attr('id','glow').attr('x','-50%').attr('y','-50%').attr('width','200%').attr('height','200%');
+    glowF.append('feGaussianBlur').attr('in','SourceGraphic').attr('stdDeviation','5').attr('result','blur');
+    const glowM = glowF.append('feMerge');
+    glowM.append('feMergeNode').attr('in','blur');
+    glowM.append('feMergeNode').attr('in','SourceGraphic');
+
+    const zoom = d3.zoom().scaleExtent([0.2,4]).on('zoom', e => mmG.attr('transform',e.transform));
+    mmSvg.call(zoom).on('dblclick.zoom',null);
+    mmG = mmSvg.append('g');
+
+    if (!data) return;
+    
+    // Safety check for empty data
+    if (!data.children) data.children = [];
+
+    const hier = d3.hierarchy(data);
+    const radius = Math.max(130, Math.min(W,H)*0.26);
+    d3.tree().size([2*Math.PI, radius]).separation((a,b)=>(a.parent===b.parent?1:2.5)/a.depth)(hier);
+
+    const cx=W/2, cy=H/2;
+    const g = mmG.append('g').attr('transform',`translate(${cx},${cy})`);
+
+    g.selectAll('.mm-link')
+        .data(hier.links()).enter().append('path')
+        .attr('class','mm-link')
+        .attr('d', d3.linkRadial().angle(d=>d.x).radius(d=>d.y))
+        .attr('stroke', d => sColor(d.target.data.status))
+        .attr('stroke-opacity', 0.22);
+
+    const nodeG = g.selectAll('.mm-node')
+        .data(hier.descendants()).enter().append('g')
+        .attr('class','mm-node')
+        .attr('id', d=>`mmn-${d.data.id}`)
+        .attr('transform', d => {
+            if(d.depth===0) return 'translate(0,0)';
+            const x=d.y*Math.cos(d.x-Math.PI/2), y=d.y*Math.sin(d.x-Math.PI/2);
+            return `translate(${x},${y})`;
+        })
+        .on('click', (e,d)=>{ e.stopPropagation(); selectNode(d.data.id); })
+        .on('mouseover', (e,d)=>showTip(e,d.data))
+        .on('mouseout', hideTip);
+
+    const nr = d => d.depth===0?26:d.depth===1?16:10;
+
+    // Glow ring for selected
+    nodeG.append('circle')
+        .attr('r', d=>nr(d)+8)
+        .attr('fill', d => d.data.id===selectedId ? sColor(d.data.status) : 'none')
+        .attr('fill-opacity', 0.15)
+        .style('pointer-events','none');
+
+    // Main circle
+    nodeG.append('circle')
+        .attr('r', nr)
+        .attr('fill', d=>sColor(d.data.status))
+        .attr('fill-opacity', d=>d.data.id===selectedId?1:0.8)
+        .attr('stroke', d=>sColor(d.data.status))
+        .attr('stroke-opacity', d=>d.data.id===selectedId?1:0.35)
+        .attr('stroke-width', d=>d.data.id===selectedId?3:1.5)
+        .style('filter', d=>d.data.id===selectedId?`drop-shadow(0 0 8px ${sColor(d.data.status)})`:'none');
+
+    // Label
+    nodeG.append('text')
+        .attr('dy','0.33em')
+        .attr('x', d=>{
+            if(d.depth===0) return 0;
+            return (d.y*Math.cos(d.x-Math.PI/2))>=0 ? nr(d)+7 : -(nr(d)+7);
+        })
+        .attr('text-anchor', d=>{
+            if(d.depth===0) return 'middle';
+            return (d.y*Math.cos(d.x-Math.PI/2))>=0 ? 'start' : 'end';
+        })
+        .attr('font-size', d=>d.depth===0?'13px':d.depth===1?'12px':'11px')
+        .attr('font-weight', d=>d.depth<=1?'600':'400')
+        .attr('fill', d=>d.data.id===selectedId?'#fff':'#cbd5e1')
+        .text(d=>trunc(d.data.title,d.depth===0?16:22));
+
+    // Add-child button
+    nodeG.append('text')
+        .attr('class','add-btn')
+        .attr('y', d=>-(nr(d)+3))
+        .attr('text-anchor','middle')
+        .attr('font-size','13px').attr('font-weight','700')
+        .attr('fill','rgba(255,255,255,0.4)').attr('dy','0.33em')
+        .text('+')
+        .on('click',(e,d)=>{ e.stopPropagation(); addChildTo(d.data.id); });
+
+    mmSvg.on('click',()=>{ if(selectedId){selectedId=null;closePanel();} });
+}
+
+// --- OUTLINE ---
+function renderOutline() {
+    const el = document.getElementById('outline-view');
+    el.innerHTML = '';
+    if (!data) return;
+    el.appendChild(buildON(data,0));
+}
+function buildON(node, depth) {
+    const wrap = document.createElement('div');
+    wrap.className = 'outline-node';
+    const hasKids = node.children && node.children.length>0;
+    const isCol = collapsed.has(node.id);
+    const row = document.createElement('div');
+    row.className = 'outline-row'+(node.id===selectedId?' selected':'');
+    const tog = document.createElement('div');
+    tog.className = 'outline-toggle'+(isCol?' collapsed':'');
+    tog.textContent = hasKids ? '\u25be' : '';
+    if(hasKids) tog.onclick=e=>{ e.stopPropagation(); collapsed.has(node.id)?collapsed.delete(node.id):collapsed.add(node.id); renderOutline(); };
+    const dot = document.createElement('div');
+    dot.className='outline-dot'; dot.style.background=sColor(node.status);
+    const title = document.createElement('div');
+    title.className='outline-title'; title.textContent=node.title;
+    const chips = document.createElement('div');
+    chips.className='outline-chips';
+    const sc=document.createElement('span'); sc.className=`chip chip-${node.status}`; sc.textContent=sLabel(node.status); chips.appendChild(sc);
+    if(node.assignee){ const ac=document.createElement('span'); ac.className='chip chip-person'; ac.textContent=node.assignee; chips.appendChild(ac); }
+    (node.tags||[]).slice(0,2).forEach(t=>{ const tc=document.createElement('span'); tc.className='chip chip-tag'; tc.textContent='#'+t; chips.appendChild(tc); });
+    row.appendChild(tog); row.appendChild(dot); row.appendChild(title); row.appendChild(chips);
+    row.onclick=()=>selectNode(node.id);
+    wrap.appendChild(row);
+    if(hasKids&&!isCol){
+        const kids=document.createElement('div'); kids.className='outline-children';
+        node.children.forEach(c=>kids.appendChild(buildON(c,depth+1)));
+        wrap.appendChild(kids);
+    }
+    return wrap;
+}
+
+// --- KANBAN ---
+function renderKanban() {
+    const el = document.getElementById('kanban-view');
+    el.innerHTML = '';
+    const nodes = allNodes(data).filter(n => getDepth(n.id) === 4);
+    [
+        {key:'todo',label:'Todo',color:'#6366f1'},
+        {key:'inprogress',label:'In Progress',color:'#f59e0b'},
+        {key:'done',label:'Done',color:'#10b981'}
+    ].forEach(col=>{
+        const items = nodes.filter(n=>n.status===col.key);
+        const colEl = document.createElement('div'); colEl.className='kanban-col';
+        const hdr = document.createElement('div'); hdr.className='kanban-col-header';
+        hdr.innerHTML=`<div class="kanban-col-dot" style="background:${col.color}"></div><span>${col.label}</span><span class="kanban-count">${items.length}</span>`;
+        const cards = document.createElement('div'); cards.className='kanban-cards';
+        items.forEach(n=>{
+            const card=document.createElement('div');
+            card.className='kanban-card'+(n.id===selectedId?' selected':'');
+            const t=document.createElement('div'); t.className='card-title'; t.textContent=n.title;
+            const meta=document.createElement('div'); meta.className='card-meta';
+            if(n.assignee){
+                const aw=document.createElement('div'); aw.className='card-assignee';
+                const av=document.createElement('div'); av.className='avatar'; av.textContent=initials(n.assignee);
+                av.style.background=`linear-gradient(135deg,${col.color}77,${col.color})`;
+                aw.appendChild(av);
+                const nm=document.createElement('span'); nm.textContent=n.assignee; aw.appendChild(nm);
+                meta.appendChild(aw);
+            }
+            card.appendChild(t); card.appendChild(meta);
+            if(n.tags&&n.tags.length){
+                const tr2=document.createElement('div'); tr2.className='card-meta'; tr2.style.marginTop='6px';
+                n.tags.slice(0,3).forEach(tg=>{ const c=document.createElement('span'); c.className='chip chip-tag'; c.textContent='#'+tg; tr2.appendChild(c); });
+                card.appendChild(tr2);
+            }
+            card.onclick=()=>selectNode(n.id);
+            cards.appendChild(card);
+        });
+        colEl.appendChild(hdr); colEl.appendChild(cards); el.appendChild(colEl);
+    });
+}
+
+function renderGitBoard() {
+    const graphEl = document.getElementById('gb-graph-container');
+    const logEl = document.getElementById('gb-log-container');
+    graphEl.innerHTML = '';
+    logEl.innerHTML = '';
+    if (!data) return;
+
+    // Add the toolbar toggle button inside graph container
+    const toolbar = document.createElement('div');
+    toolbar.className = 'gb-toolbar';
+    toolbar.style.cssText = 'position:absolute; top:12px; right:20px; z-index:10;';
+    toolbar.innerHTML = `
+        <button id="gb-toggle-merged" style="background:rgba(255,255,255,0.03); border:1px solid var(--border); color:var(--text-dim); padding:6px 12px; border-radius:8px; font-size:11px; font-family:Inter,sans-serif; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all 0.15s ease; backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);">
+            <span style="font-size:10px; color:${showMerged ? 'var(--done)' : 'var(--text-muted)'}">${showMerged ? '●' : '○'}</span>
+            Show Merged
+        </button>
+    `;
+    graphEl.appendChild(toolbar);
+
+    const btn = toolbar.querySelector('#gb-toggle-merged');
+    btn.addEventListener('mouseenter', function() {
+        btn.style.background = 'var(--surface-hover)';
+        btn.style.borderColor = 'var(--border-bright)';
+        btn.style.color = 'var(--text)';
+    });
+    btn.addEventListener('mouseleave', function() {
+        btn.style.background = 'rgba(255,255,255,0.03)';
+        btn.style.borderColor = 'var(--border)';
+        btn.style.color = 'var(--text-dim)';
+    });
+    btn.addEventListener('click', function() {
+        showMerged = !showMerged;
+        localStorage.setItem('idealog_show_merged', showMerged);
+        renderGitBoard();
+    });
+
+    let W = graphEl.clientWidth, H = graphEl.clientHeight;
+    if (!W || !H) {
+        // Fallback to parents or static dimensions to avoid infinite loops, but still let it render.
+        W = W || 800;
+        H = H || 600;
+    }
+
+    // 1. Find all project nodes (nodes with children, including root)
+    const projects = [];
+    function getProjects(node, depth = 0) {
+        projects.push({ node, depth });
+        (node.children || []).forEach(c => {
+            if (c.children && c.children.length > 0) {
+                getProjects(c, depth + 1);
+            }
+        });
+    }
+    getProjects(data);
+
+    // Map projects to lanes
+    const projectLanes = {};
+    projects.forEach((p, index) => {
+        projectLanes[p.node.id] = index;
+    });
+
+    // 2. Gather unique dates from history
+    let uniqueDates = Array.from(new Set(data.history.map(e => e.timestamp.split('T')[0])));
+    if (uniqueDates.length === 0) {
+        uniqueDates = [new Date().toISOString().split('T')[0]];
+    }
+    uniqueDates.sort((a, b) => new Date(b) - new Date(a)); // Newest first
+
+    // 3. Compute spans for each project branch
+    const projectMap = {};
+    projects.forEach(p => {
+        projectMap[p.node.id] = {
+            id: p.node.id,
+            title: p.node.title,
+            node: p.node,
+            lane: projectLanes[p.node.id],
+            parent: findParent(p.node.id),
+            events: [],
+            firstRow: -1,
+            lastRow: -1,
+            isDone: false
+        };
+    });
+
+    function isProjectDone(projNode) {
+        const tasks = allNodes(projNode).filter(n => getDepth(n.id) === 4);
+        if (tasks.length === 0) return false;
+        return tasks.every(t => t.status === 'done');
+    }
+
+    // Populate events
+    data.history.forEach(ev => {
+        const pInfo = projectMap[ev.projectId];
+        if (pInfo) {
+            pInfo.events.push(ev);
+        }
+    });
+
+    // Bubble events to parents
+    projects.forEach(p => {
+        const pInfo = projectMap[p.node.id];
+        const descendants = allNodes(p.node).filter(n => n.id !== p.node.id && n.children && n.children.length > 0);
+        descendants.forEach(desc => {
+            const descInfo = projectMap[desc.id];
+            if (descInfo) {
+                pInfo.events.push(...descInfo.events);
+            }
+        });
+    });
+
+    // Map events to row indices
+    uniqueDates.forEach((date, r) => {
+        projects.forEach(p => {
+            const pInfo = projectMap[p.node.id];
+            const hasEventOnDate = pInfo.events.some(ev => ev.timestamp.split('T')[0] === date);
+            if (hasEventOnDate) {
+                if (pInfo.firstRow === -1) pInfo.firstRow = r;
+                pInfo.lastRow = r;
+            }
+        });
+    });
+
+    projects.forEach(p => {
+        const pInfo = projectMap[p.node.id];
+        if (pInfo.firstRow === -1) {
+            pInfo.firstRow = 0;
+            pInfo.lastRow = 0;
+        }
+        pInfo.isDone = isProjectDone(p.node);
+    });
+
+    // Group history to commits
+    const commitsMap = {};
+    data.history.forEach(ev => {
+        const date = ev.timestamp.split('T')[0];
+        const key = `${ev.projectId}_${date}`;
+        if (!commitsMap[key]) {
+            commitsMap[key] = {
+                projectId: ev.projectId,
+                date: date,
+                timestamp: new Date(ev.timestamp),
+                events: []
+            };
+        }
+        commitsMap[key].events.push(ev);
+    });
+    const commitsList = Object.values(commitsMap).sort((a, b) => b.timestamp - a.timestamp);
+
+    // Dimensions
+    const ROW_H = 46;
+    const LANE_W = 34;
+    const L_PAD = 90; // Padding to display date strings nicely on left
+    const TOP_PAD = 100;
+    const svgH = uniqueDates.length * ROW_H + TOP_PAD + 40;
+    const GRAPH_W = projects.length * LANE_W + 30;
+    const svgW = L_PAD + GRAPH_W;
+
+    const xOf = (lane) => L_PAD + lane * LANE_W + LANE_W/2;
+    const yOf = (row) => TOP_PAD + row * ROW_H + ROW_H/2;
+
+    const svg = d3.select('#gb-graph-container').append('svg')
+        .attr('width', '100%').attr('height', svgH);
+    const g = svg.append('g');
+
+    // Drag-zoom support
+    svg.call(d3.zoom().scaleExtent([0.2, 4]).on('zoom', e => g.attr('transform', e.transform)))
+       .on('dblclick.zoom', null);
+
+    // 4. Horizontal Grid Lines and Date Labels
+    uniqueDates.forEach((date, r) => {
+        const y = yOf(r);
+        // Grid line
+        g.append('line')
+            .attr('x1', L_PAD - 20).attr('x2', svgW)
+            .attr('y1', y).attr('y2', y)
+            .attr('stroke', 'rgba(255,255,255,0.03)').attr('stroke-width', 1);
+
+        // Date text label
+        g.append('text')
+            .attr('x', 15).attr('y', y).attr('dy', '0.33em')
+            .attr('font-family', 'Inter, sans-serif')
+            .attr('font-size', '11px')
+            .attr('font-weight', '500')
+            .attr('fill', 'var(--text-muted)')
+            .text(fmtDate(date));
+    });
+
+    // 5. Draw Branching Curves & Merge Curves
+    projects.forEach(p => {
+        const pInfo = projectMap[p.node.id];
+        if (!pInfo.parent) return; // Skip root project
+        const parentInfo = projectMap[pInfo.parent.id];
+        if (!parentInfo) return;
+
+        const color = sColor(p.node.status);
+        const px = xOf(parentInfo.lane);
+        const x = xOf(pInfo.lane);
+        const isDone = pInfo.isDone;
+
+        // Branch curve at lastRow (branch point)
+        const branchY = yOf(pInfo.lastRow);
+        // Draw Bezier from parent lane to project lane
+        g.append('path')
+            .attr('d', `M${px},${branchY + ROW_H/2} C${(px+x)/2},${branchY + ROW_H/2} ${(px+x)/2},${branchY} ${x},${branchY}`)
+            .attr('fill', 'none')
+            .attr('stroke', color)
+            .attr('stroke-width', 1.8)
+            .attr('stroke-opacity', 0.55);
+
+        // Merge curve at firstRow (completion point) back to parent lane
+        if (isDone && showMerged) {
+            const mergeY = yOf(pInfo.firstRow);
+            g.append('path')
+                .attr('d', `M${x},${mergeY} C${(px+x)/2},${mergeY} ${(px+x)/2},${mergeY - ROW_H/2} ${px},${mergeY - ROW_H/2}`)
+                .attr('fill', 'none')
+                .attr('stroke', color)
+                .attr('stroke-width', 1.8)
+                .attr('stroke-opacity', 0.35);
+
+            // Merge dot
+            g.append('circle')
+                .attr('cx', px).attr('cy', mergeY - ROW_H/2)
+                .attr('r', 3)
+                .attr('fill', color)
+                .attr('fill-opacity', 0.6)
+                .style('pointer-events', 'none');
+        }
+    });
+
+    // 6. Draw vertical branch lines
+    projects.forEach(p => {
+        const pInfo = projectMap[p.node.id];
+        const x = xOf(pInfo.lane);
+        const color = sColor(p.node.status);
+        const isRoot = p.node.id === 'root';
+        const startY = yOf(pInfo.lastRow);
+        const endY = yOf(pInfo.isDone && showMerged ? pInfo.firstRow : 0);
+
+        g.append('line')
+            .attr('x1', x).attr('y1', startY)
+            .attr('x2', x).attr('y2', endY)
+            .attr('stroke', color)
+            .attr('stroke-width', isRoot ? 2.6 : 1.8)
+            .attr('stroke-opacity', pInfo.isDone ? 0.35 : 0.8)
+            .attr('stroke-dasharray', p.node.status === 'todo' ? '3,3' : 'none');
+    });
+
+    // 7. Draw Commit Nodes (Circles)
+    commitsList.forEach(c => {
+        const pInfo = projectMap[c.projectId];
+        if (!pInfo) return;
+        const x = xOf(pInfo.lane);
+        const y = yOf(uniqueDates.indexOf(c.date));
+        const color = sColor(pInfo.node.status);
+        const isSel = c.projectId === selectedId;
+
+        // Commit outer ring
+        g.append('circle')
+            .attr('cx', x).attr('cy', y)
+            .attr('r', isSel ? 10 : 7)
+            .attr('fill', color)
+            .attr('fill-opacity', 0.15)
+            .style('pointer-events', 'none');
+
+        // Commit core dot
+        g.append('circle')
+            .attr('cx', x).attr('cy', y)
+            .attr('r', isSel ? 5.5 : 4)
+            .attr('fill', color)
+            .attr('stroke', '#fff')
+            .attr('stroke-width', isSel ? 2 : 1)
+            .style('cursor', 'pointer')
+            .on('click', () => selectNode(c.projectId))
+            .on('mouseover', e => {
+                const t=document.getElementById('tooltip');
+                let listHtml = '';
+                c.events.forEach(ev => {
+                    listHtml += `&middot; ${ev.taskTitle} (${sLabel(ev.toStatus)})<br>`;
+                });
+                t.innerHTML=`<strong>${pInfo.title}</strong><br>${listHtml}`;
+                t.style.left=(e.pageX+14)+'px'; t.style.top=(e.pageY-8)+'px';
+                t.classList.add('visible');
+            })
+            .on('mouseout', hideTip);
+    });
+
+    // 8. Draw Lane Header Labels
+    projects.forEach(p => {
+        const pInfo = projectMap[p.node.id];
+        const x = xOf(pInfo.lane);
+        const color = sColor(p.node.status);
+
+        const textGroup = g.append('g')
+            .attr('transform', `translate(${x}, 65) rotate(-30)`)
+            .style('cursor', 'pointer')
+            .on('click', () => selectNode(p.node.id));
+
+        textGroup.append('text')
+            .attr('text-anchor', 'start')
+            .attr('font-family', 'Inter, sans-serif')
+            .attr('font-size', '10px')
+            .attr('font-weight', '700')
+            .attr('fill', color)
+            .text(trunc(pInfo.title, 14));
+    });
+
+    // 9. Render terminal Git Log on the right side
+    const hashCode = str => {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return hash;
+    };
+
+    commitsList.forEach(c => {
+        const pInfo = projectMap[c.projectId];
+        if (!pInfo) return;
+        const hashVal = Math.abs(hashCode(c.projectId + c.date)).toString(16).slice(0, 7);
+        const dateStr = new Date(c.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+        let changesHtml = '';
+        c.events.forEach(ev => {
+            let classColor = 'gb-diff-todo';
+            let prefix = '*';
+            if (ev.toStatus === 'done') { classColor = 'gb-diff-add'; prefix = '+'; }
+            else if (ev.toStatus === 'inprogress') { classColor = 'gb-diff-mod'; prefix = '~'; }
+            
+            changesHtml += `<div class="${classColor}">${prefix} [${sLabel(ev.toStatus)}] ${ev.taskTitle} <span class="gb-log-author">(@${ev.assignee || 'User'})</span></div>`;
+        });
+
+        const logCard = document.createElement('div');
+        logCard.className = 'gb-log-commit';
+        logCard.style.cursor = 'pointer';
+        logCard.onclick = () => selectNode(c.projectId);
+        logCard.innerHTML = `
+            <div class="gb-log-header">commit ${hashVal} (branch: ${pInfo.title})</div>
+            <div class="gb-log-author">Author: ${c.events[0]?.assignee || 'User'}</div>
+            <div class="gb-log-date">Date:   ${dateStr}</div>
+            <div class="gb-log-changes">${changesHtml}</div>
+        `;
+        logEl.appendChild(logCard);
+    });
+}
+
+// --- GANTT VIEW ---
+function renderGantt() {
+    const outlineEl = document.getElementById('gantt-outline-panel');
+    const timelineEl = document.getElementById('gantt-timeline-panel');
+    outlineEl.innerHTML = '';
+    timelineEl.innerHTML = '';
+    if (!data) return;
+
+    // Synchronize scrolling
+    outlineEl.onscroll = () => { timelineEl.scrollTop = outlineEl.scrollTop; };
+    timelineEl.onscroll = () => { outlineEl.scrollTop = timelineEl.scrollTop; };
+
+    // Flatten tree structure to rows to align left side outline with right side timeline
+    const rows = [];
+    function walkTree(node, depth = 0) {
+        rows.push({ node, depth });
+        const hasKids = node.children && node.children.length > 0;
+        if (hasKids && !collapsed.has(node.id)) {
+            // Sort children: projects first, then tasks
+            node.children.forEach(c => walkTree(c, depth + 1));
+        }
+    }
+    // Walk starting from data's children (exclude root itself from layout as a parent lane)
+    (data.children || []).forEach(c => walkTree(c, 0));
+
+    // Calculate time frame
+    const historyDates = (data.history || []).map(ev => new Date(ev.timestamp)).filter(d => !isNaN(d.getTime()));
+    let minDate = new Date();
+    let maxDate = new Date();
+    if (historyDates.length > 0) {
+        minDate = new Date(d3.min(historyDates));
+        maxDate = new Date(d3.max(historyDates));
+    }
+    // Pad dates: go 7 days back and 7 days forward
+    minDate.setDate(minDate.getDate() - 7);
+    maxDate.setDate(maxDate.getDate() + 7);
+    
+    // Clear hours for alignment
+    minDate.setHours(0,0,0,0);
+    maxDate.setHours(0,0,0,0);
+
+    const dates = [];
+    let cur = new Date(minDate);
+    let loopCount = 0;
+    while (cur <= maxDate && loopCount < 1000) {
+        dates.push(new Date(cur));
+        cur.setDate(cur.getDate() + 1);
+        loopCount++;
+    }
+
+    const COL_W = 40;
+    const ROW_H = 38;
+    const HEADER_H = 50;
+
+    // --- 1. Render Left Outline Panel ---
+    rows.forEach((r, idx) => {
+        const node = r.node;
+        const depth = r.depth;
+        const hasKids = node.children && node.children.length > 0;
+
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'gantt-row' + (node.id === selectedId ? ' selected' : '');
+        rowDiv.style.paddingLeft = `${depth * 16 + 8}px`;
+        rowDiv.onclick = () => selectNode(node.id);
+
+        // Chevron
+        const chev = document.createElement('span');
+        chev.style.cssText = 'width: 14px; display: inline-block; cursor: pointer; color: var(--text-muted); font-size: 10px; margin-right: 4px;';
+        if (hasKids) {
+            chev.textContent = collapsed.has(node.id) ? '▶' : '▼';
+            chev.onclick = (e) => {
+                e.stopPropagation();
+                if (collapsed.has(node.id)) collapsed.delete(node.id);
+                else collapsed.add(node.id);
+                renderGantt();
+            };
+        }
+        rowDiv.appendChild(chev);
+
+        // Node Title
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'gantt-outline-title';
+        titleSpan.textContent = node.title;
+        rowDiv.appendChild(titleSpan);
+
+        // Quick Actions
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'gantt-outline-actions';
+        if (hasKids || node.id === 'root') {
+            const addBtn = document.createElement('button');
+            addBtn.className = 'btn-gantt-action';
+            addBtn.textContent = '+ Task';
+            addBtn.onclick = (e) => {
+                e.stopPropagation();
+                addChildTo(node.id);
+            };
+            actionsDiv.appendChild(addBtn);
+        }
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn-gantt-action';
+        delBtn.textContent = '×';
+        delBtn.style.color = '#f87171';
+        delBtn.onclick = (e) => {
+            e.stopPropagation();
+            selectedId = node.id;
+            deleteSelected();
+        };
+        actionsDiv.appendChild(delBtn);
+        rowDiv.appendChild(actionsDiv);
+
+        outlineEl.appendChild(rowDiv);
+    });
+
+    // --- 2. Calculate spans for each row ---
+    function getNodeSpan(node) {
+        const hasKids = node.children && node.children.length > 0;
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const nextDay = new Date(today);
+        nextDay.setDate(today.getDate() + 1);
+
+        if (!hasKids) {
+            // Task: find dates from history
+            const taskEvents = (data.history || []).filter(ev => ev.taskId === node.id);
+            if (taskEvents.length === 0) {
+                return { start: today, end: nextDay };
+            }
+            // Earliest timestamp is start
+            let start = new Date(d3.min(taskEvents, ev => new Date(ev.timestamp)));
+            if (isNaN(start.getTime())) start = new Date(today);
+            start.setHours(0,0,0,0);
+            
+            // If done, end is the done timestamp
+            const doneEv = taskEvents.find(ev => ev.toStatus === 'done');
+            let end = doneEv ? new Date(doneEv.timestamp) : new Date();
+            if (isNaN(end.getTime())) end = new Date(today);
+            end.setHours(0,0,0,0);
+            
+            if (end.getTime() <= start.getTime()) {
+                // At least 1 day span
+                end = new Date(start);
+                end.setDate(start.getDate() + 1);
+            }
+            return { start, end };
+        } else {
+            // Project: get min/max of all nested tasks
+            const leaves = allNodes(node).filter(n => getDepth(n.id) === 4);
+            if (leaves.length === 0) {
+                return { start: today, end: nextDay };
+            }
+            const spans = leaves.map(getNodeSpan);
+            let start = new Date(d3.min(spans, s => s.start));
+            let end = new Date(d3.max(spans, s => s.end));
+            if (isNaN(start.getTime())) start = new Date(today);
+            if (isNaN(end.getTime())) end = new Date(nextDay);
+            return { start, end };
+        }
+    }
+
+    // --- 3. Render Timeline SVG Grid ---
+    const svgW = dates.length * COL_W;
+    const svgH = rows.length * ROW_H + HEADER_H;
+
+    const svg = d3.select('#gantt-timeline-panel').append('svg')
+        .attr('width', svgW).attr('height', svgH);
+
+    // Grid headers (Date columns)
+    const headerG = svg.append('g').attr('class', 'gantt-header');
+    
+    // Draw day columns backgrounds & lines
+    dates.forEach((date, cIdx) => {
+        const x = cIdx * COL_W;
+        
+        // Vertical grid line
+        svg.append('line')
+            .attr('class', 'gantt-grid-line')
+            .attr('x1', x).attr('x2', x)
+            .attr('y1', 0).attr('y2', svgH);
+
+        // Date text label
+        headerG.append('text')
+            .attr('x', x + COL_W/2).attr('y', 36)
+            .attr('text-anchor', 'middle')
+            .attr('font-family', 'Inter, sans-serif')
+            .attr('font-size', '10px')
+            .attr('font-weight', '600')
+            .attr('fill', 'var(--text-muted)')
+            .text(date.getDate());
+
+        // Month banner (only on new month or first column)
+        if (cIdx === 0 || date.getDate() === 1) {
+            headerG.append('text')
+                .attr('x', x + 5).attr('y', 20)
+                .attr('font-family', 'Inter, sans-serif')
+                .attr('font-size', '11px')
+                .attr('font-weight', '700')
+                .attr('fill', 'var(--accent)')
+                .text(date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
+        }
+    });
+
+    // Draw horizontal grid lines for rows
+    rows.forEach((r, idx) => {
+        const y = idx * ROW_H + HEADER_H;
+        
+        // Row background line
+        svg.append('line')
+            .attr('class', 'gantt-grid-line')
+            .attr('x1', 0).attr('x2', svgW)
+            .attr('y1', y).attr('y2', y);
+    });
+
+    // Draw Today line if visible
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayIdx = dates.findIndex(d => d.toISOString().split('T')[0] === todayStr);
+    if (todayIdx !== -1) {
+        const tx = todayIdx * COL_W;
+        svg.append('line')
+            .attr('class', 'gantt-today-line')
+            .attr('x1', tx).attr('x2', tx)
+            .attr('y1', 0).attr('y2', svgH);
+    }
+
+    // --- 4. Draw Gantt Bars ---
+    rows.forEach((r, idx) => {
+        const node = r.node;
+        const span = getNodeSpan(node);
+        const hasKids = node.children && node.children.length > 0;
+
+        // Map start and end to X coordinates
+        // Calculate diff in days from minDate
+        const startDiff = Math.max(0, Math.floor((span.start - minDate) / (1000*60*60*24)));
+        const endDiff = Math.floor((span.end - minDate) / (1000*60*60*24));
+
+        const barX = startDiff * COL_W;
+        const barW = Math.max(8, (endDiff - startDiff) * COL_W);
+        const barY = idx * ROW_H + HEADER_H + (ROW_H - 18) / 2; // Center bar in row
+
+        if (!hasKids) {
+            // Task Bar (Draggable)
+            const color = sColor(node.status);
+            
+            const bar = svg.append('rect')
+                .attr('class', 'gantt-bar-task')
+                .attr('x', barX).attr('y', barY)
+                .attr('width', barW).attr('height', 18)
+                .attr('fill', color)
+                .attr('fill-opacity', 0.8)
+                .attr('stroke', color)
+                .attr('stroke-width', node.id === selectedId ? 2 : 0)
+                .on('click', (e) => {
+                    e.stopPropagation();
+                    selectNode(node.id);
+                });
+
+            // Reschedule Drag Behavior
+            let startDragX = 0;
+            const drag = d3.drag()
+                .on('start', function(e) {
+                    d3.select(this).attr('fill-opacity', 1);
+                    startDragX = e.x;
+                })
+                .on('drag', function(e) {
+                    const dx = e.x - startDragX;
+                    const deltaX = Math.round(dx / COL_W) * COL_W;
+                    d3.select(this).attr('transform', `translate(${deltaX},0)`);
+                })
+                .on('end', function(e) {
+                    d3.select(this).attr('fill-opacity', 0.8);
+                    const dx = e.x - startDragX;
+                    const deltaDays = Math.round(dx / COL_W);
+                    if (deltaDays !== 0) {
+                        // Reschedule history
+                        const taskEvents = (data.history || []).filter(ev => ev.taskId === node.id);
+                        taskEvents.forEach(ev => {
+                            const dt = new Date(ev.timestamp);
+                            dt.setDate(dt.getDate() + deltaDays);
+                            ev.timestamp = dt.toISOString();
+                        });
+                        save();
+                        renderGantt();
+                    }
+                    d3.select(this).attr('transform', null);
+                });
+
+            bar.call(drag);
+        } else {
+            // Project Bar (Classic bracket style)
+            const color = sColor(node.status);
+            const projGroup = svg.append('g').style('cursor', 'pointer').on('click', () => selectNode(node.id));
+
+            // Main horizontal bar
+            projGroup.append('rect')
+                .attr('class', 'gantt-bar-project')
+                .attr('x', barX).attr('y', barY + 3)
+                .attr('width', barW).attr('height', 8)
+                .attr('fill', color)
+                .attr('fill-opacity', 0.7);
+
+            // Left bracket drop
+            projGroup.append('path')
+                .attr('d', `M${barX},${barY + 3} v12 h4`)
+                .attr('stroke', color)
+                .attr('stroke-width', 2.5)
+                .attr('fill', 'none');
+
+            // Right bracket drop
+            projGroup.append('path')
+                .attr('d', `M${barX + barW},${barY + 3} v12 h-4`)
+                .attr('stroke', color)
+                .attr('stroke-width', 2.5)
+                .attr('fill', 'none');
+        }
+    });
+}
+
+// --- SPREADSHEET & PIVOT TABLE VIEW ───
+let currentSheetTab = 'tasks';
+let pivotRowDim = 'project';
+let pivotColDim = 'status';
+// Dynamic column list stored in localStorage or default to system/subsystem
+let parsedCols = JSON.parse(localStorage.getItem('idealog_sheet_cols') || 'null');
+if (!Array.isArray(parsedCols)) {
+    parsedCols = [
+        { key: 'system', label: 'System' },
+        { key: 'subsystem', label: 'Subsystem' }
+    ];
+}
+let sheetColumns = parsedCols.filter(col => col && col.label && col.label.toLowerCase() !== 'project');
+
+localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+
+// Lists of entities that populate task dropdowns and autocompletes
+let objectLists = JSON.parse(localStorage.getItem('idealog_object_lists') || 'null') || {
+    assignees: ['Alice', 'Bob', 'Charlie', 'Dana', 'Eve', 'Frank'],
+    systems: ['Tintin1', 'Tintin2', 'Scooby1/Sagis', 'Scooby2', 'Mogli', 'M400', 'M240', 'DFM'],
+    subsystems: ['BT Gantry', 'LP', 'Internals', 'Pool', 'SPG', 'BT', 'Chassis', 'Loader'],
+    projects: ['RTM200', 'Next 3 RTM release', 'Blade holder', 'M400', 'MPUH Loader resolution', 'RTM40', 'DFM']
+};
+
+function saveObjectLists() {
+    localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+}
+
+let pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
+let enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
+let hideDoneFilter = localStorage.getItem('idealog_hide_done_filter') || 'none'; // 'none', 'all', '1day', '1week', '1month'
+let showTimestamps = localStorage.getItem('idealog_show_timestamps') === 'true'; // false by default
+let highlightDurationDays = parseFloat(localStorage.getItem('idealog_highlight_duration_days') || '1.0'); // default to 1 day highlight fade course
+let pivotZebraStripes = localStorage.getItem('idealog_pivot_zebra_stripes') !== 'false'; // default to true
+
+function setPivotZebraStripes(val) {
+    pivotZebraStripes = val;
+    localStorage.setItem('idealog_pivot_zebra_stripes', val);
+    renderPivotTable();
+}
+
+function setHighlightDurationDays(val) {
+    const num = parseFloat(val);
+    highlightDurationDays = isNaN(num) ? 0.0 : num;
+    localStorage.setItem('idealog_highlight_duration_days', highlightDurationDays);
+    renderSheet();
+}
+
+// Track active selection highlights in the Pivot Table
+let activePivotHighlightDim = null; // e.g. 'system'
+let activePivotHighlightValue = null; // e.g. 'LP'
+let activePivotSelectedTaskId = null; // e.g. 'n12345'
+
+function clearPivotHighlights() {
+    activePivotHighlightDim = null;
+    activePivotHighlightValue = null;
+    activePivotSelectedTaskId = null;
+    const activeTab = document.querySelector('.sheet-tab.active');
+    if (activeTab && activeTab.id === 'stab-pivot') {
+        renderPivotTable();
+    }
+}
+
+// Collapsible toolbar state trackers
+let isTaskSheetToolbarCollapsed = localStorage.getItem('idealog_task_sheet_collapsed') === 'true';
+let isPivotToolbarCollapsed = localStorage.getItem('idealog_pivot_collapsed') === 'true';
+
+function toggleActiveSheetControls() {
+    if (currentSheetTab === 'tasks') {
+        isTaskSheetToolbarCollapsed = !isTaskSheetToolbarCollapsed;
+        localStorage.setItem('idealog_task_sheet_collapsed', isTaskSheetToolbarCollapsed);
+        renderTaskSheet();
+    } else if (currentSheetTab === 'pivot') {
+        isPivotToolbarCollapsed = !isPivotToolbarCollapsed;
+        localStorage.setItem('idealog_pivot_collapsed', isPivotToolbarCollapsed);
+        renderPivotTable();
+    }
+    updateActiveSheetControlsVisibility();
+}
+
+function updateActiveSheetControlsVisibility() {
+    const toggleBtn = document.getElementById('btn-toggle-controls');
+    if (!toggleBtn) return;
+    
+    // Hide controls button is irrelevant on lists sheet tab
+    if (currentSheetTab === 'lists') {
+        toggleBtn.style.display = 'none';
+        return;
+    } else {
+        toggleBtn.style.display = 'flex';
+    }
+    
+    const isCollapsed = (currentSheetTab === 'tasks') ? isTaskSheetToolbarCollapsed : isPivotToolbarCollapsed;
+    if (isCollapsed) {
+        toggleBtn.innerHTML = '🔧 Show Controls';
+        toggleBtn.style.background = 'rgba(255, 255, 255, 0.03)';
+        toggleBtn.style.color = 'var(--text-muted)';
+    } else {
+        toggleBtn.innerHTML = '🔧 Hide Controls';
+        toggleBtn.style.background = 'rgba(99, 102, 241, 0.1)';
+        toggleBtn.style.color = 'var(--accent)';
+    }
+}
+
+// Side Panel Drawer collapse state tracker
+let isSidebarDrawerCollapsed = localStorage.getItem('idealog_sidebar_collapsed') === 'true';
+
+function toggleSidebarDrawer() {
+    isSidebarDrawerCollapsed = !isSidebarDrawerCollapsed;
+    localStorage.setItem('idealog_sidebar_collapsed', isSidebarDrawerCollapsed);
+    updateSidebarDrawerVisibility();
+}
+
+function updateSidebarDrawerVisibility() {
+    const panel = document.getElementById('properties-panel');
+    const toggleBtn = document.getElementById('btn-toggle-sidebar');
+    if (!panel) return;
+    
+    if (isSidebarDrawerCollapsed) {
+        panel.classList.remove('open');
+        panel.style.display = 'none';
+        if (toggleBtn) {
+            toggleBtn.innerHTML = '📁 Show Sidebar';
+            toggleBtn.style.background = 'rgba(255, 255, 255, 0.03)';
+            toggleBtn.style.color = 'var(--text-muted)';
+        }
+    } else {
+        panel.style.display = 'flex';
+        if (selectedId) {
+            panel.classList.add('open');
+        }
+        if (toggleBtn) {
+            toggleBtn.innerHTML = '📂 Hide Sidebar';
+            toggleBtn.style.background = 'rgba(99, 102, 241, 0.1)';
+            toggleBtn.style.color = 'var(--accent)';
+        }
+    }
+}
+
+function setShowTimestamps(val) {
+    showTimestamps = val;
+    localStorage.setItem('idealog_show_timestamps', val);
+    renderSheet();
+}
+
+function setHideDoneFilter(val) {
+    hideDoneFilter = val;
+    localStorage.setItem('idealog_hide_done_filter', val);
+    renderSheet();
+}
+
+function togglePivotDim(dimKey) {
+    if (enabledPivotDims.includes(dimKey)) {
+        if (enabledPivotDims.length <= 1) {
+            alert("At least one column dimension must remain enabled in the Pivot Table.");
+            return;
+        }
+        enabledPivotDims = enabledPivotDims.filter(k => k !== dimKey);
+    } else {
+        enabledPivotDims.push(dimKey);
+    }
+    localStorage.setItem('idealog_enabled_pivot_dims', JSON.stringify(enabledPivotDims));
+    renderPivotTable();
+}
+
+function switchSheetTab(tab) {
+    currentSheetTab = tab;
+    document.querySelectorAll('.sheet-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById('stab-' + tab).classList.add('active');
+    updateActiveSheetControlsVisibility();
+    renderSheet();
+}
+
+function renderSheet() {
+    if (!data) return;
+    if (currentSheetTab === 'tasks') {
+        renderTaskSheet();
+    } else if (currentSheetTab === 'pivot') {
+        renderPivotTable();
+    } else {
+        renderListsSheet();
+    }
+}
+
+function getProjectsList() {
+    const list = [];
+    if (!data) return list;
+    // Depth-level 4 nodes: Main Project (Level 0, root) -> System (Level 1) -> Subsystem (Level 2) -> Project (Level 3) -> Task (Level 4, leaves)
+    // A Project node lives exactly at depth 3 from root.
+    if (data.children) {
+        data.children.forEach(system => {
+            if (system.children) {
+                system.children.forEach(subsystem => {
+                    if (subsystem.children) {
+                        subsystem.children.forEach(project => {
+                            list.push(project);
+                        });
+                    }
+                });
+            }
+        });
+    }
+    return list;
+}
+
+function updateCascadeRef(type, oldVal, newVal) {
+    if (!oldVal || oldVal === newVal) return;
+    
+    // Traverses all nodes and updates matching fields dynamically to reflect edits
+    const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    
+    if (type === 'assignees') {
+        tasks.forEach(t => {
+            if (t.assignee === oldVal) t.assignee = newVal;
+        });
+    } else if (type === 'systems') {
+        // Systems are Level 1 nodes under root
+        if (data.children) {
+            data.children.forEach(sys => {
+                if (sys.title === oldVal) sys.title = newVal;
+            });
+        }
+        tasks.forEach(t => {
+            if (t.system === oldVal) t.system = newVal;
+        });
+    } else if (type === 'subsystems') {
+        // Subsystems are Level 2 nodes under Systems
+        if (data.children) {
+            data.children.forEach(sys => {
+                if (sys.children) {
+                    sys.children.forEach(sub => {
+                        if (sub.title === oldVal) sub.title = newVal;
+                    });
+                }
+            });
+        }
+        tasks.forEach(t => {
+            if (t.subsystem === oldVal) t.subsystem = newVal;
+        });
+    } else if (type === 'projects') {
+        // Projects are Level 3 nodes under Subsystems
+        if (data.children) {
+            data.children.forEach(sys => {
+                if (sys.children) {
+                    sys.children.forEach(sub => {
+                        if (sub.children) {
+                            sub.children.forEach(proj => {
+                                if (proj.title === oldVal) proj.title = newVal;
+                            });
+                        }
+                    });
+                }
+            });
+        }
+        tasks.forEach(t => {
+            if (t.project === oldVal) t.project = newVal;
+        });
+    }
+    save();
+}
+
+function shouldHideTask(t) {
+    if (t.status !== 'done' && t.status !== 'obsolete') return false;
+    if (hideDoneFilter === 'none') return false;
+    if (hideDoneFilter === 'all') return true;
+
+    // Determine task completion date (fallback to updatedAt or history log)
+    let doneTime = t.doneAt ? new Date(t.doneAt).getTime() : (t.updatedAt ? new Date(t.updatedAt).getTime() : null);
+    if (!doneTime && data.history) {
+        const hist = data.history.filter(ev => ev.taskId === t.id && ev.toStatus === 'done');
+        if (hist.length > 0) {
+            doneTime = new Date(hist[hist.length - 1].timestamp).getTime();
+        }
+    }
+    if (!doneTime) return hideDoneFilter !== 'none'; // If unknown timestamp, treat as done and hide if filter is active
+
+    const now = Date.now();
+    const diffMs = now - doneTime;
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    if (hideDoneFilter === '1day') return diffMs >= oneDay;
+    if (hideDoneFilter === '1week') return diffMs >= 7 * oneDay;
+    if (hideDoneFilter === '1month') return diffMs >= 30 * oneDay;
+    return false;
+}
+
+function renderTaskSheet() {
+    const area = document.getElementById('sheet-content-area');
+    area.innerHTML = '';
+
+    const rawTasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    const tasks = rawTasks.filter(t => !shouldHideTask(t));
+    const projects = getProjectsList();
+
+    // Toolbar wrapper
+    const savedUrl = localStorage.getItem('idealog_gspread_url') || '';
+    const toolbarDisplay = isTaskSheetToolbarCollapsed ? 'display: none;' : 'display: flex;';
+    const toolbarHtml = `
+        <div class="sheet-toolbar" style="flex-wrap: wrap; gap: 8px; margin-bottom: 16px; ${toolbarDisplay}">
+            <button class="btn-add" onclick="addSheetTaskRow()">+ Add Task Row</button>
+            <button class="btn-secondary btn-sm" style="max-width:110px;height:32px;" onclick="addSheetColumn()">+ Add Column</button>
+            <button class="btn-secondary btn-sm" style="max-width:160px;height:32px;background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.2);" onclick="openImportModal()">📥 Import Paste Data</button>
+            <button class="btn-secondary btn-sm" style="max-width:150px;height:32px;background:rgba(16,185,129,0.1);color:#34d399;border-color:rgba(16,185,129,0.2);" onclick="exportTableTSV()">📤 Export TSV Data</button>
+            <button class="btn-secondary btn-sm" style="max-width:150px;height:32px;background:rgba(139,92,246,0.1);color:#c084fc;border-color:rgba(139,92,246,0.2);" onclick="exportFullBackupJSON()">💾 Backup Full State</button>
+            <button class="btn-danger btn-sm" style="max-width:110px;height:32px;" onclick="deleteAllSheetTasks()">❌ Delete All</button>
+            
+            <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 32px;">
+                <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Hide Done:</span>
+                <select onchange="setHideDoneFilter(this.value)" style="background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; cursor: pointer;">
+                    <option value="none" ${hideDoneFilter === 'none' ? 'selected' : ''} style="background:#080c14;color:#fff;">Show All</option>
+                    <option value="all" ${hideDoneFilter === 'all' ? 'selected' : ''} style="background:#080c14;color:#fff;">Hide All Done</option>
+                    <option value="1day" ${hideDoneFilter === '1day' ? 'selected' : ''} style="background:#080c14;color:#fff;">Older than 1 Day</option>
+                    <option value="1week" ${hideDoneFilter === '1week' ? 'selected' : ''} style="background:#080c14;color:#fff;">Older than 1 Week</option>
+                    <option value="1month" ${hideDoneFilter === '1month' ? 'selected' : ''} style="background:#080c14;color:#fff;">Older than 1 Month</option>
+                </select>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 32px;">
+                <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Highlight (Days):</span>
+                <input type="number" min="0" step="0.1" value="${highlightDurationDays}" onchange="setHighlightDurationDays(this.value)" style="width: 50px; background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; text-align: center;">
+            </div>
+
+            <div style="flex: 1; min-width: 200px; display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; height: 32px;">
+                <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Google Sheet URL:</span>
+                <input id="gspread-url-input" type="text" placeholder="Paste Web App URL..." value="${savedUrl}" onchange="saveGSpreadUrl(this.value)" style="flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-size: 11px;">
+                <button class="btn-secondary btn-sm" onclick="pushToGoogleSheet()" style="max-width: 80px; height: 24px; padding: 0 8px; font-size: 10px; background: rgba(16,185,129,0.1); color: #34d399; border-color: rgba(16,185,129,0.2);">📤 Push</button>
+                <button class="btn-secondary btn-sm" onclick="pullFromGoogleSheets()" style="max-width: 80px; height: 24px; padding: 0 8px; font-size: 10px; background: rgba(245,158,11,0.1); color: #fbbf24; border-color: rgba(245,158,11,0.2);">📥 Pull</button>
+            </div>
+        </div>
+    `;
+
+    let tbodyHtml = '';
+    tasks.forEach(t => {
+        const parentProj = findParent(t.id);
+        const parentId = parentProj ? parentProj.id : '';
+
+        // Generate Project Select Options (Level 3 nodes)
+        let projOptions = '';
+        projects.forEach(p => {
+            projOptions += `<option value="${p.id}" ${p.id === parentId ? 'selected' : ''}>${p.title}</option>`;
+        });
+
+        // Generate Status Select Options
+        const statuses = [
+            { key: 'todo', label: 'Todo' },
+            { key: 'inprogress', label: 'In Progress' },
+            { key: 'inprogress_bg', label: 'In Progress in BG' },
+            { key: 'done', label: 'Done' },
+            { key: 'obsolete', label: 'Obsolete' }
+        ];
+        let statusOptions = '';
+        statuses.forEach(s => {
+            statusOptions += `<option value="${s.key}" ${s.key === t.status ? 'selected' : ''}>${s.label}</option>`;
+        });
+
+        // Generate Assignee Select Options from ObjectList
+        let assigneeOptions = `<option value="">Unassigned</option>`;
+        objectLists.assignees.forEach(name => {
+            assigneeOptions += `<option value="${name}" ${name === t.assignee ? 'selected' : ''}>${name}</option>`;
+        });
+
+        // Render dynamic values cells based on sheetColumns array keys as dropdown selects
+        let dynamicCellsHtml = '';
+        sheetColumns.forEach(col => {
+            const val = t[col.key] || '';
+            const lowerLabel = col.label.toLowerCase();
+            const escapedVal = escapeHtml(val);
+            
+            if (lowerLabel === 'system') {
+                dynamicCellsHtml += `
+                    <td>
+                        <input class="excel-input" type="text" placeholder="System" value="${escapedVal}" oninput="showAutocomplete(this, 'systems', (newVal) => { updateTaskPropFromSheet('${t.id}', '${col.key}', newVal); renderSheet(); })" onchange="updateTaskPropFromSheet('${t.id}', '${col.key}', this.value)">
+                    </td>
+                `;
+            } else if (lowerLabel === 'subsystem') {
+                dynamicCellsHtml += `
+                    <td>
+                        <input class="excel-input" type="text" placeholder="Subsystem" value="${escapedVal}" oninput="showAutocomplete(this, 'subsystems', (newVal) => { updateTaskPropFromSheet('${t.id}', '${col.key}', newVal); renderSheet(); })" onchange="updateTaskPropFromSheet('${t.id}', '${col.key}', this.value)">
+                    </td>
+                `;
+            } else {
+                dynamicCellsHtml += `
+                    <td>
+                        <input class="excel-input" type="text" placeholder="${col.label}" value="${escapedVal}" onchange="updateTaskPropFromSheet('${t.id}', '${col.key}', this.value)">
+                    </td>
+                `;
+            }
+        });
+
+        // Calculate fade background tint based on modified age using highlightDurationDays input (10% max opacity)
+        let rowStyle = '';
+        if (t.updatedAt && highlightDurationDays > 0) {
+            const ageMs = Date.now() - new Date(t.updatedAt).getTime();
+            const durationMs = highlightDurationDays * 24 * 60 * 60 * 1000;
+            if (ageMs < durationMs) {
+                const opacity = (1 - (ageMs / durationMs)) * 0.10; // toned down starting opacity to 10%
+                rowStyle = `style="background: rgba(16, 185, 129, ${opacity}) !important;"`;
+            }
+        }
+
+        tbodyHtml += `
+            <tr data-task-id="${t.id}" ${rowStyle}>
+                <td>
+                    <input class="excel-input" type="text" placeholder="Project" value="${parentProj ? escapeHtml(parentProj.title) : ''}" oninput="showAutocomplete(this, 'projects', (val) => { moveTaskProjectByTitle('${t.id}', val); renderSheet(); })" onchange="moveTaskProjectByTitle('${t.id}', this.value)">
+                </td>
+                <td>
+                    <input class="excel-input" type="text" value="${escapeHtml(t.title)}" onchange="updateTaskTitleFromSheet('${t.id}', this.value)">
+                </td>
+                <td>
+                    <input class="excel-input" type="text" placeholder="Assignee" value="${escapeHtml(t.assignee || '')}" oninput="showAutocomplete(this, 'assignees', (val) => { updateTaskAssigneeFromSheet('${t.id}', val); renderSheet(); })" onchange="updateTaskAssigneeFromSheet('${t.id}', this.value)">
+                </td>
+                ${dynamicCellsHtml}
+                <td>
+                    <select class="excel-select" onchange="updateTaskStatusFromSheet('${t.id}', this.value)">
+                        ${statusOptions}
+                    </select>
+                </td>
+                <td style="text-align:center;">
+                    <button class="btn-gantt-action" style="color:#f87171;" onclick="deleteSheetTask('${t.id}')">Delete</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    // Create column headers
+    let thsHtml = '';
+    sheetColumns.forEach((col, idx) => {
+        thsHtml += `
+            <th draggable="true" 
+                ondragstart="handleTaskColDragStart(event, ${idx})" 
+                ondragover="event.preventDefault()" 
+                ondrop="handleTaskColDrop(event, ${idx})"
+                style="cursor: grab;">
+                <div class="sheet-th-wrap">
+                    <input class="sheet-th-input" type="text" value="${col.label}" onchange="renameSheetColumn(${idx}, this.value)" style="cursor: text;">
+                    <button class="sheet-th-btn" onclick="deleteSheetColumn(${idx})">×</button>
+                </div>
+            </th>
+        `;
+    });
+
+    const colspanVal = 4 + sheetColumns.length;
+
+    area.innerHTML = `
+        ${toolbarHtml}
+        <table class="excel-table">
+            <thead>
+                <tr>
+                    <th>Project</th>
+                    <th>Task Title</th>
+                    <th>Assignee</th>
+                    ${thsHtml}
+                    <th>Status</th>
+                    <th style="width:100px;text-align:center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${tbodyHtml || `<tr><td colspan="${colspanVal}" style="text-align:center;color:var(--text-muted);">No tasks found. Click Add Task Row to start.</td></tr>`}
+            </tbody>
+        </table>
+    `;
+}
+
+function updateTaskTitleFromSheet(id, val) {
+    const n = findNode(id);
+    if (n) {
+        const cleanOld = (n.title || '').trim().toLowerCase();
+        const cleanNew = (val || '').trim().toLowerCase();
+        if (cleanOld === cleanNew) return;
+        n.title = val;
+        n.updatedAt = new Date().toISOString();
+        save();
+    }
+}
+
+function updateTaskAssigneeFromSheet(id, val) {
+    const n = findNode(id);
+    if (n) {
+        const cleanOld = (n.assignee || '').trim().toLowerCase();
+        const cleanNew = (val || '').trim().toLowerCase();
+        if (cleanOld === cleanNew) return;
+        n.assignee = val;
+        n.updatedAt = new Date().toISOString();
+        save();
+        renderSheet();
+    }
+}
+
+function updateTaskPropFromSheet(id, prop, val) {
+    const n = findNode(id);
+    if (n) {
+        let oldVal = n[prop] || '';
+        if (oldVal === undefined || oldVal === '') {
+            const colDef = sheetColumns.find(c => c.key === prop);
+            if (colDef) {
+                const lowerL = colDef.label.toLowerCase();
+                if (lowerL === 'system') oldVal = n.system || '';
+                else if (lowerL === 'subsystem') oldVal = n.subsystem || '';
+            }
+        }
+        const cleanOld = oldVal.toString().trim().toLowerCase();
+        const cleanNew = (val || '').toString().trim().toLowerCase();
+        if (cleanOld === cleanNew) return;
+
+        n[prop] = val;
+        n.updatedAt = new Date().toISOString();
+        
+        // Mirror to static system/subsystem keys
+        const colDef = sheetColumns.find(c => c.key === prop);
+        if (colDef) {
+            const lowerL = colDef.label.toLowerCase();
+            if (lowerL === 'system') {
+                n.system = val;
+            } else if (lowerL === 'subsystem') {
+                n.subsystem = val;
+            }
+        }
+        
+        save();
+        renderSheet();
+    }
+}
+
+function moveTaskProject(taskId, newProjId) {
+    const task = findNode(taskId);
+    if (!task) return;
+    const oldParent = findParent(taskId);
+    const newParent = findNode(newProjId);
+    if (oldParent && newParent && oldParent.id !== newProjId) {
+        oldParent.children = oldParent.children.filter(c => c.id !== taskId);
+        newParent.children.push(task);
+        
+        // Dynamic lookups of system & subsystem for the new project parent node
+        let subsystemNode = null;
+        let systemNode = null;
+        if (data.children) {
+            data.children.forEach(sys => {
+                if (sys.children) {
+                    sys.children.forEach(sub => {
+                        if (sub.children && sub.children.find(p => p.id === newParent.id)) {
+                            subsystemNode = sub;
+                            systemNode = sys;
+                        }
+                    });
+                }
+            });
+        }
+        
+        task.project = newParent.title;
+        task.system = systemNode ? systemNode.title : '';
+        task.subsystem = subsystemNode ? subsystemNode.title : '';
+        
+        save();
+        renderSheet();
+    }
+}
+
+function moveTaskProjectByTitle(taskId, newProjTitle) {
+    const task = findNode(taskId);
+    if (!task || !newProjTitle) return;
+    
+    // Find project node at depth 3
+    let matchedProj = null;
+    let subsystemNode = null;
+    let systemNode = null;
+    
+    if (data.children) {
+        data.children.forEach(sys => {
+            if (sys.children) {
+                sys.children.forEach(sub => {
+                    if (sub.children) {
+                        const proj = sub.children.find(p => p.title.toLowerCase() === newProjTitle.trim().toLowerCase());
+                        if (proj) {
+                            matchedProj = proj;
+                            subsystemNode = sub;
+                            systemNode = sys;
+                        }
+                    }
+                });
+            }
+        });
+    }
+    
+    if (matchedProj) {
+        const oldParent = findParent(taskId);
+        if (oldParent && oldParent.id !== matchedProj.id) {
+            oldParent.children = oldParent.children.filter(c => c.id !== taskId);
+            matchedProj.children.push(task);
+            
+            task.project = matchedProj.title;
+            task.updatedAt = new Date().toISOString();
+            
+            save();
+            renderSheet();
+        }
+    } else {
+        // If Project doesn't exist, create it inside the current task's system & subsystem
+        const currentSystemTitle = task.system || 'Default System';
+        const currentSubsystemTitle = task.subsystem || 'Default Subsystem';
+        
+        // 1. Find/create system
+        let sysNode = data.children.find(sys => sys.title.toLowerCase() === currentSystemTitle.toLowerCase());
+        if (!sysNode) {
+            sysNode = { id: uid(), title: currentSystemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+            data.children.push(sysNode);
+        }
+        // 2. Find/create subsystem
+        let subNode = sysNode.children.find(sub => sub.title.toLowerCase() === currentSubsystemTitle.toLowerCase());
+        if (!subNode) {
+            subNode = { id: uid(), title: currentSubsystemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+            sysNode.children.push(subNode);
+        }
+        
+        // 3. Create Project
+        const newProj = { id: uid(), title: newProjTitle.trim(), status: 'inprogress', assignee: '', tags: [], notes: '', children: [task] };
+        subNode.children.push(newProj);
+        
+        // Remove task from old parent
+        const oldParent = findParent(taskId);
+        if (oldParent) {
+            oldParent.children = oldParent.children.filter(c => c.id !== taskId);
+        }
+        
+        task.project = newProj.title;
+        task.updatedAt = new Date().toISOString();
+
+        // Ensure new project is registered in Object Lists for autocompletion
+        if (!objectLists.projects.includes(newProj.title)) {
+            objectLists.projects.push(newProj.title);
+            saveObjectLists();
+        }
+        
+        save();
+        renderSheet();
+    }
+}
+
+function updateTaskStatusFromSheet(id, val) {
+    const n = findNode(id);
+    if (n) {
+        const fromStatus = n.status;
+        const toStatus = val;
+        const parentProj = findParent(id);
+        const nowIso = new Date().toISOString();
+        
+        n.status = val;
+        n.updatedAt = nowIso;
+        if (val === 'done') {
+            if (!n.doneAt) n.doneAt = nowIso;
+        } else {
+            n.doneAt = null;
+        }
+
+        if (parentProj) {
+            data.history.push({
+                timestamp: nowIso,
+                projectId: parentProj.id,
+                taskId: n.id,
+                taskTitle: n.title,
+                action: 'status_change',
+                fromStatus: fromStatus,
+                toStatus: toStatus,
+                assignee: n.assignee || 'User'
+            });
+        }
+        save();
+        renderSheet();
+    }
+}
+
+function deleteSheetTask(taskId) {
+    const parent = findParent(taskId);
+    if (parent) {
+        parent.children = parent.children.filter(c => c.id !== taskId);
+        save();
+        renderSheet();
+    }
+}
+
+function deleteAllSheetTasks() {
+    if (!confirm("Are you sure you want to delete ALL tasks across all projects? This action cannot be undone.")) return;
+    
+    // Clear all leaf nodes (tasks) recursively across all branches
+    // Tasks live at depth 4: Root (0) -> System (1) -> Subsystem (2) -> Project (3) -> Task (4)
+    function clearLeafTasks(node, depth) {
+        if (node.children && node.children.length > 0) {
+            if (depth === 3) {
+                // Children of Level 3 Projects are Level 4 Tasks. Clear them!
+                node.children = [];
+            } else {
+                node.children.forEach(c => clearLeafTasks(c, depth + 1));
+            }
+        }
+    }
+    
+    if (data.children) {
+        data.children.forEach(c => clearLeafTasks(c, 1));
+    }
+    
+    save();
+    renderSheet();
+}
+
+function addSheetTaskRow() {
+    const projects = getProjectsList();
+    if (projects.length === 0) return;
+    const projectNode = projects[0];
+    
+    // Find parent subsystem and system to populate defaults
+    let subsystemNode = null;
+    let systemNode = null;
+    
+    if (data.children) {
+        data.children.forEach(sys => {
+            if (sys.children) {
+                sys.children.forEach(sub => {
+                    if (sub.children && sub.children.find(p => p.id === projectNode.id)) {
+                        subsystemNode = sub;
+                        systemNode = sys;
+                    }
+                });
+            }
+        });
+    }
+
+    const nowIso = new Date().toISOString();
+    const newTask = {
+        id: uid(),
+        title: 'New Task',
+        status: 'todo',
+        assignee: '',
+        system: systemNode ? systemNode.title : '',
+        subsystem: subsystemNode ? subsystemNode.title : '',
+        project: projectNode.title,
+        tags: [],
+        notes: '',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        doneAt: null,
+        children: []
+    };
+
+    // Initialize custom dynamic column properties
+    sheetColumns.forEach(col => {
+        const lowerL = col.label.toLowerCase();
+        if (lowerL === 'system') newTask[col.key] = systemNode ? systemNode.title : '';
+        else if (lowerL === 'subsystem') newTask[col.key] = subsystemNode ? subsystemNode.title : '';
+        else newTask[col.key] = '';
+    });
+
+    projectNode.children.push(newTask);
+    
+    data.history.push({
+        timestamp: new Date().toISOString(),
+        projectId: projectNode.id,
+        taskId: newTask.id,
+        taskTitle: newTask.title,
+        action: 'status_change',
+        fromStatus: 'todo',
+        toStatus: 'todo',
+        assignee: 'User'
+    });
+
+    save();
+    renderSheet();
+}
+
+function addSheetColumn() {
+    const label = prompt("Enter new column header name:");
+    if (!label || !label.trim()) return;
+    const key = 'custom_' + Math.random().toString(36).slice(2, 9);
+    sheetColumns.push({ key, label: label.trim() });
+    
+    // Auto-append the new column to pivotHierarchy so it becomes instantly sortable
+    if (!pivotHierarchy.includes(key)) {
+        pivotHierarchy.push(key);
+    }
+    
+    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+    renderSheet();
+}
+
+function renameSheetColumn(idx, newVal) {
+    if (!newVal || !newVal.trim()) return;
+    sheetColumns[idx].label = newVal.trim();
+    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+    renderSheet();
+}
+
+function deleteSheetColumn(idx) {
+    if (!confirm("Are you sure you want to delete this column? This removes the column classification header.")) return;
+    const col = sheetColumns[idx];
+    sheetColumns.splice(idx, 1);
+    
+    // Also remove from pivotHierarchy options
+    pivotHierarchy = pivotHierarchy.filter(h => h !== col.key);
+    
+    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+    renderSheet();
+}
+
+let draggedTaskColIndex = null;
+function handleTaskColDragStart(e, idx) {
+    draggedTaskColIndex = idx;
+    e.dataTransfer.effectAllowed = 'move';
+}
+function handleTaskColDrop(e, idx) {
+    e.preventDefault();
+    if (draggedTaskColIndex !== null && draggedTaskColIndex !== idx) {
+        const item = sheetColumns.splice(draggedTaskColIndex, 1)[0];
+        sheetColumns.splice(idx, 0, item);
+        localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+        renderSheet();
+    }
+}
+
+function openImportModal() {
+    document.getElementById('import-modal').style.display = 'flex';
+    document.getElementById('import-paste-area').value = '';
+    document.getElementById('import-paste-area').focus();
+}
+
+function exportTableTSV() {
+    const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    const headers = ['Project', 'Task Title', 'Assignee', ...sheetColumns.map(c => c.label), 'Status'];
+    
+    let tsvLines = [headers.join('\t')];
+    tasks.forEach(t => {
+        const parentProj = findParent(t.id);
+        const row = [
+            parentProj ? parentProj.title : '',
+            t.title || '',
+            t.assignee || '',
+            ...sheetColumns.map(c => t[c.key] || ''),
+            sLabel(t.status)
+        ];
+        tsvLines.push(row.join('\t'));
+    });
+
+    const blob = new Blob([tsvLines.join('\n')], { type: 'text/tab-separated-values;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `idealog_export_${new Date().toISOString().slice(0,10)}.tsv`;
+    link.click();
+}
+
+function exportFullBackupJSON() {
+    const backupObj = {
+        data: data,
+        sheetColumns: sheetColumns,
+        objectLists: objectLists,
+        pivotHierarchy: pivotHierarchy,
+        enabledPivotDims: enabledPivotDims
+    };
+    const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `idealog_full_backup_${new Date().toISOString().slice(0,10)}.json`;
+    link.click();
+}
+
+function closeImportModal() {
+    document.getElementById('import-modal').style.display = 'none';
+}
+
+function processImportedData() {
+    const rawVal = document.getElementById('import-paste-area').value;
+    if (!rawVal || !rawVal.trim()) {
+        alert("Please paste some data first.");
+        return;
+    }
+
+    // Support restoring full state JSON backup files directly!
+    const trimmedVal = rawVal.trim();
+    if (trimmedVal.startsWith('{') && trimmedVal.endsWith('}')) {
+        try {
+            const backup = JSON.parse(trimmedVal);
+            if (backup && backup.data && backup.objectLists) {
+                data = backup.data;
+                if (backup.sheetColumns) sheetColumns = backup.sheetColumns;
+                if (backup.objectLists) objectLists = backup.objectLists;
+                if (backup.pivotHierarchy) pivotHierarchy = backup.pivotHierarchy;
+                if (backup.enabledPivotDims) enabledPivotDims = backup.enabledPivotDims;
+
+                save();
+                saveObjectLists();
+                localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                localStorage.setItem('idealog_enabled_pivot_dims', JSON.stringify(enabledPivotDims));
+                
+                closeImportModal();
+                renderSheet();
+                alert("Successfully restored complete application state from JSON backup!");
+                return;
+            }
+        } catch (e) {
+            // Not JSON or parse failed, fall through to TSV parser
+        }
+    }
+
+    const lines = rawVal.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length < 2) {
+        alert("Pasted data must contain a header row and at least one data row.");
+        return;
+    }
+
+    // Parse header row
+    const headers = lines[0].split('\t').map(h => h.trim());
+    
+    // Map headers to system columns or find/create dynamic custom columns
+    // Reset existing project data to a clean canvas under root
+    data = {
+        id: 'root',
+        title: 'My Project',
+        status: 'inprogress',
+        assignee: '',
+        tags: [],
+        notes: '',
+        children: [],
+        history: []
+    };
+
+    // Reset default dynamic columns
+    sheetColumns = [
+        { key: 'system', label: 'System' },
+        { key: 'subsystem', label: 'Subsystem' }
+    ];
+    pivotHierarchy = ['project', 'system', 'subsystem', 'status', 'assignee'];
+
+    // Clear Object Lists
+    objectLists = {
+        assignees: [],
+        systems: [],
+        subsystems: [],
+        projects: []
+    };
+
+    const headerMapping = []; // array of { index, key }
+
+    headers.forEach((hdr, idx) => {
+        const lowerHdr = hdr.toLowerCase();
+        if (lowerHdr === 'task title' || lowerHdr === 'title' || lowerHdr === 'task') {
+            headerMapping.push({ idx, key: 'title' });
+        } else if (lowerHdr === 'assignee' || lowerHdr === 'name' || lowerHdr === 'owner') {
+            headerMapping.push({ idx, key: 'assignee' });
+        } else if (lowerHdr === 'status') {
+            headerMapping.push({ idx, key: 'status' });
+        } else if (lowerHdr === 'project' || lowerHdr === 'project branch') {
+            headerMapping.push({ idx, key: 'project' });
+        } else {
+            // Check if existing dynamic custom column exists
+            let existingCol = sheetColumns.find(c => c.label.toLowerCase() === lowerHdr);
+            if (!existingCol) {
+                // Use static key if 'system' or 'subsystem'
+                const key = (lowerHdr === 'system' || lowerHdr === 'subsystem') ? lowerHdr : 'custom_' + Math.random().toString(36).slice(2, 9);
+                existingCol = { key, label: hdr };
+                sheetColumns.push(existingCol);
+                if (!pivotHierarchy.includes(key)) {
+                    pivotHierarchy.push(key);
+                }
+            }
+            headerMapping.push({ idx, key: existingCol.key });
+        }
+    });
+
+    // Parse data rows
+    let importedCount = 0;
+    for (let i = 1; i < lines.length; i++) {
+        const rowCells = lines[i].split('\t');
+        const taskObj = {
+            id: uid(),
+            title: 'Imported Task',
+            status: 'todo',
+            assignee: '',
+            tags: [],
+            notes: '',
+            children: []
+        };
+
+        let rowProjectName = '';
+
+        headerMapping.forEach(map => {
+            const val = (rowCells[map.idx] || '').trim();
+            if (map.key === 'status') {
+                const lowerVal = val.toLowerCase();
+                const isInProgressBG = lowerVal === 'doing in bg' || 
+                                       lowerVal === 'in progress in bg' || 
+                                       lowerVal === 'in progres in bg' ||
+                                       lowerVal === 'inprogress_bg';
+                const isInProgress = lowerVal === 'in progress' || 
+                                     lowerVal === 'doing' ||
+                                     lowerVal === 'inprogress';
+                if (lowerVal === 'done' || lowerVal === 'todo' || lowerVal === 'obsolete' || isInProgress || isInProgressBG) {
+                    taskObj.status = isInProgressBG ? 'inprogress_bg' : (isInProgress ? 'inprogress' : lowerVal);
+                } else {
+                    taskObj.status = 'todo';
+                }
+            } else if (map.key === 'title') {
+                if (val) taskObj.title = val;
+            } else if (map.key === 'assignee') {
+                taskObj.assignee = val;
+            } else if (map.key === 'project') {
+                rowProjectName = val;
+                taskObj.project = val;
+            } else {
+                // Dynamic attributes
+                taskObj[map.key] = val;
+                
+                // Keep references to system and subsystem values for hierarchy builder
+                const colDef = sheetColumns.find(c => c.key === map.key || c.label.toLowerCase() === map.key.toLowerCase());
+                if (colDef) {
+                    const lowerL = colDef.label.toLowerCase();
+                    if (lowerL === 'system') {
+                        taskObj.system = val;
+                        taskObj[colDef.key] = val;
+                    } else if (lowerL === 'subsystem') {
+                        taskObj.subsystem = val;
+                        taskObj[colDef.key] = val;
+                    }
+                }
+            }
+        });
+
+        // Determine correct parent project branch node. Find existing or create a new branch.
+        let targetProj = null;
+        // Determine correct parent project branch node. Find existing or create a new branch.
+        // We must construct System (Level 1) -> Subsystem (Level 2) -> Project (Level 3) -> Task (Level 4)
+        const systemTitle = taskObj.system || 'Default System';
+        const subsystemTitle = taskObj.subsystem || 'Default Subsystem';
+        const projectTitle = rowProjectName || 'Default Project';
+
+        // 1. Find or create System (Level 1)
+        if (!data.children) data.children = [];
+        let systemNode = data.children.find(sys => sys.title.toLowerCase() === systemTitle.toLowerCase());
+        if (!systemNode) {
+            systemNode = { id: uid(), title: systemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+            data.children.push(systemNode);
+        }
+
+        // 2. Find or create Subsystem (Level 2)
+        if (!systemNode.children) systemNode.children = [];
+        let subsystemNode = systemNode.children.find(sub => sub.title.toLowerCase() === subsystemTitle.toLowerCase());
+        if (!subsystemNode) {
+            subsystemNode = { id: uid(), title: subsystemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+            systemNode.children.push(subsystemNode);
+        }
+
+        // 3. Find or create Project (Level 3)
+        if (!subsystemNode.children) subsystemNode.children = [];
+        targetProj = subsystemNode.children.find(proj => proj.title.toLowerCase() === projectTitle.toLowerCase());
+        if (!targetProj) {
+            targetProj = { id: uid(), title: projectTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+            subsystemNode.children.push(targetProj);
+        }
+
+        // Populate task fields to match the hierarchy path
+        taskObj.system = systemNode.title;
+        taskObj.subsystem = subsystemNode.title;
+        taskObj.project = targetProj.title;
+
+        // Ensure dynamic column matching keys are also populated on the task object
+        sheetColumns.forEach(col => {
+            const lowerL = col.label.toLowerCase();
+            if (lowerL === 'system') {
+                taskObj[col.key] = systemNode.title;
+            } else if (lowerL === 'subsystem') {
+                taskObj[col.key] = subsystemNode.title;
+            } else if (lowerL === 'project') {
+                taskObj[col.key] = targetProj.title;
+            }
+        });
+
+        // Initialize internal metadata timestamps for filtering
+        const importNow = new Date().toISOString();
+        taskObj.createdAt = importNow;
+        taskObj.updatedAt = importNow;
+        taskObj.doneAt = (taskObj.status === 'done' || taskObj.status === 'obsolete') ? importNow : null;
+
+        // 4. Place Task at exactly Level 4
+        if (!targetProj.children) targetProj.children = [];
+        targetProj.children.push(taskObj);
+        
+        data.history.push({
+            timestamp: new Date().toISOString(),
+            projectId: targetProj.id,
+            taskId: taskObj.id,
+            taskTitle: taskObj.title,
+            action: 'status_change',
+            fromStatus: 'todo',
+            toStatus: taskObj.status,
+            assignee: taskObj.assignee || 'User'
+        });
+
+        // Automatically collect and insert unique names to dynamic autocompletion lists
+        if (taskObj.assignee && !objectLists.assignees.includes(taskObj.assignee)) {
+            objectLists.assignees.push(taskObj.assignee);
+        }
+        if (systemNode.title && !objectLists.systems.includes(systemNode.title)) {
+            objectLists.systems.push(systemNode.title);
+        }
+        if (subsystemNode.title && !objectLists.subsystems.includes(subsystemNode.title)) {
+            objectLists.subsystems.push(subsystemNode.title);
+        }
+        if (targetProj.title && !objectLists.projects.includes(targetProj.title)) {
+            objectLists.projects.push(targetProj.title);
+        }
+
+        importedCount++;
+    }
+
+    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+    saveObjectLists();
+    save();
+    closeImportModal();
+    renderSheet();
+    alert(`Successfully imported ${importedCount} task rows and initialized Object Lists.`);
+}
+
+function saveGSpreadUrl(val) {
+    localStorage.setItem('idealog_gspread_url', val.trim());
+}
+
+async function pushToGoogleSheet() {
+    const url = localStorage.getItem('idealog_gspread_url');
+    if (!url) {
+        alert("Please paste your Google Apps Script Web App URL first.");
+        return;
+    }
+
+    const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    const payload = tasks.map(t => {
+        const parentProj = findParent(t.id);
+        const row = {
+            id: t.id,
+            Project: parentProj ? parentProj.title : '',
+            "Task Title": t.title,
+            Assignee: t.assignee || '',
+            Status: sLabel(t.status)
+        };
+        sheetColumns.forEach(col => {
+            row[col.label] = t[col.key] || '';
+        });
+        return row;
+    });
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            mode: 'cors',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // Avoid triggering CORS pre-flight pre-conditions on generic post requests
+            body: JSON.stringify(payload)
+        });
+        const resData = await response.json();
+        if (resData.success) {
+            alert(`Successfully pushed ${resData.count} rows to Google Sheet.`);
+        } else {
+            alert("Error pushing data: " + resData.error);
+        }
+    } catch (e) {
+        alert("Sync request failed. Make sure your Web App URL is correct and deployed as 'Anyone' access.\n\nDetails: " + e.toString());
+    }
+}
+
+async function pullFromGoogleSheets() {
+    const url = localStorage.getItem('idealog_gspread_url');
+    if (!url) {
+        alert("Please paste your Google Apps Script Web App URL first.");
+        return;
+    }
+
+    try {
+        const response = await fetch(url, {
+            redirect: 'follow'
+        });
+        const rows = await response.json();
+        if (!Array.isArray(rows)) {
+            alert("Unexpected data received from Google Sheets API.");
+            return;
+        }
+
+        // Identify imported columns and create headers in sheetColumns if they do not exist
+        if (rows.length > 0) {
+            const rowKeys = Object.keys(rows[0]);
+            rowKeys.forEach(k => {
+                const lowerK = k.toLowerCase();
+                if (lowerK !== 'id' && lowerK !== 'project' && lowerK !== 'task title' && lowerK !== 'assignee' && lowerK !== 'status') {
+                    // Check if column exists
+                    let exists = sheetColumns.find(col => col.label.toLowerCase() === lowerK);
+                    if (!exists) {
+                        const newKey = 'custom_' + Math.random().toString(36).slice(2, 9);
+                        sheetColumns.push({ key: newKey, label: k });
+                        if (!pivotHierarchy.includes(newKey)) {
+                            pivotHierarchy.push(newKey);
+                        }
+                    }
+                }
+            });
+            localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+        }
+
+        let updatedCount = 0;
+        let createdCount = 0;
+
+        rows.forEach(row => {
+            const taskId = row.id;
+            let taskNode = null;
+            if (taskId) {
+                taskNode = findNode(taskId);
+            }
+
+            // Map Status field value
+            let statusVal = 'todo';
+            if (row.Status) {
+                const lowerSt = row.Status.toLowerCase();
+                const isInProgressBG = lowerSt === 'doing in bg' || 
+                                       lowerSt === 'in progress in bg' || 
+                                       lowerSt === 'in progres in bg' ||
+                                       lowerSt === 'inprogress_bg' ||
+                                       lowerSt === 'in progress in bg';
+                const isInProgress = lowerSt === 'in progress' || 
+                                     lowerSt === 'doing' ||
+                                     lowerSt === 'inprogress';
+                if (lowerSt === 'done' || lowerSt === 'todo' || lowerSt === 'obsolete' || isInProgress || isInProgressBG) {
+                    statusVal = isInProgressBG ? 'inprogress_bg' : (isInProgress ? 'inprogress' : lowerSt);
+                }
+            }
+
+            if (taskNode) {
+                // Update existing task node attributes
+                taskNode.title = row["Task Title"] || taskNode.title;
+                taskNode.assignee = row.Assignee || '';
+                taskNode.status = statusVal;
+
+                // Sync custom dynamic columns
+                sheetColumns.forEach(col => {
+                    if (row[col.label] !== undefined) {
+                        taskNode[col.key] = row[col.label];
+                    }
+                });
+
+                // Move project branch if modified
+                if (row.Project) {
+                    const currentParent = findParent(taskNode.id);
+                    if (!currentParent || currentParent.title.toLowerCase() !== row.Project.toLowerCase()) {
+                        const systemTitle = taskNode.system || 'Default System';
+                        const subsystemTitle = taskNode.subsystem || 'Default Subsystem';
+                        const projectTitle = row.Project;
+
+                        // 1. Find or create System (Level 1)
+                        if (!data.children) data.children = [];
+                        let systemNode = data.children.find(sys => sys.title.toLowerCase() === systemTitle.toLowerCase());
+                        if (!systemNode) {
+                            systemNode = { id: uid(), title: systemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                            data.children.push(systemNode);
+                        }
+
+                        // 2. Find or create Subsystem (Level 2)
+                        if (!systemNode.children) systemNode.children = [];
+                        let subsystemNode = systemNode.children.find(sub => sub.title.toLowerCase() === subsystemTitle.toLowerCase());
+                        if (!subsystemNode) {
+                            subsystemNode = { id: uid(), title: subsystemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                            systemNode.children.push(subsystemNode);
+                        }
+
+                        // 3. Find or create Project (Level 3)
+                        if (!subsystemNode.children) subsystemNode.children = [];
+                        let targetProj = subsystemNode.children.find(proj => proj.title.toLowerCase() === projectTitle.toLowerCase());
+                        if (!targetProj) {
+                            targetProj = { id: uid(), title: projectTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                            subsystemNode.children.push(targetProj);
+                        }
+
+                        taskNode.system = systemNode.title;
+                        taskNode.subsystem = subsystemNode.title;
+                        taskNode.project = targetProj.title;
+
+                        if (currentParent) {
+                            currentParent.children = currentParent.children.filter(c => c.id !== taskNode.id);
+                        }
+                        if (!targetProj.children) targetProj.children = [];
+                        targetProj.children.push(taskNode);
+                    }
+                }
+                updatedCount++;
+            } else {
+                // Create a new task node
+                const newTask = {
+                    id: taskId || uid(),
+                    title: row["Task Title"] || 'Imported Task',
+                    status: statusVal,
+                    assignee: row.Assignee || '',
+                    tags: [],
+                    notes: '',
+                    children: []
+                };
+
+                // Sync custom dynamic columns
+                sheetColumns.forEach(col => {
+                    if (row[col.label] !== undefined) {
+                        newTask[col.key] = row[col.label];
+                        
+                        // Keep references to system and subsystem values for hierarchy builder
+                        const lowerL = col.label.toLowerCase();
+                        if (lowerL === 'system') {
+                            newTask.system = row[col.label];
+                        } else if (lowerL === 'subsystem') {
+                            newTask.subsystem = row[col.label];
+                        }
+                    }
+                });
+
+                // Find or create parent project (guaranteeing System -> Subsystem -> Project structure)
+                const systemTitle = newTask.system || 'Default System';
+                const subsystemTitle = newTask.subsystem || 'Default Subsystem';
+                const projectTitle = row.Project || 'Default Project';
+
+                // 1. Find or create System (Level 1)
+                if (!data.children) data.children = [];
+                let systemNode = data.children.find(sys => sys.title.toLowerCase() === systemTitle.toLowerCase());
+                if (!systemNode) {
+                    systemNode = { id: uid(), title: systemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                    data.children.push(systemNode);
+                }
+
+                // 2. Find or create Subsystem (Level 2)
+                if (!systemNode.children) systemNode.children = [];
+                let subsystemNode = systemNode.children.find(sub => sub.title.toLowerCase() === subsystemTitle.toLowerCase());
+                if (!subsystemNode) {
+                    subsystemNode = { id: uid(), title: subsystemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                    systemNode.children.push(subsystemNode);
+                }
+
+                // 3. Find or create Project (Level 3)
+                if (!subsystemNode.children) subsystemNode.children = [];
+                let targetProj = subsystemNode.children.find(proj => proj.title.toLowerCase() === projectTitle.toLowerCase());
+                if (!targetProj) {
+                    targetProj = { id: uid(), title: projectTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                    subsystemNode.children.push(targetProj);
+                }
+
+                // Populate task fields to match the hierarchy path
+                newTask.system = systemNode.title;
+                newTask.subsystem = subsystemNode.title;
+                newTask.project = targetProj.title;
+
+                // Ensure dynamic column matching keys are also populated on the task object
+                sheetColumns.forEach(col => {
+                    const lowerL = col.label.toLowerCase();
+                    if (lowerL === 'system') {
+                        newTask[col.key] = systemNode.title;
+                    } else if (lowerL === 'subsystem') {
+                        newTask[col.key] = subsystemNode.title;
+                    } else if (lowerL === 'project') {
+                        newTask[col.key] = targetProj.title;
+                    }
+                });
+
+                // 4. Place Task at exactly Level 4
+                if (!targetProj.children) targetProj.children = [];
+                targetProj.children.push(newTask);
+                createdCount++;
+            }
+        });
+
+        save();
+        renderSheet();
+        alert(`Pull sync completed:\n- Updated ${updatedCount} existing tasks.\n- Created ${createdCount} new tasks.`);
+    } catch (e) {
+        alert("Failed to fetch data from Google Sheets web app. Confirm your URL and deployment settings.\n\nDetails: " + e.toString());
+    }
+}
+
+// --- OBJECT LISTS SHEET VIEW ---
+function renderListsSheet() {
+    const area = document.getElementById('sheet-content-area');
+    area.innerHTML = '';
+
+    // Lists Header Toolbar
+    const toolbar = document.createElement('div');
+    toolbar.className = 'sheet-toolbar';
+    toolbar.style.cssText = 'padding: 0 0 12px 0; margin-bottom: 8px; display: flex; gap: 8px; border-bottom: 1px solid var(--border);';
+    toolbar.innerHTML = `
+        <button class="btn-secondary btn-sm" onclick="openListsImportModal()" style="max-width:180px;height:32px;background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.2);">📥 Bulk Import Lists Data</button>
+    `;
+    area.appendChild(toolbar);
+
+    const container = document.createElement('div');
+    container.style.cssText = 'display: flex; gap: 20px; width: 100%; height: calc(100% - 60px); overflow: auto; padding: 10px 0;';
+
+    const columns = [
+        { type: 'assignees', label: 'Assignees' },
+        { type: 'systems', label: 'Systems' },
+        { type: 'subsystems', label: 'Subsystems' },
+        { type: 'projects', label: 'Projects' }
+    ];
+
+    // Auto-append dynamic custom columns to Object Lists sheet
+    sheetColumns.forEach(col => {
+        const lowerL = col.label.toLowerCase();
+        if (lowerL !== 'system' && lowerL !== 'subsystem' && lowerL !== 'project' && lowerL !== 'assignee') {
+            if (!objectLists[col.key]) {
+                objectLists[col.key] = [];
+            }
+            columns.push({ type: col.key, label: col.label });
+        }
+    });
+
+    columns.forEach(col => {
+        if (!objectLists[col.type]) objectLists[col.type] = [];
+        const colDiv = document.createElement('div');
+        colDiv.style.cssText = 'flex: 1; min-width: 200px; max-width: 320px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; height: fit-content;';
+
+        const titleDiv = document.createElement('div');
+        titleDiv.style.cssText = 'font-size: 12px; font-weight: bold; color: var(--text-dim); text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;';
+        titleDiv.innerHTML = `<span>${col.label}</span><span style="font-size: 10px; color: var(--text-muted); font-weight: normal;">${objectLists[col.type].length} items</span>`;
+        colDiv.appendChild(titleDiv);
+
+        // Input Form
+        const form = document.createElement('div');
+        form.style.cssText = 'display: flex; gap: 6px;';
+        form.innerHTML = `
+            <input id="list-input-${col.type}" type="text" placeholder="Add new ${col.label.toLowerCase()}…" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 4px 8px; font-size: 11px; outline: none;">
+            <button onclick="addListItem('${col.type}')" style="background: var(--accent); color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold; cursor: pointer;">Add</button>
+        `;
+        colDiv.appendChild(form);
+
+        // List Container
+        const listContainer = document.createElement('div');
+        listContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px; max-height: 400px; overflow-y: auto;';
+
+        objectLists[col.type].forEach((item, idx) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; gap: 4px;';
+            row.innerHTML = `
+                <input type="text" value="${item}" onchange="editListItem('${col.type}', ${idx}, this.value)" style="background: transparent; border: none; color: var(--text); font-size: 11px; outline: none; flex: 1; min-width: 50px;">
+                <button onclick="mergeListItem('${col.type}', ${idx})" title="Merge items" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px; transition: color 0.15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">⎘ Merge</button>
+                <button onclick="deleteListItem('${col.type}', ${idx})" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; transition: color 0.15s;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='var(--text-muted)'">×</button>
+            `;
+            listContainer.appendChild(row);
+        });
+
+        colDiv.appendChild(listContainer);
+        container.appendChild(colDiv);
+    });
+
+    area.appendChild(container);
+}
+
+function addListItem(type) {
+    const input = document.getElementById(`list-input-${type}`);
+    const val = input.value.trim();
+    if (!val) return;
+    if (objectLists[type].includes(val)) {
+        alert("This item already exists in the list.");
+        return;
+    }
+    objectLists[type].push(val);
+    objectLists[type].sort((a,b) => a.localeCompare(b));
+    saveObjectLists();
+    input.value = '';
+    renderListsSheet();
+}
+
+function editListItem(type, idx, newVal) {
+    const trimmed = newVal.trim();
+    if (!trimmed) {
+        deleteListItem(type, idx);
+        return;
+    }
+    const oldVal = objectLists[type][idx];
+    if (objectLists[type].includes(trimmed) && objectLists[type].indexOf(trimmed) !== idx) {
+        alert("This item already exists in the list.");
+        renderListsSheet();
+        return;
+    }
+    objectLists[type][idx] = trimmed;
+    objectLists[type].sort((a,b) => a.localeCompare(b));
+    saveObjectLists();
+    
+    // Cascade update reference in all tasks automatically!
+    updateCascadeRef(type, oldVal, trimmed);
+    
+    renderListsSheet();
+}
+
+function deleteListItem(type, idx) {
+    if (!confirm("Are you sure you want to delete this option? Deleted options will remain in existing tasks unless updated manually.")) return;
+    objectLists[type].splice(idx, 1);
+    saveObjectLists();
+    renderListsSheet();
+}
+
+function mergeListItem(type, idx) {
+    const oldVal = objectLists[type][idx];
+    const options = objectLists[type].filter(item => item !== oldVal);
+    if (options.length === 0) {
+        alert("There are no other items to merge into.");
+        return;
+    }
+
+    const mergeTarget = prompt(`Enter the name of the existing option to merge "${oldVal}" into:\n\nAvailable targets:\n${options.join(', ')}`);
+    if (!mergeTarget) return;
+
+    const matchedTarget = options.find(opt => opt.toLowerCase() === mergeTarget.trim().toLowerCase());
+    if (!matchedTarget) {
+        alert("Target option not found in the list. Merge cancelled.");
+        return;
+    }
+
+    if (confirm(`Are you sure you want to merge "${oldVal}" into "${matchedTarget}"? All tasks referencing "${oldVal}" will be updated to "${matchedTarget}".`)) {
+        // Update cascade reference in all tasks automatically
+        updateCascadeRef(type, oldVal, matchedTarget);
+        
+        // Remove old merged item from the list
+        objectLists[type].splice(idx, 1);
+        saveObjectLists();
+        
+        renderListsSheet();
+    }
+}
+
+// Bulk list import modal controls
+function openListsImportModal() {
+    document.getElementById('import-lists-modal').style.display = 'flex';
+    document.getElementById('import-lists-paste-area').value = '';
+}
+
+function closeListsImportModal() {
+    document.getElementById('import-lists-modal').style.display = 'none';
+}
+
+function processListsImportedData() {
+    const raw = document.getElementById('import-lists-paste-area').value.trim();
+    if (!raw) {
+        alert("Please paste your spreadsheet data first.");
+        return;
+    }
+
+    const lines = raw.split(/\r?\n/);
+    if (lines.length < 2) {
+        alert("Invalid data. Pasted text must contain a header row and at least one data row.");
+        return;
+    }
+
+    const headers = lines[0].split('\t').map(h => h.trim().toLowerCase());
+    
+    // Map column indices matching classifiers
+    const projIdx = headers.findIndex(h => h === 'project' || h === 'project branch');
+    const assigneeIdx = headers.findIndex(h => h === 'assignee' || h === 'resource');
+    const systemIdx = headers.findIndex(h => h === 'system');
+    const subsystemIdx = headers.findIndex(h => h === 'subsystem');
+
+    if (projIdx === -1 && assigneeIdx === -1 && systemIdx === -1 && subsystemIdx === -1) {
+        alert("Could not detect any matching columns. Ensure headers include 'Project', 'Assignee', 'System', or 'Subsystem'.");
+        return;
+    }
+
+    const newItems = { assignees: new Set(), systems: new Set(), subsystems: new Set(), projects: new Set() };
+
+    for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const row = lines[i].split('\t');
+        
+        if (projIdx !== -1 && row[projIdx]) newItems.projects.add(row[projIdx].trim());
+        if (assigneeIdx !== -1 && row[assigneeIdx]) newItems.assignees.add(row[assigneeIdx].trim());
+        if (systemIdx !== -1 && row[systemIdx]) newItems.systems.add(row[systemIdx].trim());
+        if (subsystemIdx !== -1 && row[subsystemIdx]) newItems.subsystems.add(row[subsystemIdx].trim());
+    }
+
+    // Merge unique extracted items into current object list stores
+    let addedCount = 0;
+    Object.keys(newItems).forEach(type => {
+        newItems[type].forEach(item => {
+            if (item && !objectLists[type].includes(item)) {
+                objectLists[type].push(item);
+                addedCount++;
+            }
+        });
+        objectLists[type].sort((a,b) => a.localeCompare(b));
+    });
+
+    saveObjectLists();
+    closeListsImportModal();
+    renderListsSheet();
+    alert(`Successfully imported ${addedCount} new unique items to your Object Lists!`);
+}
+
+// Active Autocomplete Dropdown List Handler
+let activeAutocompleteEl = null;
+
+function showAutocomplete(inputEl, type, onSelect) {
+    // Remove any existing suggestion box
+    if (activeAutocompleteEl) {
+        activeAutocompleteEl.remove();
+        activeAutocompleteEl = null;
+    }
+
+    const val = inputEl.value.trim().toLowerCase();
+    const list = objectLists[type] || [];
+    
+    // Suggest items matching typed keyword
+    const matches = list.filter(item => item.toLowerCase().includes(val));
+
+    const box = document.createElement('div');
+    box.className = 'autocomplete-suggestions';
+    
+    // Calculate positioning
+    const rect = inputEl.getBoundingClientRect();
+    box.style.left = rect.left + window.scrollX + 'px';
+    box.style.top = (rect.bottom + window.scrollY) + 'px';
+    box.style.width = rect.width + 'px';
+
+    matches.forEach(match => {
+        const div = document.createElement('div');
+        div.className = 'autocomplete-suggestion-item';
+        div.textContent = match;
+        div.onmousedown = (e) => {
+            e.preventDefault();
+            inputEl.value = match;
+            onSelect(match);
+            box.remove();
+            activeAutocompleteEl = null;
+        };
+        box.appendChild(div);
+    });
+
+    // Option to quickly add new option if typed string doesn't match exactly
+    if (val && !list.map(l => l.toLowerCase()).includes(val)) {
+        const addDiv = document.createElement('div');
+        addDiv.className = 'autocomplete-suggestion-item autocomplete-suggestion-add';
+        addDiv.textContent = `+ Add "${inputEl.value}"`;
+        addDiv.onmousedown = (e) => {
+            e.preventDefault();
+            const originalVal = inputEl.value.trim();
+            if (!objectLists[type]) {
+                objectLists[type] = [];
+            }
+            objectLists[type].push(originalVal);
+            objectLists[type].sort((a,b) => a.localeCompare(b));
+            saveObjectLists();
+            inputEl.value = originalVal;
+            onSelect(originalVal);
+            box.remove();
+            activeAutocompleteEl = null;
+        };
+        box.appendChild(addDiv);
+    }
+
+    if (box.children.length > 0) {
+        document.body.appendChild(box);
+        activeAutocompleteEl = box;
+    }
+}
+
+// Close suggestion box on blur & clear active pivot highlights if clicking outside table
+document.addEventListener('mousedown', (e) => {
+    if (activeAutocompleteEl && !activeAutocompleteEl.contains(e.target)) {
+        activeAutocompleteEl.remove();
+        activeAutocompleteEl = null;
+    }
+    
+    // Clear active highlights when clicking blank page space outside the pivot table/sidebar area
+    if (currentSheetTab === 'pivot') {
+        const outsideTable = !e.target.closest('.excel-table') && !e.target.closest('#properties-panel') && !e.target.closest('.pivot-config-bar');
+        if (outsideTable && (activePivotHighlightDim || activePivotSelectedTaskId)) {
+            clearPivotHighlights();
+        }
+    }
+});
+
+function setPivotAxis(axis, value) {
+    if (axis === 'row') pivotRowDim = value;
+    else pivotColDim = value;
+    renderSheet();
+}
+
+function renderPivotTable() {
+    const area = document.getElementById('sheet-content-area');
+    area.innerHTML = '';
+
+    const rawTasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    const tasks = rawTasks.filter(t => !shouldHideTask(t));
+    const projects = getProjectsList();
+
+    function getTaskDimVal(task, dim) {
+        if (dim === 'project') {
+            const parent = findParent(task.id);
+            return parent ? parent.title : 'Unassigned';
+        }
+        if (dim === 'assignee') {
+            return task.assignee || 'Unassigned';
+        }
+        if (dim === 'status') {
+            return task.status || 'todo';
+        }
+        if (dim === 'created_on') {
+            return task.createdAt ? new Date(task.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unassigned';
+        }
+        if (dim === 'modified_on') {
+            return task.updatedAt ? new Date(task.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unassigned';
+        }
+        // Custom or dynamic columns (with fallback to static system/subsystem keys)
+        let val = task[dim];
+        if (val === undefined || val === '') {
+            const colDef = sheetColumns.find(c => c.key === dim);
+            if (colDef) {
+                const lowerL = colDef.label.toLowerCase();
+                if (lowerL === 'system') val = task.system;
+                else if (lowerL === 'subsystem') val = task.subsystem;
+            }
+        }
+        return val || 'Unassigned';
+    }
+
+    let rowVals = [];
+    if (pivotRowDim === 'project') {
+        rowVals = projects.map(p => p.title);
+    } else if (pivotRowDim === 'status') {
+        rowVals = ['todo', 'inprogress', 'done', 'obsolete'];
+    } else {
+        rowVals = Array.from(new Set(tasks.map(t => getTaskDimVal(t, pivotRowDim))));
+        if (rowVals.length === 0) rowVals = ['Unassigned'];
+    }
+
+    let colVals = [];
+    if (pivotColDim === 'none') {
+        colVals = ['tasks'];
+    } else if (pivotColDim === 'project') {
+        colVals = projects.map(p => p.title);
+    } else if (pivotColDim === 'status') {
+        colVals = ['todo', 'inprogress', 'done', 'obsolete'];
+    } else {
+        colVals = Array.from(new Set(tasks.map(t => getTaskDimVal(t, pivotColDim))));
+        if (colVals.length === 0) colVals = ['Unassigned'];
+    }
+
+    // Filter active dimensions based on enabled state
+    const activePivotHierarchy = pivotHierarchy.filter(h => enabledPivotDims.includes(h));
+
+    // Add Created On and Modified On as checkbox options at the end
+    const hierarchyLabels = {
+        'project': 'Project',
+        'status': 'Status',
+        'assignee': 'Name',
+        'created_on': 'Created On',
+        'modified_on': 'Modified On'
+    };
+    sheetColumns.forEach(c => {
+        hierarchyLabels[c.key] = c.label;
+    });
+
+    // Render configuration bar with Checkboxes to toggle columns on/off
+    let checkboxesHtml = '';
+    pivotHierarchy.forEach(h => {
+        const isChecked = enabledPivotDims.includes(h);
+        checkboxesHtml += `
+            <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim); cursor: pointer; user-select: none; background: rgba(255,255,255,0.03); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border);">
+                <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="togglePivotDim('${h}')" style="accent-color: var(--accent); cursor: pointer;">
+                ${hierarchyLabels[h]}
+            </label>
+        `;
+    });
+
+    const toolbarDisplay = isPivotToolbarCollapsed ? 'display: none;' : 'display: flex;';
+    const configBarHtml = `
+        <div class="pivot-config-bar" style="${toolbarDisplay} align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px;">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; margin-right: 4px;">Columns:</span>
+                    ${checkboxesHtml}
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
+                    <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Hide Done:</span>
+                    <select onchange="setHideDoneFilter(this.value)" style="background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; cursor: pointer;">
+                        <option value="none" ${hideDoneFilter === 'none' ? 'selected' : ''} style="background:#080c14;color:#fff;">Show All</option>
+                        <option value="all" ${hideDoneFilter === 'all' ? 'selected' : ''} style="background:#080c14;color:#fff;">Hide All Done</option>
+                        <option value="1day" ${hideDoneFilter === '1day' ? 'selected' : ''} style="background:#080c14;color:#fff;">Older than 1 Day</option>
+                        <option value="1week" ${hideDoneFilter === '1week' ? 'selected' : ''} style="background:#080c14;color:#fff;">Older than 1 Week</option>
+                        <option value="1month" ${hideDoneFilter === '1month' ? 'selected' : ''} style="background:#080c14;color:#fff;">Older than 1 Month</option>
+                    </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
+                    <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Highlight (Days):</span>
+                    <input type="number" min="0" step="0.1" value="${highlightDurationDays}" onchange="setHighlightDurationDays(this.value)" style="width: 50px; background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; text-align: center;">
+                </div>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
+                    <input type="checkbox" ${pivotZebraStripes ? 'checked' : ''} onchange="setPivotZebraStripes(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
+                    Zebra Stripes
+                </label>
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 10px;">
+            <span class="pivot-select-label" style="color:var(--accent); font-size: 11px; font-weight: 600;">
+                ${activePivotHierarchy.map(h => hierarchyLabels[h]).join(' → ')}
+            </span>
+        </div>
+    `;
+
+    // Cascading data construction based on dynamic activePivotHierarchy sequence
+    const buildHierarchyMap = (tasksList, levelIndex) => {
+        if (levelIndex >= activePivotHierarchy.length) {
+            return tasksList;
+        }
+        const dim = activePivotHierarchy[levelIndex];
+        const group = {};
+        tasksList.forEach(t => {
+            let key = getTaskDimVal(t, dim);
+            if (dim === 'status') {
+                key = sLabel(t.status);
+            }
+            if (!group[key]) group[key] = [];
+            group[key].push(t);
+        });
+
+        // Recursively group nested layers
+        const result = {};
+        Object.entries(group).forEach(([key, items]) => {
+            result[key] = buildHierarchyMap(items, levelIndex + 1);
+        });
+        return result;
+    };
+
+    const tree = buildHierarchyMap(tasks, 0);
+
+    // Recursively traverse and build table rows
+    let tbodyHtml = '';
+    const levelStates = Array(activePivotHierarchy.length).fill(true);
+    let renderedRowIndex = 0;
+
+    const generateRows = (node, depth, currentPath = {}) => {
+        if (depth === activePivotHierarchy.length) {
+            // Leaf level: node is the array of matching tasks
+            node.forEach(t => {
+                // Calculate fade background tint based on modified age using highlightDurationDays input (10% max opacity)
+                let cellStyle = '';
+                if (t.updatedAt && highlightDurationDays > 0) {
+                    const ageMs = Date.now() - new Date(t.updatedAt).getTime();
+                    const durationMs = highlightDurationDays * 24 * 60 * 60 * 1000;
+                    if (ageMs < durationMs) {
+                        const opacity = (1 - (ageMs / durationMs)) * 0.10; // toned down starting opacity to 10%
+                        cellStyle = `style="background: rgba(16, 185, 129, ${opacity}) !important;"`;
+                    }
+                }
+
+                // Check if this task/row matches the active highlighted pivot coordinate path
+                let isRowHighlighted = false;
+                if (activePivotHighlightDim && activePivotHighlightValue) {
+                    const tVal = getTaskDimVal(t, activePivotHighlightDim);
+                    if (tVal === activePivotHighlightValue) {
+                        isRowHighlighted = true;
+                    }
+                } else if (activePivotSelectedTaskId && activePivotSelectedTaskId === t.id) {
+                    isRowHighlighted = true;
+                }
+
+                const trClass = (isRowHighlighted ? 'highlight-path ' : '') + (renderedRowIndex % 2 === 0 ? 'row-even' : 'row-odd');
+                renderedRowIndex++;
+
+                let trHtml = `<tr data-task-id="${t.id}" class="${trClass}">`;
+                for (let i = 0; i < activePivotHierarchy.length; i++) {
+                    const isFirst = levelStates[i];
+                    const dim = activePivotHierarchy[i];
+                    const rawVal = getTaskDimVal(t, dim);
+                    
+                    // Determine if this cell is part of the highlighted active dimension coordinate value
+                    const isCellHighlighted = isRowHighlighted && (rawVal === activePivotHighlightValue || (activePivotSelectedTaskId && activePivotSelectedTaskId === t.id));
+                    const cellClass = (isCellHighlighted ? 'highlight-cell ' : '') + 'pivot-dim-cell';
+                    
+                    if (isFirst) {
+                        const displayVal = rawVal === 'Unassigned' ? '' : sLabel(rawVal);
+                        const weight = i === 0 ? '600' : i === 1 ? '550' : '500';
+                        const color = dim === 'status' ? sColor(t.status) : (i >= 3 ? 'var(--text-muted)' : 'var(--text)');
+                        const bgStyle = i === 0 ? 'background: rgba(255,255,255,0.01);' : '';
+                        
+                        trHtml += `<td class="${cellClass}" style="font-weight:${weight}; vertical-align:top; border-bottom: none; color: ${color}; ${bgStyle}" onclick="event.stopPropagation(); activePivotHighlightDim = '${dim}'; activePivotHighlightValue = '${rawVal.replace(/'/g, "\\'")}'; activePivotSelectedTaskId = null; renderPivotTable();">${displayVal}</td>`;
+                        levelStates[i] = false;
+                    } else {
+                        // Apply active highlights even on spanned/hidden empty connector cells
+                        trHtml += `<td class="${isCellHighlighted ? 'highlight-cell' : ''}" style="border-top:none; border-bottom:none;"></td>`;
+                    }
+                }
+
+                trHtml += `
+                    <td ${cellStyle}>
+                        <div class="pivot-cell-task ${t.status}" onclick="event.stopPropagation(); selectNode('${t.id}'); activePivotHighlightDim = null; activePivotHighlightValue = null; activePivotSelectedTaskId = '${t.id}'; renderPivotTable();">
+                            <span contenteditable="true" onblur="updateTaskTitleFromSheet('${t.id}', this.innerText)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+                                ${t.title}
+                            </span>
+                            <button class="btn-gantt-action" style="padding:0;color:#f87171;" onclick="event.stopPropagation(); deleteSheetTask('${t.id}')">×</button>
+                        </div>
+                    </td>
+                </tr>
+                `;
+                tbodyHtml += trHtml;
+            });
+            return;
+        }
+
+        Object.entries(node).forEach(([key, childNode]) => {
+            levelStates[depth] = true;
+            const pathCopy = { ...currentPath, [activePivotHierarchy[depth]]: key };
+            generateRows(childNode, depth + 1, pathCopy);
+        });
+    };
+
+    generateRows(tree, 0, {});
+
+    // Render table headers with HTML5 drag and drop handlers
+    let theadHtml = '<tr>';
+    activePivotHierarchy.forEach((h, idx) => {
+        theadHtml += `
+            <th class="pivot-th-drag" draggable="true" 
+                ondragstart="handlePivotDragStart(event, ${idx})" 
+                ondragover="event.preventDefault()" 
+                ondrop="handlePivotDrop(event, ${idx})">
+                ${hierarchyLabels[h]}
+            </th>`;
+    });
+    theadHtml += '<th>Task</th></tr>';
+
+    area.innerHTML = `
+        ${configBarHtml}
+        <table class="excel-table ${pivotZebraStripes ? 'zebra-enabled' : ''}">
+            <thead>
+                ${theadHtml}
+            </thead>
+            <tbody>
+                ${tbodyHtml || `<tr><td colspan="${activePivotHierarchy.length + 1}" style="text-align:center;color:var(--text-muted);">No tasks found.</td></tr>`}
+            </tbody>
+        </table>
+    `;
+}
+
+// Drag & Drop handlers for Sorting priority
+let draggedColIndex = null;
+function handlePivotDragStart(e, idx) {
+    draggedColIndex = idx;
+    e.dataTransfer.effectAllowed = 'move';
+}
+function handlePivotDrop(e, idx) {
+    e.preventDefault();
+    if (draggedColIndex !== null && draggedColIndex !== idx) {
+        const activePivotHierarchy = pivotHierarchy.filter(h => enabledPivotDims.includes(h));
+        const draggedKey = activePivotHierarchy[draggedColIndex];
+        const targetKey = activePivotHierarchy[idx];
+
+        if (draggedKey && targetKey) {
+            const oldMainIdx = pivotHierarchy.indexOf(draggedKey);
+            const newMainIdx = pivotHierarchy.indexOf(targetKey);
+
+            if (oldMainIdx !== -1 && newMainIdx !== -1) {
+                const item = pivotHierarchy.splice(oldMainIdx, 1)[0];
+                pivotHierarchy.splice(newMainIdx, 0, item);
+                renderPivotTable();
+            }
+        }
+    }
+}
+
+function addPivotTask(rowVal, colVal) {
+    const projects = getProjectsList();
+    if (projects.length === 0) return;
+
+    let projId = projects[0].id;
+    let assignee = '';
+    let status = 'todo';
+    let system = '';
+    let subsystem = '';
+
+    const applyDim = (dim, val) => {
+        if (dim === 'project') {
+            const p = projects.find(proj => proj.title === val);
+            if (p) projId = p.id;
+        } else if (dim === 'assignee') {
+            if (val !== 'Unassigned') assignee = val;
+        } else if (dim === 'status') {
+            status = val;
+        } else if (dim === 'system') {
+            if (val !== 'Unassigned') system = val;
+        } else if (dim === 'subsystem') {
+            if (val !== 'Unassigned') subsystem = val;
+        }
+    };
+
+    applyDim(pivotRowDim, rowVal);
+    applyDim(pivotColDim, colVal);
+
+    const parentProj = findNode(projId);
+    if (parentProj) {
+        const task = {
+            id: uid(),
+            title: 'New Task',
+            status: status,
+            assignee: assignee,
+            system: system,
+            subsystem: subsystem,
+            tags: [],
+            notes: '',
+            children: []
+        };
+        parentProj.children.push(task);
+
+        data.history.push({
+            timestamp: new Date().toISOString(),
+            projectId: parentProj.id,
+            taskId: task.id,
+            taskTitle: task.title,
+            action: 'status_change',
+            fromStatus: 'todo',
+            toStatus: status,
+            assignee: assignee || 'User'
+        });
+
+        save();
+        renderSheet();
+    }
+}
+
+// --- PROPERTIES ---
+function selectNode(id) {
+    selectedId=id;
+    const n=findNode(id); if(!n) return;
+    document.getElementById('prop-title').value=n.title;
+    document.getElementById('prop-assignee').value=n.assignee||'';
+    
+    // Find project title
+    const parentProj = findParent(n.id);
+    document.getElementById('prop-project').value = (parentProj && parentProj.id !== 'root') ? parentProj.title : (n.project || '');
+    
+    document.getElementById('prop-system').value=n.system||'';
+    document.getElementById('prop-subsystem').value=n.subsystem||'';
+    
+    // Render dynamic custom column properties in sidebar panel
+    const dynContainer = document.getElementById('dynamic-props-container');
+    if (dynContainer) {
+        dynContainer.innerHTML = '';
+        sheetColumns.forEach(col => {
+            const lowerL = col.label.toLowerCase();
+            if (lowerL !== 'system' && lowerL !== 'subsystem' && lowerL !== 'project' && lowerL !== 'assignee') {
+                const propGrp = document.createElement('div');
+                propGrp.className = 'prop-group';
+                propGrp.style.marginBottom = '12px';
+                
+                const label = document.createElement('div');
+                label.className = 'prop-label';
+                label.textContent = col.label;
+                
+                const input = document.createElement('input');
+                input.className = 'prop-input';
+                input.type = 'text';
+                input.placeholder = col.label;
+                input.value = n[col.key] || '';
+                
+                input.onchange = function() {
+                    updateProp(col.key, this.value);
+                };
+                input.oninput = function() {
+                    showAutocomplete(this, col.key, (val) => { updateProp(col.key, val); this.value = val; });
+                };
+                input.onfocus = function() {
+                    showAutocomplete(this, col.key, (val) => { updateProp(col.key, val); this.value = val; });
+                };
+                
+                propGrp.appendChild(label);
+                propGrp.appendChild(input);
+                dynContainer.appendChild(propGrp);
+            }
+        });
+    }
+    
+    document.getElementById('prop-notes').value=n.notes||'';
+    setStatusPills(n.status);
+    renderTagPills(n.tags||[]);
+    document.getElementById('properties-panel').classList.add('open');
+    redraw();
+}
+function setStatusPills(s) {
+    ['todo','inprogress','inprogress_bg','done'].forEach(k=>{
+        document.getElementById('spill-'+k).className='status-pill'+(k===s?` active-${k}`:'');
+    });
+}
+function setStatus(s) {
+    const n = findNode(selectedId);
+    if (n) {
+        const fromStatus = n.status;
+        const toStatus = s;
+        const parentProj = findParent(selectedId);
+        if (parentProj) {
+            data.history.push({
+                timestamp: new Date().toISOString(),
+                projectId: parentProj.id,
+                taskId: n.id,
+                taskTitle: n.title,
+                action: 'status_change',
+                fromStatus: fromStatus,
+                toStatus: toStatus,
+                assignee: n.assignee || 'User'
+            });
+        }
+    }
+    updateProp('status',s); setStatusPills(s);
+    if(currentView==='mindmap') renderMindMap();
+}
+function renderTagPills(tags) {
+    const wrap=document.getElementById('tags-wrap');
+    const inp=document.getElementById('prop-tags-input');
+    wrap.innerHTML='';
+    tags.forEach(t=>{
+        const pill=document.createElement('div'); pill.className='tag-pill';
+        const lbl=document.createElement('span'); lbl.textContent='#'+t;
+        const btn=document.createElement('button'); btn.textContent='\u00d7'; btn.onclick=()=>removeTag(t);
+        pill.appendChild(lbl); pill.appendChild(btn); wrap.appendChild(pill);
+    });
+    wrap.appendChild(inp);
+}
+function handleTagInput(e) {
+    if(e.key==='Enter'||e.key===','){
+        e.preventDefault();
+        const val=e.target.value.trim().replace(/^#/,'').replace(/,$/,'');
+        if(!val) return;
+        const n=findNode(selectedId); if(!n) return;
+        if(!n.tags) n.tags=[];
+        if(!n.tags.includes(val)){ n.tags.push(val); save(); renderTagPills(n.tags); }
+        e.target.value='';
+    }
+}
+function removeTag(tag) {
+    const n=findNode(selectedId); if(!n) return;
+    n.tags=(n.tags||[]).filter(t=>t!==tag); save(); renderTagPills(n.tags);
+}
+function updateTitle(val) {
+    const n=findNode(selectedId); if(!n) return;
+    const oldVal = n.title || '';
+    const newVal = val || '';
+    if (oldVal.trim() !== newVal.trim()) {
+        n.title=val;
+        n.updatedAt = new Date().toISOString();
+        save();
+    }
+    clearTimeout(titleTimer);
+    if(currentView==='mindmap' && mmG){
+        mmG.select(`#mmn-${selectedId} text:not(.add-btn)`).text(trunc(val,22));
+    } else {
+        titleTimer=setTimeout(redraw,300);
+    }
+}
+function updateProp(prop,val) {
+    const n=findNode(selectedId); if(!n) return;
+    
+    // Normalize and compare values to prevent premature change triggers
+    let oldVal = n[prop] || '';
+    if (oldVal === undefined || oldVal === '') {
+        if (prop === 'system') oldVal = n.system || '';
+        else if (prop === 'subsystem') oldVal = n.subsystem || '';
+    }
+    
+    const cleanOld = oldVal.toString().trim().toLowerCase();
+    const cleanNew = (val || '').toString().trim().toLowerCase();
+    
+    if (cleanOld === cleanNew) return;
+    
+    const nowIso = new Date().toISOString();
+    if (!n.createdAt) n.createdAt = nowIso;
+    n.updatedAt = nowIso;
+    
+    if (prop === 'status') {
+        if (val === 'done') {
+            if (!n.doneAt) n.doneAt = nowIso;
+        } else {
+            n.doneAt = null;
+        }
+    }
+    
+    n[prop]=val;
+    
+    // Mirror the property update onto the matching dynamic custom column key
+    if (prop === 'system' || prop === 'subsystem') {
+        const matchingCol = sheetColumns.find(c => c.label.toLowerCase() === prop);
+        if (matchingCol) {
+            n[matchingCol.key] = val;
+        }
+    } else {
+        // If updating via custom_xxxx key directly, mirror to task.system/subsystem
+        const colDef = sheetColumns.find(c => c.key === prop);
+        if (colDef) {
+            const lowerL = colDef.label.toLowerCase();
+            if (lowerL === 'system') {
+                n.system = val;
+            } else if (lowerL === 'subsystem') {
+                n.subsystem = val;
+            }
+        }
+    }
+    
+    save();
+    if(currentView!=='mindmap') redraw();
+}
+function closePanel() {
+    selectedId=null;
+    document.getElementById('properties-panel').classList.remove('open');
+    redraw();
+}
+
+// --- ADD / DELETE ---
+function getDepth(nodeId) {
+    if (nodeId === 'root') return 0;
+    
+    // Fallback if data is not loaded yet
+    if (!data) return 1;
+    
+    // Trace depth by searching paths from root downwards
+    let foundDepth = -1;
+    function traverse(node, currentDepth) {
+        if (!node) return false;
+        if (node.id === nodeId) {
+            foundDepth = currentDepth;
+            return true;
+        }
+        if (node.children) {
+            for (let i = 0; i < node.children.length; i++) {
+                if (traverse(node.children[i], currentDepth + 1)) return true;
+            }
+        }
+        return false;
+    }
+    
+    traverse(data, 0);
+    return foundDepth !== -1 ? foundDepth : 1;
+}
+
+function addChildTo(parentId) {
+    const parent=findNode(parentId); if(!parent) return;
+    const depth = getDepth(parentId);
+    if (depth >= 4) {
+        alert("Cannot add further child nodes. The strict hierarchy level limit (Main Project > System > Subsystem > Project > Task) is reached.");
+        return;
+    }
+
+    // Default node variables mapping to level requirements
+    const node = { id: uid(), title: 'New Node', status: 'todo', assignee: '', tags: [], notes: '', children: [] };
+    
+    // Auto-populate systems, subsystems, or projects path metadata fields on the new node if it is a level 4 task leaf
+    if (depth === 3) {
+        node.project = parent.title;
+        const sub = findParent(parent.id);
+        if (sub) {
+            node.subsystem = sub.title;
+            const sys = findParent(sub.id);
+            if (sys) {
+                node.system = sys.title;
+            }
+        }
+    }
+
+    parent.children.push(node); save();
+    if(collapsed.has(parentId)) collapsed.delete(parentId);
+    redraw();
+    selectNode(node.id);
+    setTimeout(()=>{ const inp=document.getElementById('prop-title'); if(inp){inp.focus();inp.select();} },120);
+}
+function addRootChild() { addChildTo('root'); }
+function addChildToSelected() { addChildTo(selectedId||'root'); }
+function deleteSelected() {
+    if(!selectedId||selectedId==='root') return;
+    const parent=findParent(selectedId); if(!parent) return;
+    parent.children=parent.children.filter(c=>c.id!==selectedId);
+    save(); selectedId=null;
+    document.getElementById('properties-panel').classList.remove('open');
+    redraw();
+}
+
+// --- VIEWS ---
+function switchView(view) {
+    currentView=view;
+    document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
+    document.getElementById('btn-'+view).classList.add('active');
+    ['gitboard','spreadsheet'].forEach(v => {
+        const el = document.getElementById(v+'-view');
+        if (el) el.style.display = v===view?'flex':'none';
+    });
+    redraw();
+}
+function redraw() {
+    if(currentView==='gitboard') renderGitBoard();
+    else if(currentView==='spreadsheet') {
+        updateActiveSheetControlsVisibility();
+        renderSheet();
+    }
+}
+
+// --- TOOLTIP ---
+function showTip(e,n) {
+    const t=document.getElementById('tooltip');
+    t.innerHTML=`<strong>${n.title}</strong><br><span style="color:${sColor(n.status)}">${sLabel(n.status)}</span>${n.assignee?' &middot; '+n.assignee:''}`;
+    t.style.left=(e.pageX+14)+'px'; t.style.top=(e.pageY-8)+'px';
+    t.classList.add('visible');
+}
+function hideTip() { document.getElementById('tooltip').classList.remove('visible'); }
+
+// --- INIT ---
+updateSidebarDrawerVisibility();
+switchView('spreadsheet');
+window.addEventListener('resize',()=>{ 
+    if(currentView==='gitboard') renderGitBoard();
+    else if(currentView==='spreadsheet') renderSheet();
+});
+</script>
+</body>
+</html>
