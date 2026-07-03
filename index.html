@@ -4081,13 +4081,16 @@ function renderPivotTable() {
 
                 // Match the Task cell itself as the rightmost column for the row highlight
                 let taskCellHighlightClass = '';
-                if (activePivotSelectedRowIdx === (renderedRowIndex - 1)) {
+                const isTaskCellActiveSelected = activePivotSelectedRowIdx === (renderedRowIndex - 1) && activePivotSelectedColIdx === activePivotHierarchy.length;
+                if (isTaskCellActiveSelected) {
+                    taskCellHighlightClass = `class="active-selected-cell"`;
+                } else if (activePivotSelectedRowIdx === (renderedRowIndex - 1)) {
                     taskCellHighlightClass = `class="active-row-highlight-right"`;
                 }
 
                 trHtml += `
                     <td ${cellStyle} ${taskCellHighlightClass}>
-                        <div class="pivot-cell-task ${t.status}" onclick="event.stopPropagation(); selectNode('${t.id}'); activePivotHighlightDim = null; activePivotHighlightValue = null; activePivotSelectedTaskId = '${t.id}'; activePivotSelectedRowIdx = ${renderedRowIndex - 1}; activePivotSelectedColIdx = activePivotHierarchy.length; renderPivotTable();">
+                        <div class="pivot-cell-task ${t.status}" onclick="event.stopPropagation(); selectNode('${t.id}'); activePivotHighlightDim = null; activePivotHighlightValue = null; activePivotSelectedTaskId = '${t.id}'; activePivotSelectedRowIdx = ${renderedRowIndex - 1}; activePivotSelectedColIdx = ${activePivotHierarchy.length}; renderPivotTable();">
                             <span contenteditable="true" onblur="updateTaskTitleFromSheet('${t.id}', this.innerText)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
                                 ${t.title}
                             </span>
