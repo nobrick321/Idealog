@@ -4129,7 +4129,8 @@ function renderPivotTable() {
         // Find current highlighted cell in coordinates
         let currentIdx = -1;
         if (activePivotHighlightDim && activePivotHighlightValue) {
-            // Find current highlight location matching active selection
+            // Find current highlight location matching active selection.
+            // When navigating spanned categories, match the cell closest to our target
             currentIdx = cellCoords.findIndex(c => c.dim === activePivotHighlightDim && c.value === activePivotHighlightValue);
         }
 
