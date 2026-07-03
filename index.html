@@ -4074,14 +4074,12 @@ function renderPivotTable() {
         </th>
     </tr>`;
 
-    // --- Pivot Table News Section Generator ---
+    // --- Pivot Table News Section Generator (Restructured as a Detailed Table Panel) ---
     const nowTime = Date.now();
     const rangeMs = pivotNewsDays * 24 * 60 * 60 * 1000;
     
     // Gather all leaf tasks matching active pivot table filters (excluding hidden tasks)
     const activeTasks = tasks;
-    
-    // Sort tasks in the news by modified date descending
     const newsItems = [];
     
     activeTasks.forEach(t => {
@@ -4092,30 +4090,42 @@ function renderPivotTable() {
         // Match creations
         if (createdMs && (nowTime - createdMs <= rangeMs)) {
             newsItems.push({
-                task: t,
                 time: createdMs,
                 type: 'created',
-                desc: `Task Created: <strong>${t.title}</strong> (Project: <em>${t.project || 'Unassigned'}</em>, Assignee: <em>${t.assignee || 'Unassigned'}</em>)`
+                project: t.project || 'Unassigned',
+                system: t.system || 'Unassigned',
+                subsystem: t.subsystem || 'Unassigned',
+                taskTitle: t.title,
+                assignee: t.assignee || 'Unassigned',
+                details: 'Task initialized in database'
             });
         }
         
         // Match status done completions
         if (t.status === 'done' && doneMs && (nowTime - doneMs <= rangeMs)) {
             newsItems.push({
-                task: t,
                 time: doneMs,
                 type: 'done',
-                desc: `Task Completed: <strong>${t.title}</strong> (Project: <em>${t.project || 'Unassigned'}</em>, Assignee: <em>${t.assignee || 'Unassigned'}</em>)`
+                project: t.project || 'Unassigned',
+                system: t.system || 'Unassigned',
+                subsystem: t.subsystem || 'Unassigned',
+                taskTitle: t.title,
+                assignee: t.assignee || 'Unassigned',
+                details: 'Task marked completed'
             });
         }
         
         // Match other updates/modifications (avoid duplicating creation events)
         if (updatedMs && (nowTime - updatedMs <= rangeMs) && Math.abs(updatedMs - createdMs) > 2000 && Math.abs(updatedMs - doneMs) > 2000) {
             newsItems.push({
-                task: t,
                 time: updatedMs,
                 type: 'updated',
-                desc: `Task Modified: <strong>${t.title}</strong> (Project: <em>${t.project || 'Unassigned'}</em>, Assignee: <em>${t.assignee || 'Unassigned'}</em>)`
+                project: t.project || 'Unassigned',
+                system: t.system || 'Unassigned',
+                subsystem: t.subsystem || 'Unassigned',
+                taskTitle: t.title,
+                assignee: t.assignee || 'Unassigned',
+                details: 'Task properties/notes updated'
             });
         }
     });
@@ -4128,10 +4138,18 @@ function renderPivotTable() {
                 // Avoid status change duplicates of 'done' which are already logged above
                 if (h.toStatus === 'done') return;
                 
+                // Lookup current properties of the task if still present
+                const matchedTask = findNode(h.taskId);
+                
                 newsItems.push({
                     time: histMs,
                     type: 'status',
-                    desc: `Status Shift: <strong>${h.taskTitle}</strong> moved from <em>${sLabel(h.fromStatus)}</em> to <em>${sLabel(h.toStatus)}</em> by <em>${h.assignee || 'User'}</em>`
+                    project: matchedTask ? (matchedTask.project || 'Unassigned') : 'Unassigned',
+                    system: matchedTask ? (matchedTask.system || 'Unassigned') : 'Unassigned',
+                    subsystem: matchedTask ? (matchedTask.subsystem || 'Unassigned') : 'Unassigned',
+                    taskTitle: h.taskTitle,
+                    assignee: h.assignee || 'User',
+                    details: `Status Shift: ${sLabel(h.fromStatus)} ➔ ${sLabel(h.toStatus)}`
                 });
             }
         });
@@ -4152,16 +4170,55 @@ function renderPivotTable() {
         return `${diffDays}d ago`;
     };
 
+    // Build the news items table body rows
+    let newsTbodyHtml = '';
+    if (newsItems.length === 0) {
+        newsTbodyHtml = `<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
+    } else {
+        newsItems.forEach(item => {
+            let badgeStyle = '';
+            let typeLabel = '';
+            if (item.type === 'created') {
+                badgeStyle = 'background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3);';
+                typeLabel = '✨ CREATED';
+            } else if (item.type === 'done') {
+                badgeStyle = 'background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3);';
+                typeLabel = '✅ DONE';
+            } else if (item.type === 'updated') {
+                badgeStyle = 'background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3);';
+                typeLabel = '🛠️ UPDATED';
+            } else if (item.type === 'status') {
+                badgeStyle = 'background: rgba(139,92,246,0.15); color: #c084fc; border: 1px solid rgba(139,92,246,0.3);';
+                typeLabel = '🔄 STATUS';
+            }
+            
+            newsTbodyHtml += `
+                <tr>
+                    <td class="pivot-dim-cell" style="font-weight:600; color:var(--text);">${item.project}</td>
+                    <td class="pivot-dim-cell" style="color:var(--text-dim);">${item.system}</td>
+                    <td class="pivot-dim-cell" style="color:var(--text-muted);">${item.subsystem}</td>
+                    <td>
+                        <span class="chip" style="${badgeStyle} font-size: 9px; font-weight:700; text-transform:uppercase; padding: 2px 6px;">${typeLabel}</span>
+                    </td>
+                    <td style="font-weight:500;">${item.taskTitle}</td>
+                    <td class="pivot-dim-cell" style="color:var(--text-dim); font-style:italic;">${item.assignee}</td>
+                    <td style="color:var(--text-muted);">${item.details}</td>
+                    <td style="text-align:right; color:var(--text-muted); white-space:nowrap; width:1%;">${getRelativeTimeString(item.time)}</td>
+                </tr>
+            `;
+        });
+    }
+
     let newsHtml = `
-        <div class="pivot-news-section" style="margin-top: 24px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+        <div class="pivot-news-section" style="margin-top: 28px; padding: 18px; background: rgba(8,12,20,0.65); border: 1px solid var(--border); border-radius: 12px; backdrop-filter: blur(20px);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 14px; font-weight: 700; color: var(--accent);">📡 Latest Happenings</span>
-                    <span style="font-size: 11px; color: var(--text-muted);">(${newsItems.length} events logged)</span>
+                    <span style="font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing:0.05em;">📡 Happenings Ledger (Pivot News)</span>
+                    <span style="font-size: 11px; color: var(--text-muted);">(${newsItems.length} transactions in view)</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase;">Timeline:</span>
-                    <select onchange="setPivotNewsDays(this.value)" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; color: var(--text); font-size: 11px; cursor: pointer; outline: none;">
+                    <select onchange="setPivotNewsDays(this.value)" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; color: var(--text); font-size: 11px; cursor: pointer; outline: none;">
                         <option value="1" ${pivotNewsDays === 1 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 24 Hours</option>
                         <option value="3" ${pivotNewsDays === 3 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 3 Days</option>
                         <option value="7" ${pivotNewsDays === 7 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 7 Days</option>
@@ -4170,34 +4227,24 @@ function renderPivotTable() {
                     </select>
                 </div>
             </div>
-            <div class="news-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding-right: 4px;">
-    `;
-
-    if (newsItems.length === 0) {
-        newsHtml += `<div style="text-align: center; padding: 12px; color: var(--text-muted); font-size: 12px;">No activity logged during this timeframe. Try selecting a broader news window.</div>`;
-    } else {
-        newsItems.forEach(item => {
-            let icon = '📝';
-            let color = 'var(--text-dim)';
-            if (item.type === 'created') { icon = '✨'; color = '#818cf8'; }
-            else if (item.type === 'done') { icon = '✅'; color = '#34d399'; }
-            else if (item.type === 'updated') { icon = '🛠️'; color = '#fbbf24'; }
-            else if (item.type === 'status') { icon = '🔄'; color = '#a78bfa'; }
             
-            newsHtml += `
-                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 8px 10px; background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.03); border-radius: 6px; font-size: 12px;">
-                    <div style="display: flex; align-items: center; gap: 8px; color: ${color};">
-                        <span>${icon}</span>
-                        <span>${item.desc}</span>
-                    </div>
-                    <span style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">${getRelativeTimeString(item.time)}</span>
-                </div>
-            `;
-        });
-    }
-
-    newsHtml += `
-            </div>
+            <table class="excel-table" style="table-layout: auto;">
+                <thead>
+                    <tr>
+                        <th style="width: 12%; white-space: nowrap;">Project</th>
+                        <th style="width: 10%; white-space: nowrap;">System</th>
+                        <th style="width: 10%; white-space: nowrap;">Subsystem</th>
+                        <th style="width: 8%; white-space: nowrap;">Event</th>
+                        <th style="width: 25%;">Task Title</th>
+                        <th style="width: 10%; white-space: nowrap;">Operator</th>
+                        <th style="width: 20%;">Activity Log</th>
+                        <th style="text-align:right; width: 5%; white-space: nowrap;">Occurred</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${newsTbodyHtml}
+                </tbody>
+            </table>
         </div>
     `;
 
