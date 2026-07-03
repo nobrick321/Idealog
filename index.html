@@ -4074,7 +4074,7 @@ function renderPivotTable() {
         </th>
     </tr>`;
 
-    // --- Pivot Table News Section Generator (Restructured as a Detailed Table Panel) ---
+    // --- Pivot Table News Section Generator (Mimics activePivotHierarchy columns dynamically) ---
     const nowTime = Date.now();
     const rangeMs = pivotNewsDays * 24 * 60 * 60 * 1000;
     
@@ -4093,11 +4093,7 @@ function renderPivotTable() {
             newsItems.push({
                 time: doneMs,
                 type: 'done',
-                project: t.project || 'Unassigned',
-                system: t.system || 'Unassigned',
-                subsystem: t.subsystem || 'Unassigned',
-                taskTitle: t.title,
-                assignee: t.assignee || 'Unassigned',
+                task: t,
                 details: 'Task marked completed'
             });
         }
@@ -4107,11 +4103,7 @@ function renderPivotTable() {
             newsItems.push({
                 time: createdMs,
                 type: 'created',
-                project: t.project || 'Unassigned',
-                system: t.system || 'Unassigned',
-                subsystem: t.subsystem || 'Unassigned',
-                taskTitle: t.title,
-                assignee: t.assignee || 'Unassigned',
+                task: t,
                 details: 'Task initialized in database'
             });
         }
@@ -4121,11 +4113,7 @@ function renderPivotTable() {
             newsItems.push({
                 time: updatedMs,
                 type: 'updated',
-                project: t.project || 'Unassigned',
-                system: t.system || 'Unassigned',
-                subsystem: t.subsystem || 'Unassigned',
-                taskTitle: t.title,
-                assignee: t.assignee || 'Unassigned',
+                task: t,
                 details: 'Task properties/notes updated'
             });
         }
@@ -4142,14 +4130,17 @@ function renderPivotTable() {
                 // Lookup current properties of the task if still present
                 const matchedTask = findNode(h.taskId);
                 
+                // Create a temporary mock task matching historical title/properties if the original is gone,
+                // or extend matchedTask to preserve dimension lookups via getTaskDimVal
+                const mockTask = matchedTask ? { ...matchedTask } : { id: h.taskId, title: h.taskTitle, status: h.toStatus };
+                if (!mockTask.assignee && h.assignee) {
+                    mockTask.assignee = h.assignee;
+                }
+                
                 newsItems.push({
                     time: histMs,
                     type: 'status',
-                    project: matchedTask ? (matchedTask.project || 'Unassigned') : 'Unassigned',
-                    system: matchedTask ? (matchedTask.system || 'Unassigned') : 'Unassigned',
-                    subsystem: matchedTask ? (matchedTask.subsystem || 'Unassigned') : 'Unassigned',
-                    taskTitle: h.taskTitle,
-                    assignee: h.assignee || 'User',
+                    task: mockTask,
                     details: `Status Shift: ${sLabel(h.fromStatus)} ➔ ${sLabel(h.toStatus)}`
                 });
             }
@@ -4171,15 +4162,25 @@ function renderPivotTable() {
         return `${diffDays}d ago`;
     };
 
-    // Build the news items table body rows with cell-spanning groupings
+    // Render table headers dynamically matching activePivotHierarchy columns
+    let newsTheadHtml = '<tr>';
+    activePivotHierarchy.forEach(h => {
+        newsTheadHtml += `<th style="width: 1%; white-space: nowrap;">${hierarchyLabels[h]}</th>`;
+    });
+    newsTheadHtml += `
+        <th style="width: 10%; white-space: nowrap;">Event</th>
+        <th style="width: auto;">Task Title</th>
+        <th style="width: 25%;">Activity Log</th>
+        <th style="text-align:right; width: 5%; white-space: nowrap;">Occurred</th>
+    </tr>`;
+
+    // Build the news items table body rows with dynamic cell-spanning groupings
     let newsTbodyHtml = '';
     if (newsItems.length === 0) {
-        newsTbodyHtml = `<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
+        newsTbodyHtml = `<tr><td colspan="${activePivotHierarchy.length + 4}" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
     } else {
-        // Track unique spanned values per category level
-        let lastProject = null;
-        let lastSystem = null;
-        let lastSubsystem = null;
+        // Track unique spanned values per category level index matching activePivotHierarchy
+        const lastDimValues = Array(activePivotHierarchy.length).fill(null);
         
         newsItems.forEach(item => {
             let badgeStyle = '';
@@ -4198,38 +4199,37 @@ function renderPivotTable() {
                 typeLabel = '🔄 STATUS';
             }
             
-            // Check span matches
-            const showProject = item.project !== lastProject;
-            // If project changes, system and subsystem must reset to prevent accidental merging across different projects
-            const showSystem = showProject || item.system !== lastSystem;
-            const showSubsystem = showSystem || item.subsystem !== lastSubsystem;
+            // Build cells for active hierarchy dimensions
+            let dimensionCellsHtml = '';
+            let isParentDifferent = false;
             
-            lastProject = item.project;
-            lastSystem = item.system;
-            lastSubsystem = item.subsystem;
-
-            const projCell = showProject 
-                ? `<td class="pivot-dim-cell" style="font-weight:600; color:var(--text); border-bottom: none; vertical-align: top;">${item.project}</td>` 
-                : `<td style="border-top: none; border-bottom: none;"></td>`;
+            activePivotHierarchy.forEach((dim, idx) => {
+                const rawVal = getTaskDimVal(item.task, dim);
+                const displayVal = rawVal === 'Unassigned' ? '' : sLabel(rawVal);
                 
-            const sysCell = showSystem 
-                ? `<td class="pivot-dim-cell" style="color:var(--text-dim); border-bottom: none; vertical-align: top;">${item.system}</td>` 
-                : `<td style="border-top: none; border-bottom: none;"></td>`;
-                
-            const subCell = showSubsystem 
-                ? `<td class="pivot-dim-cell" style="color:var(--text-muted); border-bottom: none; vertical-align: top;">${item.subsystem}</td>` 
-                : `<td style="border-top: none; border-bottom: none;"></td>`;
+                // Grouping spanning check matching main pivot logic:
+                // If any parent category changes, all child categories reset spanning
+                if (isParentDifferent || rawVal !== lastDimValues[idx]) {
+                    const weight = idx === 0 ? '600' : idx === 1 ? '550' : '500';
+                    const color = dim === 'status' ? sColor(item.task.status) : (idx >= 3 ? 'var(--text-muted)' : 'var(--text)');
+                    
+                    dimensionCellsHtml += `<td class="pivot-dim-cell" style="font-weight:${weight}; vertical-align:top; border-bottom: none; color: ${color}; white-space: nowrap;">${displayVal}</td>`;
+                    lastDimValues[idx] = rawVal;
+                    isParentDifferent = true; // Force reset of child columns spanning
+                } else {
+                    dimensionCellsHtml += `<td style="border-top:none; border-bottom:none;"></td>`;
+                }
+            });
             
             newsTbodyHtml += `
                 <tr>
-                    ${projCell}
-                    ${sysCell}
-                    ${subCell}
+                    ${dimensionCellsHtml}
                     <td>
                         <span class="chip" style="${badgeStyle} font-size: 9px; font-weight:700; text-transform:uppercase; padding: 2px 6px;">${typeLabel}</span>
                     </td>
-                    <td style="font-weight:500;">${item.taskTitle}</td>
-                    <td class="pivot-dim-cell" style="color:var(--text-dim); font-style:italic;">${item.assignee}</td>
+                    <td style="font-weight:500;">
+                        <span style="cursor: pointer; text-decoration: underline rgba(255,255,255,0.1);" onclick="event.stopPropagation(); selectNode('${item.task.id}');">${item.task.title}</span>
+                    </td>
                     <td style="color:var(--text-muted);">${item.details}</td>
                     <td style="text-align:right; color:var(--text-muted); white-space:nowrap; width:1%;">${getRelativeTimeString(item.time)}</td>
                 </tr>
@@ -4258,16 +4258,7 @@ function renderPivotTable() {
             
             <table class="excel-table" style="table-layout: auto;">
                 <thead>
-                    <tr>
-                        <th style="width: 12%; white-space: nowrap;">Project</th>
-                        <th style="width: 10%; white-space: nowrap;">System</th>
-                        <th style="width: 10%; white-space: nowrap;">Subsystem</th>
-                        <th style="width: 8%; white-space: nowrap;">Event</th>
-                        <th style="width: 25%;">Task Title</th>
-                        <th style="width: 10%; white-space: nowrap;">Operator</th>
-                        <th style="width: 20%;">Activity Log</th>
-                        <th style="text-align:right; width: 5%; white-space: nowrap;">Occurred</th>
-                    </tr>
+                    ${newsTheadHtml}
                 </thead>
                 <tbody>
                     ${newsTbodyHtml}
