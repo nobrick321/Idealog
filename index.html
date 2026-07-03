@@ -648,6 +648,14 @@
             background: #080c14 !important; /* Matches main theme background */
             z-index: 100;
         }
+        /* Compressed table style for Pivot news happenings ledger */
+        .news-excel-table th, .news-excel-table td {
+            padding: 2px 4px !important;
+            font-size: 10px !important;
+        }
+        .news-excel-table th {
+            font-size: 9px !important;
+        }
         /* Prevent dimension value wrapping in Pivot Table */
         .pivot-dim-cell {
             white-space: nowrap !important;
@@ -4256,7 +4264,7 @@ function renderPivotTable() {
                 </div>
             </div>
             
-            <table class="excel-table" style="table-layout: auto;">
+            <table class="excel-table news-excel-table" style="table-layout: auto;">
                 <thead>
                     ${newsTheadHtml}
                 </thead>
