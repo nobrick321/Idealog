@@ -684,6 +684,14 @@
         .excel-table.zebra-enabled tbody tr.row-odd.highlight-path {
             background: rgba(99, 102, 241, 0.09) !important; /* Slightly darker tone on odd highlight rows */
         }
+        /* Special high-contrast highlight style for the active selected cell */
+        .excel-table tbody td.active-selected-cell {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.35) 0%, rgba(139, 92, 246, 0.35) 100%) !important;
+            border: 2px solid var(--accent) !important;
+            color: #fff !important;
+            box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
+            z-index: 10;
+        }
         .excel-table.zebra-enabled tbody tr.row-odd.highlight-path td.highlight-cell {
             background: rgba(99, 102, 241, 0.22) !important;
             color: #fff !important;
@@ -4027,7 +4035,10 @@ function renderPivotTable() {
                     
                     // Determine if this cell is part of the highlighted active dimension coordinate value
                     const isCellHighlighted = isRowHighlighted && (rawVal === activePivotHighlightValue || (activePivotSelectedTaskId && activePivotSelectedTaskId === t.id));
-                    const cellClass = (isCellHighlighted ? 'highlight-cell ' : '') + 'pivot-dim-cell';
+                    
+                    // Determine if this specific visual grid cell matches the active selected cell focus target coordinates
+                    const isActiveSelected = activePivotHighlightDim === dim && activePivotHighlightValue === rawVal;
+                    const cellClass = (isCellHighlighted ? 'highlight-cell ' : '') + (isActiveSelected ? 'active-selected-cell ' : '') + 'pivot-dim-cell';
                     
                     if (isFirst) {
                         const displayVal = rawVal === 'Unassigned' ? '' : sLabel(rawVal);
@@ -4039,7 +4050,8 @@ function renderPivotTable() {
                         levelStates[i] = false;
                     } else {
                         // Apply active highlights even on spanned/hidden empty connector cells
-                        trHtml += `<td class="${isCellHighlighted ? 'highlight-cell' : ''}" style="border-top:none; border-bottom:none;"></td>`;
+                        const emptyCellClass = (isCellHighlighted ? 'highlight-cell ' : '') + (isActiveSelected ? 'active-selected-cell ' : '');
+                        trHtml += `<td class="${emptyCellClass}" style="border-top:none; border-bottom:none;" onclick="event.stopPropagation(); activePivotHighlightDim = '${dim}'; activePivotHighlightValue = '${rawVal.replace(/'/g, "\\'")}'; activePivotSelectedTaskId = null; renderPivotTable();"></td>`;
                     }
                 }
 
@@ -4099,18 +4111,14 @@ function renderPivotTable() {
     };
     gatherVisualRows(tree, 0);
 
-    // From the visual rows, map cell coordinates (ignoring duplicates for spanned fields)
+    // From the visual rows, map every single visual grid coordinate cell position.
+    // By keeping all row indexes mapped (even spanned ones), highlight moves cell-by-cell without jumping.
     const cellCoords = []; // array of { dim, value, rowIndex, colIndex }
-    const lastSeenVal = {}; // track spanning values to locate main visual coordinates
     
     activePivotHierarchy.forEach((dim, colIdx) => {
-        lastSeenVal[dim] = null;
         rows.forEach((r, rowIdx) => {
             const val = r.dims[dim];
-            if (val !== lastSeenVal[dim]) {
-                cellCoords.push({ dim, value: val, rowIndex: rowIdx, colIndex: colIdx });
-                lastSeenVal[dim] = val;
-            }
+            cellCoords.push({ dim, value: val, rowIndex: rowIdx, colIndex: colIdx });
         });
     });
 
@@ -4121,10 +4129,11 @@ function renderPivotTable() {
         // Find current highlighted cell in coordinates
         let currentIdx = -1;
         if (activePivotHighlightDim && activePivotHighlightValue) {
+            // Find current highlight location matching active selection
             currentIdx = cellCoords.findIndex(c => c.dim === activePivotHighlightDim && c.value === activePivotHighlightValue);
         }
 
-        // Default: If nothing is highlighted, select the first visual cell
+        // Default: If nothing is highlighted, select the top-left cell
         if (currentIdx === -1) {
             const first = cellCoords[0];
             activePivotHighlightDim = first.dim;
@@ -4138,25 +4147,19 @@ function renderPivotTable() {
         let targetCell = null;
 
         if (direction === 'left' || direction === 'right') {
-            // Shift columns: Find cell in same visual row but adjacent column
+            // Shift columns: Find cell in same visual row index but adjacent column index
             const step = direction === 'left' ? -1 : 1;
             let targetColIdx = (currentCell.colIndex + step + activePivotHierarchy.length) % activePivotHierarchy.length;
             
-            // Find cell closest to current row index in the target column
-            const targetColCells = cellCoords.filter(c => c.colIndex === targetColIdx);
-            if (targetColCells.length > 0) {
-                targetColCells.sort((a, b) => Math.abs(a.rowIndex - currentCell.rowIndex) - Math.abs(b.rowIndex - currentCell.rowIndex));
-                targetCell = targetColCells[0];
-            }
+            // Match same visual row index in the target column
+            targetCell = cellCoords.find(c => c.colIndex === targetColIdx && c.rowIndex === currentCell.rowIndex);
         } else if (direction === 'up' || direction === 'down') {
-            // Shift rows: Find adjacent row cell in the same column
-            const sameColCells = cellCoords.filter(c => c.colIndex === currentCell.colIndex);
-            const colIdxInSublist = sameColCells.findIndex(c => c.rowIndex === currentCell.rowIndex);
-            if (colIdxInSublist !== -1) {
-                const step = direction === 'up' ? -1 : 1;
-                const targetSubIdx = (colIdxInSublist + step + sameColCells.length) % sameColCells.length;
-                targetCell = sameColCells[targetSubIdx];
-            }
+            // Shift rows: Find cell in adjacent row index but same column index
+            const step = direction === 'up' ? -1 : 1;
+            const targetRowIdx = (currentCell.rowIndex + step + rows.length) % rows.length;
+            
+            // Match adjacent visual row index in the same column
+            targetCell = cellCoords.find(c => c.colIndex === currentCell.colIndex && c.rowIndex === targetRowIdx);
         }
 
         if (targetCell) {
