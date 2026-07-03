@@ -3685,6 +3685,22 @@ function showAutocomplete(inputEl, type, onSelect) {
         box.appendChild(addDiv);
     }
 
+    // Attach keydown listener to inputEl to prevent Enter key auto-selecting/adding options
+    // and blur the input field instead to save current typed text without creation
+    if (!inputEl.dataset.hasEnterHandler) {
+        inputEl.dataset.hasEnterHandler = 'true';
+        inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                inputEl.blur();
+                if (activeAutocompleteEl) {
+                    activeAutocompleteEl.remove();
+                    activeAutocompleteEl = null;
+                }
+            }
+        });
+    }
+
     if (box.children.length > 0) {
         document.body.appendChild(box);
         activeAutocompleteEl = box;
@@ -3842,11 +3858,6 @@ function renderPivotTable() {
                     Freeze Headers
                 </label>
             </div>
-        </div>
-        <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 10px;">
-            <span class="pivot-select-label" style="color:var(--accent); font-size: 11px; font-weight: 600;">
-                ${activePivotHierarchy.map(h => hierarchyLabels[h]).join(' → ')}
-            </span>
         </div>
     `;
 
@@ -4061,6 +4072,92 @@ function renderPivotTable() {
 
     generateRows(tree, 0, {});
 
+    // Collect list of unique active values per activePivotHierarchy dimension
+    // to support directional shifting (Left/Right shifts dims, Up/Down shifts values inside dim)
+    const dimValuesMap = {};
+    activePivotHierarchy.forEach(dim => {
+        dimValuesMap[dim] = Array.from(new Set(tasks.map(t => getTaskDimVal(t, dim)))).filter(v => v !== 'Unassigned');
+        if (dimValuesMap[dim].length === 0) dimValuesMap[dim] = ['Unassigned'];
+    });
+
+    // Helper functions for Shift Highlight controls
+    window.shiftPivotHighlight = function(direction) {
+        if (activePivotHierarchy.length === 0) return;
+        
+        // Default initialization if nothing is highlighted yet
+        if (!activePivotHighlightDim) {
+            activePivotHighlightDim = activePivotHierarchy[0];
+            const vals = dimValuesMap[activePivotHighlightDim];
+            activePivotHighlightValue = vals.length > 0 ? vals[0] : 'Unassigned';
+            activePivotSelectedTaskId = null;
+            renderPivotTable();
+            return;
+        }
+
+        const currentDimIdx = activePivotHierarchy.indexOf(activePivotHighlightDim);
+        if (currentDimIdx === -1) return;
+
+        if (direction === 'left') {
+            const nextIdx = (currentDimIdx - 1 + activePivotHierarchy.length) % activePivotHierarchy.length;
+            activePivotHighlightDim = activePivotHierarchy[nextIdx];
+            const vals = dimValuesMap[activePivotHighlightDim];
+            activePivotHighlightValue = vals.length > 0 ? vals[0] : 'Unassigned';
+            activePivotSelectedTaskId = null;
+        } else if (direction === 'right') {
+            const nextIdx = (currentDimIdx + 1) % activePivotHierarchy.length;
+            activePivotHighlightDim = activePivotHierarchy[nextIdx];
+            const vals = dimValuesMap[activePivotHighlightDim];
+            activePivotHighlightValue = vals.length > 0 ? vals[0] : 'Unassigned';
+            activePivotSelectedTaskId = null;
+        } else if (direction === 'up' || direction === 'down') {
+            const vals = dimValuesMap[activePivotHighlightDim];
+            if (vals.length > 1) {
+                const currentValIdx = vals.indexOf(activePivotHighlightValue);
+                if (currentValIdx !== -1) {
+                    let nextValIdx = currentValIdx;
+                    if (direction === 'up') {
+                        nextValIdx = (currentValIdx - 1 + vals.length) % vals.length;
+                    } else {
+                        nextValIdx = (currentValIdx + 1) % vals.length;
+                    }
+                    activePivotHighlightValue = vals[nextValIdx];
+                } else {
+                    activePivotHighlightValue = vals[0];
+                }
+                activePivotSelectedTaskId = null;
+            }
+        }
+        renderPivotTable();
+    };
+
+    // Keyboard controls handler function mapped dynamically
+    if (!window.hasPivotKeyHandlersAttached) {
+        window.hasPivotKeyHandlersAttached = true;
+        window.addEventListener('keydown', (e) => {
+            const activeTab = document.querySelector('.sheet-tab.active');
+            if (!activeTab || activeTab.id !== 'stab-pivot') return;
+            
+            // Ignore key shifts if typing in text/input fields
+            if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.contentEditable === 'true')) {
+                return;
+            }
+
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                window.shiftPivotHighlight('up');
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                window.shiftPivotHighlight('down');
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                window.shiftPivotHighlight('left');
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                window.shiftPivotHighlight('right');
+            }
+        });
+    }
+
     // Render table headers with HTML5 drag and drop handlers only
     let theadHtml = '<tr>';
     activePivotHierarchy.forEach((h, idx) => {
@@ -4225,20 +4322,29 @@ function renderPivotTable() {
 
     let newsHtml = `
         <div class="pivot-news-section" style="margin-top: 28px; padding: 18px; background: rgba(8,12,20,0.65); border: 1px solid var(--border); border-radius: 12px; backdrop-filter: blur(20px);">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing:0.05em;">📡 Happenings Ledger (Pivot News)</span>
                     <span style="font-size: 11px; color: var(--text-muted);">(${newsItems.length} transactions in view)</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase;">Timeline:</span>
-                    <select onchange="setPivotNewsDays(this.value)" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; color: var(--text); font-size: 11px; cursor: pointer; outline: none;">
-                        <option value="1" ${pivotNewsDays === 1 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 24 Hours</option>
-                        <option value="3" ${pivotNewsDays === 3 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 3 Days</option>
-                        <option value="7" ${pivotNewsDays === 7 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 7 Days</option>
-                        <option value="14" ${pivotNewsDays === 14 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 14 Days</option>
-                        <option value="30" ${pivotNewsDays === 30 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 30 Days</option>
-                    </select>
+                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px;">
+                        <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; margin-right: 4px;">Highlight Shift:</span>
+                        <button onclick="window.shiftPivotHighlight('left')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">◀</button>
+                        <button onclick="window.shiftPivotHighlight('up')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">▲</button>
+                        <button onclick="window.shiftPivotHighlight('down')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">▼</button>
+                        <button onclick="window.shiftPivotHighlight('right')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">▶</button>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase;">Timeline:</span>
+                        <select onchange="setPivotNewsDays(this.value)" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; color: var(--text); font-size: 11px; cursor: pointer; outline: none;">
+                            <option value="1" ${pivotNewsDays === 1 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 24 Hours</option>
+                            <option value="3" ${pivotNewsDays === 3 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 3 Days</option>
+                            <option value="7" ${pivotNewsDays === 7 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 7 Days</option>
+                            <option value="14" ${pivotNewsDays === 14 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 14 Days</option>
+                            <option value="30" ${pivotNewsDays === 30 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 30 Days</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             
