@@ -2062,6 +2062,16 @@ function setHighlightDurationDays(val) {
     renderSheet();
 }
 
+// News timeline filter range in days (default to 7 days)
+let pivotNewsDays = parseFloat(localStorage.getItem('idealog_pivot_news_days') || '7.0');
+
+function setPivotNewsDays(val) {
+    const num = parseFloat(val);
+    pivotNewsDays = isNaN(num) ? 7.0 : num;
+    localStorage.setItem('idealog_pivot_news_days', pivotNewsDays);
+    renderPivotTable();
+}
+
 // Track active selection highlights in the Pivot Table
 let activePivotHighlightDim = null; // e.g. 'system'
 let activePivotHighlightValue = null; // e.g. 'LP'
@@ -4064,6 +4074,133 @@ function renderPivotTable() {
         </th>
     </tr>`;
 
+    // --- Pivot Table News Section Generator ---
+    const nowTime = Date.now();
+    const rangeMs = pivotNewsDays * 24 * 60 * 60 * 1000;
+    
+    // Gather all leaf tasks matching active pivot table filters (excluding hidden tasks)
+    const activeTasks = tasks;
+    
+    // Sort tasks in the news by modified date descending
+    const newsItems = [];
+    
+    activeTasks.forEach(t => {
+        const createdMs = t.createdAt ? new Date(t.createdAt).getTime() : 0;
+        const updatedMs = t.updatedAt ? new Date(t.updatedAt).getTime() : 0;
+        const doneMs = t.doneAt ? new Date(t.doneAt).getTime() : 0;
+        
+        // Match creations
+        if (createdMs && (nowTime - createdMs <= rangeMs)) {
+            newsItems.push({
+                task: t,
+                time: createdMs,
+                type: 'created',
+                desc: `Task Created: <strong>${t.title}</strong> (Project: <em>${t.project || 'Unassigned'}</em>, Assignee: <em>${t.assignee || 'Unassigned'}</em>)`
+            });
+        }
+        
+        // Match status done completions
+        if (t.status === 'done' && doneMs && (nowTime - doneMs <= rangeMs)) {
+            newsItems.push({
+                task: t,
+                time: doneMs,
+                type: 'done',
+                desc: `Task Completed: <strong>${t.title}</strong> (Project: <em>${t.project || 'Unassigned'}</em>, Assignee: <em>${t.assignee || 'Unassigned'}</em>)`
+            });
+        }
+        
+        // Match other updates/modifications (avoid duplicating creation events)
+        if (updatedMs && (nowTime - updatedMs <= rangeMs) && Math.abs(updatedMs - createdMs) > 2000 && Math.abs(updatedMs - doneMs) > 2000) {
+            newsItems.push({
+                task: t,
+                time: updatedMs,
+                type: 'updated',
+                desc: `Task Modified: <strong>${t.title}</strong> (Project: <em>${t.project || 'Unassigned'}</em>, Assignee: <em>${t.assignee || 'Unassigned'}</em>)`
+            });
+        }
+    });
+
+    // Also parse history timeline entries for status movements
+    if (data.history) {
+        data.history.forEach(h => {
+            const histMs = h.timestamp ? new Date(h.timestamp).getTime() : 0;
+            if (histMs && (nowTime - histMs <= rangeMs)) {
+                // Avoid status change duplicates of 'done' which are already logged above
+                if (h.toStatus === 'done') return;
+                
+                newsItems.push({
+                    time: histMs,
+                    type: 'status',
+                    desc: `Status Shift: <strong>${h.taskTitle}</strong> moved from <em>${sLabel(h.fromStatus)}</em> to <em>${sLabel(h.toStatus)}</em> by <em>${h.assignee || 'User'}</em>`
+                });
+            }
+        });
+    }
+
+    // Sort news newest first
+    newsItems.sort((a, b) => b.time - a.time);
+
+    // Format relative timestamp
+    const getRelativeTimeString = (ms) => {
+        const diffSecs = Math.floor((nowTime - ms) / 1000);
+        if (diffSecs < 60) return 'Just now';
+        const diffMins = Math.floor(diffSecs / 60);
+        if (diffMins < 60) return `${diffMins}m ago`;
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours}h ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays}d ago`;
+    };
+
+    let newsHtml = `
+        <div class="pivot-news-section" style="margin-top: 24px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 14px; font-weight: 700; color: var(--accent);">📡 Latest Happenings</span>
+                    <span style="font-size: 11px; color: var(--text-muted);">(${newsItems.length} events logged)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase;">Timeline:</span>
+                    <select onchange="setPivotNewsDays(this.value)" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; color: var(--text); font-size: 11px; cursor: pointer; outline: none;">
+                        <option value="1" ${pivotNewsDays === 1 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 24 Hours</option>
+                        <option value="3" ${pivotNewsDays === 3 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 3 Days</option>
+                        <option value="7" ${pivotNewsDays === 7 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 7 Days</option>
+                        <option value="14" ${pivotNewsDays === 14 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 14 Days</option>
+                        <option value="30" ${pivotNewsDays === 30 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 30 Days</option>
+                    </select>
+                </div>
+            </div>
+            <div class="news-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding-right: 4px;">
+    `;
+
+    if (newsItems.length === 0) {
+        newsHtml += `<div style="text-align: center; padding: 12px; color: var(--text-muted); font-size: 12px;">No activity logged during this timeframe. Try selecting a broader news window.</div>`;
+    } else {
+        newsItems.forEach(item => {
+            let icon = '📝';
+            let color = 'var(--text-dim)';
+            if (item.type === 'created') { icon = '✨'; color = '#818cf8'; }
+            else if (item.type === 'done') { icon = '✅'; color = '#34d399'; }
+            else if (item.type === 'updated') { icon = '🛠️'; color = '#fbbf24'; }
+            else if (item.type === 'status') { icon = '🔄'; color = '#a78bfa'; }
+            
+            newsHtml += `
+                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 8px 10px; background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.03); border-radius: 6px; font-size: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px; color: ${color};">
+                        <span>${icon}</span>
+                        <span>${item.desc}</span>
+                    </div>
+                    <span style="font-size: 11px; color: var(--text-muted); white-space: nowrap;">${getRelativeTimeString(item.time)}</span>
+                </div>
+            `;
+        });
+    }
+
+    newsHtml += `
+            </div>
+        </div>
+    `;
+
     area.innerHTML = `
         ${configBarHtml}
         <table class="excel-table ${pivotZebraStripes ? 'zebra-enabled' : ''} ${freezeHeaders ? 'headers-frozen' : ''}">
@@ -4074,6 +4211,7 @@ function renderPivotTable() {
                 ${tbodyHtml || `<tr><td colspan="${activePivotHierarchy.length + 1}" style="text-align:center;color:var(--text-muted);">No tasks found.</td></tr>`}
             </tbody>
         </table>
+        ${newsHtml}
     `;
 }
 
