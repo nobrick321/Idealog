@@ -4272,14 +4272,13 @@ function renderPivotTable() {
     });
     newsTheadHtml += `
         <th style="width: auto;">Task Title</th>
-        <th style="width: 25%;">Activity Log</th>
         <th style="text-align:right; width: 5%; white-space: nowrap;">Occurred</th>
     </tr>`;
 
     // Build the news items table body rows with dynamic cell-spanning groupings
     let newsTbodyHtml = '';
     if (newsItems.length === 0) {
-        newsTbodyHtml = `<tr><td colspan="${activePivotHierarchy.length + 3}" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
+        newsTbodyHtml = `<tr><td colspan="${activePivotHierarchy.length + 2}" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
     } else {
         // Track unique spanned values per category level index matching activePivotHierarchy
         const lastDimValues = Array(activePivotHierarchy.length).fill(null);
@@ -4313,7 +4312,6 @@ function renderPivotTable() {
                     <td style="font-weight:500;">
                         <span style="cursor: pointer; text-decoration: underline rgba(255,255,255,0.1);" onclick="event.stopPropagation(); selectNode('${item.task.id}');">${item.task.title}</span>
                     </td>
-                    <td style="color:var(--text-muted);">${item.details}</td>
                     <td style="text-align:right; color:var(--text-muted); white-space:nowrap; width:1%;">${getRelativeTimeString(item.time)}</td>
                 </tr>
             `;
