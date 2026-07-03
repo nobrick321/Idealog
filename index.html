@@ -4072,62 +4072,99 @@ function renderPivotTable() {
 
     generateRows(tree, 0, {});
 
-    // Collect list of unique active values per activePivotHierarchy dimension
-    // to support directional shifting (Left/Right shifts dims, Up/Down shifts values inside dim)
-    const dimValuesMap = {};
-    activePivotHierarchy.forEach(dim => {
-        dimValuesMap[dim] = Array.from(new Set(tasks.map(t => getTaskDimVal(t, dim)))).filter(v => v !== 'Unassigned');
-        if (dimValuesMap[dim].length === 0) dimValuesMap[dim] = ['Unassigned'];
+    // Collect list of visually rendered cell coordinates from the pivot table itself
+    // to navigate highlights smoothly in visual order.
+    // Each entry represents a visually rendered cell: { dim, value, rowIndex, colIndex }
+    const visualCells = [];
+    const rows = [];
+    
+    // We can gather rows by traversing the tree in the exact same sequence we render them.
+    const gatherVisualRows = (node, depth, currentPath = {}) => {
+        if (depth === activePivotHierarchy.length) {
+            node.forEach(t => {
+                const r = { taskId: t.id, dims: {} };
+                activePivotHierarchy.forEach(dim => {
+                    r.dims[dim] = getTaskDimVal(t, dim);
+                });
+                rows.push(r);
+            });
+            return;
+        }
+        const dim = activePivotHierarchy[depth];
+        if (node instanceof Map) {
+            node.forEach((childNode, key) => {
+                gatherVisualRows(childNode, depth + 1, { ...currentPath, [dim]: key });
+            });
+        }
+    };
+    gatherVisualRows(tree, 0);
+
+    // From the visual rows, map cell coordinates (ignoring duplicates for spanned fields)
+    const cellCoords = []; // array of { dim, value, rowIndex, colIndex }
+    const lastSeenVal = {}; // track spanning values to locate main visual coordinates
+    
+    activePivotHierarchy.forEach((dim, colIdx) => {
+        lastSeenVal[dim] = null;
+        rows.forEach((r, rowIdx) => {
+            const val = r.dims[dim];
+            if (val !== lastSeenVal[dim]) {
+                cellCoords.push({ dim, value: val, rowIndex: rowIdx, colIndex: colIdx });
+                lastSeenVal[dim] = val;
+            }
+        });
     });
 
-    // Helper functions for Shift Highlight controls
+    // Helper functions for Shift Highlight controls traversing exact visual table coordinates
     window.shiftPivotHighlight = function(direction) {
-        if (activePivotHierarchy.length === 0) return;
+        if (activePivotHierarchy.length === 0 || cellCoords.length === 0) return;
         
-        // Default initialization if nothing is highlighted yet
-        if (!activePivotHighlightDim) {
-            activePivotHighlightDim = activePivotHierarchy[0];
-            const vals = dimValuesMap[activePivotHighlightDim];
-            activePivotHighlightValue = vals.length > 0 ? vals[0] : 'Unassigned';
+        // Find current highlighted cell in coordinates
+        let currentIdx = -1;
+        if (activePivotHighlightDim && activePivotHighlightValue) {
+            currentIdx = cellCoords.findIndex(c => c.dim === activePivotHighlightDim && c.value === activePivotHighlightValue);
+        }
+
+        // Default: If nothing is highlighted, select the first visual cell
+        if (currentIdx === -1) {
+            const first = cellCoords[0];
+            activePivotHighlightDim = first.dim;
+            activePivotHighlightValue = first.value;
             activePivotSelectedTaskId = null;
             renderPivotTable();
             return;
         }
 
-        const currentDimIdx = activePivotHierarchy.indexOf(activePivotHighlightDim);
-        if (currentDimIdx === -1) return;
+        const currentCell = cellCoords[currentIdx];
+        let targetCell = null;
 
-        if (direction === 'left') {
-            const nextIdx = (currentDimIdx - 1 + activePivotHierarchy.length) % activePivotHierarchy.length;
-            activePivotHighlightDim = activePivotHierarchy[nextIdx];
-            const vals = dimValuesMap[activePivotHighlightDim];
-            activePivotHighlightValue = vals.length > 0 ? vals[0] : 'Unassigned';
-            activePivotSelectedTaskId = null;
-        } else if (direction === 'right') {
-            const nextIdx = (currentDimIdx + 1) % activePivotHierarchy.length;
-            activePivotHighlightDim = activePivotHierarchy[nextIdx];
-            const vals = dimValuesMap[activePivotHighlightDim];
-            activePivotHighlightValue = vals.length > 0 ? vals[0] : 'Unassigned';
-            activePivotSelectedTaskId = null;
+        if (direction === 'left' || direction === 'right') {
+            // Shift columns: Find cell in same visual row but adjacent column
+            const step = direction === 'left' ? -1 : 1;
+            let targetColIdx = (currentCell.colIndex + step + activePivotHierarchy.length) % activePivotHierarchy.length;
+            
+            // Find cell closest to current row index in the target column
+            const targetColCells = cellCoords.filter(c => c.colIndex === targetColIdx);
+            if (targetColCells.length > 0) {
+                targetColCells.sort((a, b) => Math.abs(a.rowIndex - currentCell.rowIndex) - Math.abs(b.rowIndex - currentCell.rowIndex));
+                targetCell = targetColCells[0];
+            }
         } else if (direction === 'up' || direction === 'down') {
-            const vals = dimValuesMap[activePivotHighlightDim];
-            if (vals.length > 1) {
-                const currentValIdx = vals.indexOf(activePivotHighlightValue);
-                if (currentValIdx !== -1) {
-                    let nextValIdx = currentValIdx;
-                    if (direction === 'up') {
-                        nextValIdx = (currentValIdx - 1 + vals.length) % vals.length;
-                    } else {
-                        nextValIdx = (currentValIdx + 1) % vals.length;
-                    }
-                    activePivotHighlightValue = vals[nextValIdx];
-                } else {
-                    activePivotHighlightValue = vals[0];
-                }
-                activePivotSelectedTaskId = null;
+            // Shift rows: Find adjacent row cell in the same column
+            const sameColCells = cellCoords.filter(c => c.colIndex === currentCell.colIndex);
+            const colIdxInSublist = sameColCells.findIndex(c => c.rowIndex === currentCell.rowIndex);
+            if (colIdxInSublist !== -1) {
+                const step = direction === 'up' ? -1 : 1;
+                const targetSubIdx = (colIdxInSublist + step + sameColCells.length) % sameColCells.length;
+                targetCell = sameColCells[targetSubIdx];
             }
         }
-        renderPivotTable();
+
+        if (targetCell) {
+            activePivotHighlightDim = targetCell.dim;
+            activePivotHighlightValue = targetCell.value;
+            activePivotSelectedTaskId = null;
+            renderPivotTable();
+        }
     };
 
     // Keyboard controls handler function mapped dynamically
