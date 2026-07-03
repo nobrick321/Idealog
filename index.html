@@ -650,11 +650,9 @@
         }
         /* Compressed table style for Pivot news happenings ledger */
         .news-excel-table th, .news-excel-table td {
-            padding: 2px 4px !important;
-            font-size: 10px !important;
-        }
-        .news-excel-table th {
-            font-size: 9px !important;
+            padding: 0px 4px !important;
+            line-height: 1.1 !important;
+            height: 18px !important;
         }
         /* Prevent dimension value wrapping in Pivot Table */
         .pivot-dim-cell {
@@ -4233,7 +4231,7 @@ function renderPivotTable() {
                 <tr>
                     ${dimensionCellsHtml}
                     <td>
-                        <span class="chip" style="${badgeStyle} font-size: 9px; font-weight:700; text-transform:uppercase; padding: 2px 6px;">${typeLabel}</span>
+                        <span class="chip" style="${badgeStyle} font-size: 8px; font-weight:700; text-transform:uppercase; padding: 0.5px 4px; display: inline-block; line-height: 1;">${typeLabel}</span>
                     </td>
                     <td style="font-weight:500;">
                         <span style="cursor: pointer; text-decoration: underline rgba(255,255,255,0.1);" onclick="event.stopPropagation(); selectNode('${item.task.id}');">${item.task.title}</span>
