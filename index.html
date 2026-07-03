@@ -4087,22 +4087,9 @@ function renderPivotTable() {
         const updatedMs = t.updatedAt ? new Date(t.updatedAt).getTime() : 0;
         const doneMs = t.doneAt ? new Date(t.doneAt).getTime() : 0;
         
-        // Match creations
-        if (createdMs && (nowTime - createdMs <= rangeMs)) {
-            newsItems.push({
-                time: createdMs,
-                type: 'created',
-                project: t.project || 'Unassigned',
-                system: t.system || 'Unassigned',
-                subsystem: t.subsystem || 'Unassigned',
-                taskTitle: t.title,
-                assignee: t.assignee || 'Unassigned',
-                details: 'Task initialized in database'
-            });
-        }
-        
         // Match status done completions
-        if (t.status === 'done' && doneMs && (nowTime - doneMs <= rangeMs)) {
+        const hasDoneEvent = t.status === 'done' && doneMs && (nowTime - doneMs <= rangeMs);
+        if (hasDoneEvent) {
             newsItems.push({
                 time: doneMs,
                 type: 'done',
@@ -4112,6 +4099,20 @@ function renderPivotTable() {
                 taskTitle: t.title,
                 assignee: t.assignee || 'Unassigned',
                 details: 'Task marked completed'
+            });
+        }
+        
+        // Match creations (only if the task hasn't also been completed in this same news window)
+        if (createdMs && (nowTime - createdMs <= rangeMs) && !hasDoneEvent) {
+            newsItems.push({
+                time: createdMs,
+                type: 'created',
+                project: t.project || 'Unassigned',
+                system: t.system || 'Unassigned',
+                subsystem: t.subsystem || 'Unassigned',
+                taskTitle: t.title,
+                assignee: t.assignee || 'Unassigned',
+                details: 'Task initialized in database'
             });
         }
         
