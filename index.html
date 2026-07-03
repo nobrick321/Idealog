@@ -4170,11 +4170,16 @@ function renderPivotTable() {
         return `${diffDays}d ago`;
     };
 
-    // Build the news items table body rows
+    // Build the news items table body rows with cell-spanning groupings
     let newsTbodyHtml = '';
     if (newsItems.length === 0) {
-        newsTbodyHtml = `<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
+        newsTbodyHtml = `<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
     } else {
+        // Track unique spanned values per category level
+        let lastProject = null;
+        let lastSystem = null;
+        let lastSubsystem = null;
+        
         newsItems.forEach(item => {
             let badgeStyle = '';
             let typeLabel = '';
@@ -4192,11 +4197,33 @@ function renderPivotTable() {
                 typeLabel = '🔄 STATUS';
             }
             
+            // Check span matches
+            const showProject = item.project !== lastProject;
+            // If project changes, system and subsystem must reset to prevent accidental merging across different projects
+            const showSystem = showProject || item.system !== lastSystem;
+            const showSubsystem = showSystem || item.subsystem !== lastSubsystem;
+            
+            lastProject = item.project;
+            lastSystem = item.system;
+            lastSubsystem = item.subsystem;
+
+            const projCell = showProject 
+                ? `<td class="pivot-dim-cell" style="font-weight:600; color:var(--text); border-bottom: none; vertical-align: top;">${item.project}</td>` 
+                : `<td style="border-top: none; border-bottom: none;"></td>`;
+                
+            const sysCell = showSystem 
+                ? `<td class="pivot-dim-cell" style="color:var(--text-dim); border-bottom: none; vertical-align: top;">${item.system}</td>` 
+                : `<td style="border-top: none; border-bottom: none;"></td>`;
+                
+            const subCell = showSubsystem 
+                ? `<td class="pivot-dim-cell" style="color:var(--text-muted); border-bottom: none; vertical-align: top;">${item.subsystem}</td>` 
+                : `<td style="border-top: none; border-bottom: none;"></td>`;
+            
             newsTbodyHtml += `
                 <tr>
-                    <td class="pivot-dim-cell" style="font-weight:600; color:var(--text);">${item.project}</td>
-                    <td class="pivot-dim-cell" style="color:var(--text-dim);">${item.system}</td>
-                    <td class="pivot-dim-cell" style="color:var(--text-muted);">${item.subsystem}</td>
+                    ${projCell}
+                    ${sysCell}
+                    ${subCell}
                     <td>
                         <span class="chip" style="${badgeStyle} font-size: 9px; font-weight:700; text-transform:uppercase; padding: 2px 6px;">${typeLabel}</span>
                     </td>
