@@ -4174,7 +4174,6 @@ function renderPivotTable() {
         newsTheadHtml += `<th style="width: 1%; white-space: nowrap;">${hierarchyLabels[h]}</th>`;
     });
     newsTheadHtml += `
-        <th style="width: 10%; white-space: nowrap;">Event</th>
         <th style="width: auto;">Task Title</th>
         <th style="width: 25%;">Activity Log</th>
         <th style="text-align:right; width: 5%; white-space: nowrap;">Occurred</th>
@@ -4183,28 +4182,12 @@ function renderPivotTable() {
     // Build the news items table body rows with dynamic cell-spanning groupings
     let newsTbodyHtml = '';
     if (newsItems.length === 0) {
-        newsTbodyHtml = `<tr><td colspan="${activePivotHierarchy.length + 4}" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
+        newsTbodyHtml = `<tr><td colspan="${activePivotHierarchy.length + 3}" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
     } else {
         // Track unique spanned values per category level index matching activePivotHierarchy
         const lastDimValues = Array(activePivotHierarchy.length).fill(null);
         
         newsItems.forEach(item => {
-            let badgeStyle = '';
-            let typeLabel = '';
-            if (item.type === 'created') {
-                badgeStyle = 'background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3);';
-                typeLabel = '✨ CREATED';
-            } else if (item.type === 'done') {
-                badgeStyle = 'background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3);';
-                typeLabel = '✅ DONE';
-            } else if (item.type === 'updated') {
-                badgeStyle = 'background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3);';
-                typeLabel = '🛠️ UPDATED';
-            } else if (item.type === 'status') {
-                badgeStyle = 'background: rgba(139,92,246,0.15); color: #c084fc; border: 1px solid rgba(139,92,246,0.3);';
-                typeLabel = '🔄 STATUS';
-            }
-            
             // Build cells for active hierarchy dimensions
             let dimensionCellsHtml = '';
             let isParentDifferent = false;
@@ -4230,9 +4213,6 @@ function renderPivotTable() {
             newsTbodyHtml += `
                 <tr>
                     ${dimensionCellsHtml}
-                    <td>
-                        <span class="chip" style="${badgeStyle} font-size: 8px; font-weight:700; text-transform:uppercase; padding: 0.5px 4px; display: inline-block; line-height: 1;">${typeLabel}</span>
-                    </td>
                     <td style="font-weight:500;">
                         <span style="cursor: pointer; text-decoration: underline rgba(255,255,255,0.1);" onclick="event.stopPropagation(); selectNode('${item.task.id}');">${item.task.title}</span>
                     </td>
