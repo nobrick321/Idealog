@@ -665,25 +665,6 @@
         .excel-table.zebra-enabled tbody tr.row-odd {
             background: rgba(0, 0, 0, 0.15);
         }
-        /* Active path highlights (non-alternating fallback) */
-        .excel-table tbody tr.highlight-path {
-            background: rgba(99, 102, 241, 0.07) !important;
-        }
-        .excel-table tbody tr.highlight-path td.highlight-cell {
-            background: rgba(99, 102, 241, 0.18) !important;
-            color: #fff !important;
-        }
-        /* Alternating highlight path tones when zebra striping is checked */
-        .excel-table.zebra-enabled tbody tr.row-even.highlight-path {
-            background: rgba(99, 102, 241, 0.05) !important; /* Slightly lighter tone on even highlight rows */
-        }
-        .excel-table.zebra-enabled tbody tr.row-even.highlight-path td.highlight-cell {
-            background: rgba(99, 102, 241, 0.15) !important;
-            color: #fff !important;
-        }
-        .excel-table.zebra-enabled tbody tr.row-odd.highlight-path {
-            background: rgba(99, 102, 241, 0.09) !important; /* Slightly darker tone on odd highlight rows */
-        }
         /* Special high-contrast highlight style for the active selected cell */
         .excel-table tbody td.active-selected-cell {
             background: linear-gradient(135deg, rgba(99, 102, 241, 0.35) 0%, rgba(139, 92, 246, 0.35) 100%) !important;
@@ -691,10 +672,6 @@
             color: #fff !important;
             box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
             z-index: 10;
-        }
-        .excel-table.zebra-enabled tbody tr.row-odd.highlight-path td.highlight-cell {
-            background: rgba(99, 102, 241, 0.22) !important;
-            color: #fff !important;
         }
         /* Add pointer style to pivot dimensions cells to make them feel interactive */
         .excel-table td.pivot-dim-cell {
@@ -2086,15 +2063,13 @@ function setPivotNewsDays(val) {
     renderPivotTable();
 }
 
-// Track active selection highlights in the Pivot Table
-let activePivotHighlightDim = null; // e.g. 'system'
-let activePivotHighlightValue = null; // e.g. 'LP'
-let activePivotSelectedTaskId = null; // e.g. 'n12345'
+// Track active selection highlights in the Pivot Table using exact visual grid coordinates
+let activePivotHighlightRowIdx = null; // visual row index (e.g. 2)
+let activePivotHighlightColIdx = null; // visual column index (e.g. 1)
 
 function clearPivotHighlights() {
-    activePivotHighlightDim = null;
-    activePivotHighlightValue = null;
-    activePivotSelectedTaskId = null;
+    activePivotHighlightRowIdx = null;
+    activePivotHighlightColIdx = null;
     const activeTab = document.querySelector('.sheet-tab.active');
     if (activeTab && activeTab.id === 'stab-pivot') {
         renderPivotTable();
@@ -4013,32 +3988,18 @@ function renderPivotTable() {
                     }
                 }
 
-                // Check if this task/row matches the active highlighted pivot coordinate path
-                let isRowHighlighted = false;
-                if (activePivotHighlightDim && activePivotHighlightValue) {
-                    const tVal = getTaskDimVal(t, activePivotHighlightDim);
-                    if (tVal === activePivotHighlightValue) {
-                        isRowHighlighted = true;
-                    }
-                } else if (activePivotSelectedTaskId && activePivotSelectedTaskId === t.id) {
-                    isRowHighlighted = true;
-                }
-
-                const trClass = (isRowHighlighted ? 'highlight-path ' : '') + (renderedRowIndex % 2 === 0 ? 'row-even' : 'row-odd');
+                const trClass = renderedRowIndex % 2 === 0 ? 'row-even' : 'row-odd';
                 renderedRowIndex++;
-
+ 
                 let trHtml = `<tr data-task-id="${t.id}" class="${trClass}">`;
                 for (let i = 0; i < activePivotHierarchy.length; i++) {
                     const isFirst = levelStates[i];
                     const dim = activePivotHierarchy[i];
                     const rawVal = getTaskDimVal(t, dim);
                     
-                    // Determine if this cell is part of the highlighted active dimension coordinate value
-                    const isCellHighlighted = isRowHighlighted && (rawVal === activePivotHighlightValue || (activePivotSelectedTaskId && activePivotSelectedTaskId === t.id));
-                    
-                    // Determine if this specific visual grid cell matches the active selected cell focus target coordinates
-                    const isActiveSelected = activePivotHighlightDim === dim && activePivotHighlightValue === rawVal;
-                    const cellClass = (isCellHighlighted ? 'highlight-cell ' : '') + (isActiveSelected ? 'active-selected-cell ' : '') + 'pivot-dim-cell';
+                    // Determine if this specific cell coordinate is actively focused/selected by the user
+                    const isActiveSelected = activePivotHighlightRowIdx === (renderedRowIndex - 1) && activePivotHighlightColIdx === i;
+                    const cellClass = (isActiveSelected ? 'active-selected-cell ' : '') + 'pivot-dim-cell';
                     
                     if (isFirst) {
                         const displayVal = rawVal === 'Unassigned' ? '' : sLabel(rawVal);
@@ -4046,18 +4007,18 @@ function renderPivotTable() {
                         const color = dim === 'status' ? sColor(t.status) : (i >= 3 ? 'var(--text-muted)' : 'var(--text)');
                         const bgStyle = i === 0 ? 'background: rgba(255,255,255,0.01);' : '';
                         
-                        trHtml += `<td class="${cellClass}" style="font-weight:${weight}; vertical-align:top; border-bottom: none; color: ${color}; ${bgStyle}" onclick="event.stopPropagation(); activePivotHighlightDim = '${dim}'; activePivotHighlightValue = '${rawVal.replace(/'/g, "\\'")}'; activePivotSelectedTaskId = null; renderPivotTable();">${displayVal}</td>`;
+                        trHtml += `<td class="${cellClass}" style="font-weight:${weight}; vertical-align:top; border-bottom: none; color: ${color}; ${bgStyle}" onclick="event.stopPropagation(); activePivotHighlightRowIdx = ${renderedRowIndex - 1}; activePivotHighlightColIdx = ${i}; renderPivotTable();">${displayVal}</td>`;
                         levelStates[i] = false;
                     } else {
-                        // Apply active highlights even on spanned/hidden empty connector cells
-                        const emptyCellClass = (isCellHighlighted ? 'highlight-cell ' : '') + (isActiveSelected ? 'active-selected-cell ' : '');
-                        trHtml += `<td class="${emptyCellClass}" style="border-top:none; border-bottom:none;" onclick="event.stopPropagation(); activePivotHighlightDim = '${dim}'; activePivotHighlightValue = '${rawVal.replace(/'/g, "\\'")}'; activePivotSelectedTaskId = null; renderPivotTable();"></td>`;
+                        // Apply active focus highlights even on spanned/hidden empty connector cells
+                        const emptyCellClass = isActiveSelected ? 'active-selected-cell ' : '';
+                        trHtml += `<td class="${emptyCellClass}" style="border-top:none; border-bottom:none;" onclick="event.stopPropagation(); activePivotHighlightRowIdx = ${renderedRowIndex - 1}; activePivotHighlightColIdx = ${i}; renderPivotTable();"></td>`;
                     }
                 }
-
+ 
                 trHtml += `
                     <td ${cellStyle}>
-                        <div class="pivot-cell-task ${t.status}" onclick="event.stopPropagation(); selectNode('${t.id}'); activePivotHighlightDim = null; activePivotHighlightValue = null; activePivotSelectedTaskId = '${t.id}'; renderPivotTable();">
+                        <div class="pivot-cell-task ${t.status}" onclick="event.stopPropagation(); selectNode('${t.id}'); activePivotHighlightRowIdx = null; activePivotHighlightColIdx = null; renderPivotTable();">
                             <span contenteditable="true" onblur="updateTaskTitleFromSheet('${t.id}', this.innerText)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
                                 ${t.title}
                             </span>
@@ -4113,61 +4074,27 @@ function renderPivotTable() {
 
     // From the visual rows, map every single visual grid coordinate cell position.
     // By keeping all row indexes mapped (even spanned ones), highlight moves cell-by-cell without jumping.
-    const cellCoords = []; // array of { dim, value, rowIndex, colIndex }
-    
-    activePivotHierarchy.forEach((dim, colIdx) => {
-        rows.forEach((r, rowIdx) => {
-            const val = r.dims[dim];
-            cellCoords.push({ dim, value: val, rowIndex: rowIdx, colIndex: colIdx });
-        });
-    });
 
     // Helper functions for Shift Highlight controls traversing exact visual table coordinates
     window.shiftPivotHighlight = function(direction) {
-        if (activePivotHierarchy.length === 0 || cellCoords.length === 0) return;
+        if (activePivotHierarchy.length === 0 || rows.length === 0) return;
         
-        // Find current highlighted cell in coordinates
-        let currentIdx = -1;
-        if (activePivotHighlightDim && activePivotHighlightValue) {
-            // Find current highlight location matching active selection
-            currentIdx = cellCoords.findIndex(c => c.dim === activePivotHighlightDim && c.value === activePivotHighlightValue);
-        }
-
         // Default: If nothing is highlighted, select the top-left cell
-        if (currentIdx === -1) {
-            const first = cellCoords[0];
-            activePivotHighlightDim = first.dim;
-            activePivotHighlightValue = first.value;
-            activePivotSelectedTaskId = null;
+        if (activePivotHighlightRowIdx === null || activePivotHighlightColIdx === null) {
+            activePivotHighlightRowIdx = 0;
+            activePivotHighlightColIdx = 0;
             renderPivotTable();
             return;
         }
 
-        const currentCell = cellCoords[currentIdx];
-        let targetCell = null;
-
         if (direction === 'left' || direction === 'right') {
-            // Shift columns: Find cell in same visual row index but adjacent column index
             const step = direction === 'left' ? -1 : 1;
-            let targetColIdx = (currentCell.colIndex + step + activePivotHierarchy.length) % activePivotHierarchy.length;
-            
-            // Match same visual row index in the target column
-            targetCell = cellCoords.find(c => c.colIndex === targetColIdx && c.rowIndex === currentCell.rowIndex);
+            activePivotHighlightColIdx = (activePivotHighlightColIdx + step + activePivotHierarchy.length) % activePivotHierarchy.length;
         } else if (direction === 'up' || direction === 'down') {
-            // Shift rows: Find cell in adjacent row index but same column index
             const step = direction === 'up' ? -1 : 1;
-            const targetRowIdx = (currentCell.rowIndex + step + rows.length) % rows.length;
-            
-            // Match adjacent visual row index in the same column
-            targetCell = cellCoords.find(c => c.colIndex === currentCell.colIndex && c.rowIndex === targetRowIdx);
+            activePivotHighlightRowIdx = (activePivotHighlightRowIdx + step + rows.length) % rows.length;
         }
-
-        if (targetCell) {
-            activePivotHighlightDim = targetCell.dim;
-            activePivotHighlightValue = targetCell.value;
-            activePivotSelectedTaskId = null;
-            renderPivotTable();
-        }
+        renderPivotTable();
     };
 
     // Keyboard controls handler function mapped dynamically
