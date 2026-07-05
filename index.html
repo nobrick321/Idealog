@@ -4313,7 +4313,23 @@ function renderPivotTable() {
         });
     }
 
-    // Sort news newest first
+    // Deduplicate news items by task ID, keeping only the most recent event per task to avoid spam
+    const seenTaskIds = new Set();
+    const uniqueNewsItems = [];
+    // Sort temporarily by time descending so we grab the newest event first
+    newsItems.sort((a, b) => b.time - a.time);
+    newsItems.forEach(item => {
+        if (!seenTaskIds.has(item.task.id)) {
+            seenTaskIds.add(item.task.id);
+            uniqueNewsItems.push(item);
+        }
+    });
+    
+    // Replace array with the deduplicated list
+    newsItems.length = 0;
+    newsItems.push(...uniqueNewsItems);
+
+    // Sort news newest first (maintain ordering)
     newsItems.sort((a, b) => b.time - a.time);
 
     // Format relative timestamp
