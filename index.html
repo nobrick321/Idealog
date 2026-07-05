@@ -980,7 +980,7 @@
                 </div>
             </div>
             <div class="panel-actions">
-                <button class="btn-sm btn-secondary" onclick="addChildToSelected()">+ Child</button>
+                <button class="btn-sm btn-secondary" onclick="addFollowupTask()">Followup Task</button>
                 <button class="btn-sm btn-danger" onclick="deleteSelected()">Delete</button>
             </div>
         </aside>
@@ -4844,7 +4844,45 @@ function addChildTo(parentId) {
     setTimeout(()=>{ const inp=document.getElementById('prop-title'); if(inp){inp.focus();inp.select();} },120);
 }
 function addRootChild() { addChildTo('root'); }
-function addChildToSelected() { addChildTo(selectedId||'root'); }
+function addFollowupTask() {
+    if (!selectedId || selectedId === 'root') return;
+    const current = findNode(selectedId);
+    if (!current) return;
+    
+    const parent = findParent(selectedId);
+    if (!parent) return;
+    
+    // Create new node copying all attributes except ID, title, status, and comments
+    const followupNode = {
+        id: uid(),
+        title: 'Followup of ' + current.title,
+        status: 'todo',
+        assignee: current.assignee || '',
+        tags: current.tags ? [...current.tags] : [],
+        children: []
+    };
+    
+    // Clone all custom column values and location metadata (project, system, subsystem)
+    Object.keys(current).forEach(key => {
+        if (!['id', 'title', 'status', 'tags', 'children', 'comments', 'createdAt', 'updatedAt', 'doneAt'].includes(key)) {
+            followupNode[key] = current[key];
+        }
+    });
+    
+    parent.children.push(followupNode);
+    save();
+    redraw();
+    selectNode(followupNode.id);
+    
+    // Auto-focus title field for renaming
+    setTimeout(() => {
+        const inp = document.getElementById('prop-title');
+        if (inp) {
+            inp.focus();
+            inp.select();
+        }
+    }, 120);
+}
 function deleteSelected() {
     if(!selectedId||selectedId==='root') return;
     const parent=findParent(selectedId); if(!parent) return;
