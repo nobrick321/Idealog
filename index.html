@@ -967,9 +967,16 @@
                         <input class="tags-input" id="prop-tags-input" type="text" placeholder="tag, press Enter" onkeydown="handleTagInput(event)">
                     </div>
                 </div>
-                <div class="prop-group">
-                    <div class="prop-label">Notes</div>
-                    <textarea class="prop-input" id="prop-notes" rows="4" placeholder="Add notes…" oninput="updateProp('notes', this.value)" style="resize:vertical;line-height:1.6"></textarea>
+                <div class="prop-group" style="flex: 1; min-height: 200px; display: flex; flex-direction: column; gap: 8px;">
+                    <div class="prop-label">Comments Chat</div>
+                    <!-- Comments Container Feed -->
+                    <div id="comments-feed-container" style="flex: 1; min-height: 120px; max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px;"></div>
+                    
+                    <!-- Comments Input Form Section -->
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <input class="prop-input" id="comment-add-input" type="text" placeholder="Send a comment…" style="flex: 1;" onkeydown="if(event.key==='Enter') { event.preventDefault(); addNewComment(); }">
+                        <button onclick="addNewComment()" style="background: var(--accent); border: none; color: white; border-radius: 8px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">Send</button>
+                    </div>
                 </div>
             </div>
             <div class="panel-actions">
@@ -4587,11 +4594,70 @@ function selectNode(id) {
         });
     }
     
-    document.getElementById('prop-notes').value=n.notes||'';
+    // Render the comments chat feed dynamically
+    renderCommentsFeed(n);
+    
     setStatusPills(n.status);
     renderTagPills(n.tags||[]);
     document.getElementById('properties-panel').classList.add('open');
     redraw();
+}
+
+// Render dynamic comment chat bubbles into sidebar feed container
+function renderCommentsFeed(n) {
+    const container = document.getElementById('comments-feed-container');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const comments = n.comments || [];
+    if (comments.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:12px; color:var(--text-muted); font-size:11px; font-style:italic;">No comments yet. Start the conversation!</div>`;
+        return;
+    }
+    
+    comments.forEach(c => {
+        const dateStr = c.timestamp ? new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(c.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+        const bubble = document.createElement('div');
+        bubble.style.cssText = 'background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px;';
+        
+        bubble.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <span style="font-size: 10px; font-weight: 600; color: var(--accent);">${c.author || 'User'}</span>
+                <span style="font-size: 9px; color: var(--text-muted);">${dateStr}</span>
+            </div>
+            <div style="font-size: 12px; color: var(--text); word-break: break-word; line-height: 1.4;">${c.text}</div>
+        `;
+        container.appendChild(bubble);
+    });
+    
+    // Auto-scroll comments container feed to bottom to show latest updates
+    setTimeout(() => { container.scrollTop = container.scrollHeight; }, 30);
+}
+
+// Add comments helper method bound to input submit action
+function addNewComment() {
+    const input = document.getElementById('comment-add-input');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    
+    const n = findNode(selectedId);
+    if (!n) return;
+    
+    if (!n.comments) n.comments = [];
+    
+    // Push new comment metadata log
+    n.comments.push({
+        id: 'c_' + Math.random().toString(36).slice(2, 9),
+        author: n.assignee || 'User',
+        text: text,
+        timestamp: new Date().toISOString()
+    });
+    
+    // Save state and refresh sidebar properties UI
+    save();
+    input.value = '';
+    renderCommentsFeed(n);
 }
 function setStatusPills(s) {
     ['todo','inprogress','inprogress_bg','done'].forEach(k=>{
