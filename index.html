@@ -4070,12 +4070,16 @@ function renderPivotTable() {
                         const color = dim === 'status' ? sColor(t.status) : (i >= 3 ? 'var(--text-muted)' : 'var(--text)');
                         const bgStyle = i === 0 ? 'background: rgba(255,255,255,0.01);' : '';
                         
-                        trHtml += `<td class="${cellClass}" style="font-weight:${weight}; vertical-align:top; border-bottom: none; color: ${color}; ${bgStyle}" onclick="event.stopPropagation(); activePivotHighlightDim = '${dim}'; activePivotHighlightValue = '${rawVal.replace(/'/g, "\\'")}'; activePivotSelectedTaskId = null; activePivotSelectedRowIdx = ${renderedRowIndex - 1}; activePivotSelectedColIdx = ${i}; renderPivotTable();">${displayVal}</td>`;
+                        // If rowHighlightClass is active, let it control the top and bottom borders instead of forcing border-bottom: none
+                        const borderStyle = rowHighlightClass ? '' : 'border-bottom: none;';
+                        trHtml += `<td class="${cellClass}" style="font-weight:${weight}; vertical-align:top; ${borderStyle} color: ${color}; ${bgStyle}" onclick="event.stopPropagation(); activePivotHighlightDim = '${dim}'; activePivotHighlightValue = '${rawVal.replace(/'/g, "\\'")}'; activePivotSelectedTaskId = null; activePivotSelectedRowIdx = ${renderedRowIndex - 1}; activePivotSelectedColIdx = ${i}; renderPivotTable();">${displayVal}</td>`;
                         levelStates[i] = false;
                     } else {
                         // Apply active highlights even on spanned/hidden empty connector cells
                         const emptyCellClass = (isCellHighlighted ? 'highlight-cell ' : '') + (isActiveSelected ? 'active-selected-cell ' : '') + rowHighlightClass;
-                        trHtml += `<td class="${emptyCellClass}" style="border-top:none; border-bottom:none;" onclick="event.stopPropagation(); activePivotHighlightDim = '${dim}'; activePivotHighlightValue = '${rawVal.replace(/'/g, "\\'")}'; activePivotSelectedTaskId = null; activePivotSelectedRowIdx = ${renderedRowIndex - 1}; activePivotSelectedColIdx = ${i}; renderPivotTable();"></td>`;
+                        // Let rowHighlightClass control borders if active, otherwise use border-top/bottom: none
+                        const borderStyle = rowHighlightClass ? '' : 'border-top:none; border-bottom:none;';
+                        trHtml += `<td class="${emptyCellClass}" style="${borderStyle}" onclick="event.stopPropagation(); activePivotHighlightDim = '${dim}'; activePivotHighlightValue = '${rawVal.replace(/'/g, "\\'")}'; activePivotSelectedTaskId = null; activePivotSelectedRowIdx = ${renderedRowIndex - 1}; activePivotSelectedColIdx = ${i}; renderPivotTable();"></td>`;
                     }
                 }
 
