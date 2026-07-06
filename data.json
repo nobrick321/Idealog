@@ -4413,5 +4413,1327 @@
     ]
   },
   "sheetColumns": null,
-  "collapsed": []
+  "collapsed": [],
+  "history": [
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "npx5ry0k",
+      "taskId": "nr5628b6",
+      "taskTitle": "Release RTM200 bistu delta parts",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "A.Verma"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "no1axbu0",
+      "taskId": "nzx5j1qj",
+      "taskTitle": "Next version block angle adjustment mechanism",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Sanjith"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nulg3pjo",
+      "taskId": "njhb6x0s",
+      "taskTitle": "Blade holder deburr for block face rubbing issue",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "n3qvfe5a",
+      "taskId": "ndagee7t",
+      "taskTitle": "M400 alu chassis release",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Ankit"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "n3qvfe5a",
+      "taskId": "nouk0ej1",
+      "taskTitle": "M400 steel reinforced chassis release",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Ankit"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nu6x56o1",
+      "taskId": "naz3u3eq",
+      "taskTitle": "Send hall effect encoder upgrade package",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Mitta"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "npj1v9n1",
+      "taskId": "nm3l9biw",
+      "taskTitle": "Release 3nos Bistu FRU",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "A.Verma"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nu6x56o1",
+      "taskId": "nl3gyc19",
+      "taskTitle": "Make V3 motor board mount for debugger on motor",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Mitta"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "no1axbu0",
+      "taskId": "nous4hm8",
+      "taskTitle": "Block adjustment delta parts cam generation",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Sanjith"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "ni2rvv1h",
+      "taskId": "nuyi71ze",
+      "taskTitle": "Hot pool active gates motion smoothness",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nnq6k05e",
+      "taskId": "n17uzc0j",
+      "taskTitle": "No EDM BH PP manufacturing",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nxekmn42",
+      "taskId": "nnxy32ap",
+      "taskTitle": "Internals Assembly",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nj6z3yl8",
+      "taskId": "nc0ws7y1",
+      "taskTitle": "Active gate 3DP cavity comes loose sometimes",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nj6z3yl8",
+      "taskId": "n8ndc2jl",
+      "taskTitle": "Active gate Dowel pin comes loose",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nggibgd9",
+      "taskId": "nzgzkuqc",
+      "taskTitle": "Layout Design of all components",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Ankit"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nknmml82",
+      "taskId": "nkuhpw94",
+      "taskTitle": "Imported Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "To-Do"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nvrjf9bi",
+      "taskId": "n3x3bvu3",
+      "taskTitle": "HALT test new flow sensor",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "njlvkpc3",
+      "taskId": "nzrzvqvb",
+      "taskTitle": "LP design upgrades",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "ntvtyfal",
+      "taskId": "n2p94neh",
+      "taskTitle": "LP assembly",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Purushottam"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nz3x5hl7",
+      "taskId": "n9jtsan0",
+      "taskTitle": "Filter assembly",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Purushottam"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nvh5b4yn",
+      "taskId": "nsi8ener",
+      "taskTitle": "Upgraded SPG release",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "ncrybr02",
+      "taskId": "nodgor67",
+      "taskTitle": "Delta SPG upgrade",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nvsfh603",
+      "taskId": "n1d8wiv1",
+      "taskTitle": "Delta SPG upgrade",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "ntjei6t6",
+      "taskId": "nairbgoe",
+      "taskTitle": "Stainer robot design",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Sai"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "ngtsp9bx",
+      "taskId": "nu0yzkqn",
+      "taskTitle": "Arm too close to CST when accessing Block tray last row",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "Pavan M."
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nny87tr4",
+      "taskId": "n0pqwyyk",
+      "taskTitle": "Drain issue, all tanks not draining completely",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "Ritesh"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "n2exz8w4",
+      "taskId": "nwtukvbr",
+      "taskTitle": "Check mainpool catchment collision with Main-jaw",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nbec3rg6",
+      "taskId": "nenths9q",
+      "taskTitle": "Release mainpool catchment after upgrades",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nw7ao58y",
+      "taskId": "n3m9x15j",
+      "taskTitle": "Imported Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "To-Do"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nu5se618",
+      "taskId": "n9jt9mld",
+      "taskTitle": "Tintin2 ID upgrades and release",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nggibgd9",
+      "taskId": "nqr7dm6a",
+      "taskTitle": "Scanner assembly",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Mitta"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nggibgd9",
+      "taskId": "nu7risuq",
+      "taskTitle": "Scanner RnD stiffner based plate release",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Mitta"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nggibgd9",
+      "taskId": "nk1h71og",
+      "taskTitle": "Make Scanner units FRU style",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "Mitta"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nyo3upcp",
+      "taskId": "nlv7fwt8",
+      "taskTitle": "10 block tray upgrade design",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Vikram"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "ngpurq68",
+      "taskId": "n9zsecne",
+      "taskTitle": "NVR module has changed and needs to be freshly accomodated",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress_bg",
+      "assignee": "Navadeep"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nysyvvsj",
+      "taskId": "n5yra43v",
+      "taskTitle": "Package itms listed by Akash",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "neqju62n",
+      "taskId": "nn0nuzck",
+      "taskTitle": "Order delta parts of ABC that got used in Scooby2",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "no0kn5he",
+      "taskId": "no2fqofq",
+      "taskTitle": "Assemble NVR and arm controllers in PT",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nza5ypw9",
+      "taskId": "nc701o2m",
+      "taskTitle": "Redesigning for new wire routing",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Purushottam"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nrxkv9mb",
+      "taskId": "npjlqwxp",
+      "taskTitle": "To test in 85deg DI water overnight",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "n6wnq1ed",
+      "taskId": "nb4iiifx",
+      "taskTitle": "Hanger gantry hitting active gate",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Shrinivas"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.343Z",
+      "projectId": "nhf3hciy",
+      "taskId": "nedk43rc",
+      "taskTitle": "Top aluminum plate in main pool is forming joker gum formation",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-27T04:22:03.344Z",
+      "projectId": "nu4i73m7",
+      "taskId": "nu8sqyxz",
+      "taskTitle": "Mainjaw spring force turned out to be low for small blocks",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "Sanjith"
+    },
+    {
+      "timestamp": "2026-06-27T04:45:13.892Z",
+      "projectId": "nvrxq403",
+      "taskId": "nr5628b6",
+      "taskTitle": "Release RTM200 bistu delta parts",
+      "action": "status_change",
+      "fromStatus": "done",
+      "toStatus": "done",
+      "assignee": "A.Verma"
+    },
+    {
+      "timestamp": "2026-06-27T10:13:12.705Z",
+      "projectId": "nz3x5hl7",
+      "taskId": "n9jtsan0",
+      "taskTitle": "Filter assembly",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Purushottam"
+    },
+    {
+      "timestamp": "2026-06-27T10:14:48.113Z",
+      "projectId": "no0kn5he",
+      "taskId": "no2fqofq",
+      "taskTitle": "Assemble NVR and arm controllers in PT",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-27T10:39:08.324Z",
+      "projectId": "ni2rvv1h",
+      "taskId": "nuyi71ze",
+      "taskTitle": "Hot pool active gates motion smoothness",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-27T10:57:31.862Z",
+      "projectId": "nvrjf9bi",
+      "taskId": "n3x3bvu3",
+      "taskTitle": "HALT test new flow sensor",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-27T12:18:58.410Z",
+      "projectId": "no0kn5he",
+      "taskId": "n9zsecne",
+      "taskTitle": "NVR module has changed and needs to be freshly accomodated",
+      "action": "status_change",
+      "fromStatus": "inprogress_bg",
+      "toStatus": "done",
+      "assignee": "Navadeep"
+    },
+    {
+      "timestamp": "2026-06-27T12:19:19.778Z",
+      "projectId": "no0kn5he",
+      "taskId": "n9zsecne",
+      "taskTitle": "NVR module has changed and needs to be freshly accomodated",
+      "action": "status_change",
+      "fromStatus": "done",
+      "toStatus": "todo",
+      "assignee": "Navadeep"
+    },
+    {
+      "timestamp": "2026-06-27T12:53:45.778Z",
+      "projectId": "nysyvvsj",
+      "taskId": "n5yra43v",
+      "taskTitle": "Package itms listed by Akash",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-27T13:10:48.325Z",
+      "projectId": "nu6x56o1",
+      "taskId": "naz3u3eq",
+      "taskTitle": "Send hall effect encoder upgrade package",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Mitta"
+    },
+    {
+      "timestamp": "2026-06-27T13:10:58.837Z",
+      "projectId": "nu6x56o1",
+      "taskId": "nl3gyc19",
+      "taskTitle": "Make V3 motor board mount for debugger on motor",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Mitta"
+    },
+    {
+      "timestamp": "2026-06-29T08:42:45.423Z",
+      "projectId": "nulg3pjo",
+      "taskId": "njhb6x0s",
+      "taskTitle": "Blade holder deburr for block face rubbing issue",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-29T10:45:06.245Z",
+      "projectId": "nrxkv9mb",
+      "taskId": "npjlqwxp",
+      "taskTitle": "To test in 85deg DI water overnight",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-29T12:30:43.465Z",
+      "projectId": "neqju62n",
+      "taskId": "nn0nuzck",
+      "taskTitle": "Order delta parts of ABC that got used in Scooby2",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-06-29T13:07:33.714Z",
+      "projectId": "no0kn5he",
+      "taskId": "nu7risuq",
+      "taskTitle": "Scanner RnD stiffner base plate release",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Mitta"
+    },
+    {
+      "timestamp": "2026-06-29T14:15:35.480Z",
+      "projectId": "ngtsp9bx",
+      "taskId": "npan9ccl",
+      "taskTitle": "Zip tie points for tubing routing",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-29T14:15:38.784Z",
+      "projectId": "ngtsp9bx",
+      "taskId": "nzeupa6y",
+      "taskTitle": "Water going to MP catchment seeps sideways and leaks out",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-29T14:15:41.552Z",
+      "projectId": "ngtsp9bx",
+      "taskId": "nenths9q",
+      "taskTitle": "Main pool catchment efficient drainage",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-06-29T15:17:47.583Z",
+      "projectId": "no0kn5he",
+      "taskId": "nwtukvbr",
+      "taskTitle": "Check mainpool catchment collision with Main-jaw",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-29T15:44:45.007Z",
+      "projectId": "ntwmw0va",
+      "taskId": "nhuirs8m",
+      "taskTitle": "Figure how to reach and how to change air filter cartridge",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Vikram"
+    },
+    {
+      "timestamp": "2026-06-29T15:46:49.185Z",
+      "projectId": "nwknp4p8",
+      "taskId": "nk1h71og",
+      "taskTitle": "Make Scanner units FRU style",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Mitta"
+    },
+    {
+      "timestamp": "2026-06-30T06:17:51.373Z",
+      "projectId": "ns0cxgqx",
+      "taskId": "nkuhpw94",
+      "taskTitle": "Variance in block angle adjustment in facing & sectioning",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-30T06:19:42.430Z",
+      "projectId": "no0kn5he",
+      "taskId": "nodgor67",
+      "taskTitle": "Delta SPG upgrade",
+      "action": "status_change",
+      "fromStatus": "done",
+      "toStatus": "todo",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-30T09:04:43.720Z",
+      "projectId": "ntjei6t6",
+      "taskId": "nairbgoe",
+      "taskTitle": "Stainer robot design",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "inprogress_bg",
+      "assignee": "Sai"
+    },
+    {
+      "timestamp": "2026-06-30T09:13:27.272Z",
+      "projectId": "nuxgapgh",
+      "taskId": "n3lv5351",
+      "taskTitle": "Add another front panel window in ID",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-30T09:17:05.988Z",
+      "projectId": "root",
+      "taskId": "nq6o4v4b",
+      "taskTitle": "Easy insertion of nut holder in block angle adjustment motor nuts",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-06-30T09:18:57.637Z",
+      "projectId": "ns0cxgqx",
+      "taskId": "nkuhpw94",
+      "taskTitle": "Variance in block angle adjustment in facing & sectioning",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "inprogress_bg",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-06-30T09:20:44.656Z",
+      "projectId": "root",
+      "taskId": "nka9kmyz",
+      "taskTitle": "Scanner unit mechanical assembly",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-06-30T09:22:52.017Z",
+      "projectId": "nro0epx2",
+      "taskId": "n6ynl1jj",
+      "taskTitle": "H1",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Harshit"
+    },
+    {
+      "timestamp": "2026-06-30T09:23:05.352Z",
+      "projectId": "root",
+      "taskId": "n6kxc7eo",
+      "taskTitle": "New Node",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-06-30T10:44:15.657Z",
+      "projectId": "no0kn5he",
+      "taskId": "nzgzkuqc",
+      "taskTitle": "Layout Design of all components",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "todo",
+      "assignee": "Ankit"
+    },
+    {
+      "timestamp": "2026-06-30T11:22:11.335Z",
+      "projectId": "nro0epx2",
+      "taskId": "n6ynl1jj",
+      "taskTitle": "H1",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Harshit"
+    },
+    {
+      "timestamp": "2026-06-30T12:53:03.697Z",
+      "projectId": "root",
+      "taskId": "ne0nupbe",
+      "taskTitle": "Do RCA",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Ritesh"
+    },
+    {
+      "timestamp": "2026-06-30T13:02:56.921Z",
+      "projectId": "ne2bu2w8",
+      "taskId": "n730riqb",
+      "taskTitle": "do RCA",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress_bg",
+      "assignee": "Ritesh"
+    },
+    {
+      "timestamp": "2026-06-30T13:02:57.521Z",
+      "projectId": "ne2bu2w8",
+      "taskId": "n730riqb",
+      "taskTitle": "do RCA",
+      "action": "status_change",
+      "fromStatus": "inprogress_bg",
+      "toStatus": "done",
+      "assignee": "Ritesh"
+    },
+    {
+      "timestamp": "2026-07-01T08:33:36.115Z",
+      "projectId": "no0kn5he",
+      "taskId": "n9zsecne",
+      "taskTitle": "NVR module has changed and needs to be freshly accomodated",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Navadeep"
+    },
+    {
+      "timestamp": "2026-07-01T10:15:37.267Z",
+      "projectId": "no0kn5he",
+      "taskId": "npcoxnki",
+      "taskTitle": "Install air filter duct 3dp guide",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Navadeep"
+    },
+    {
+      "timestamp": "2026-07-01T10:33:47.052Z",
+      "projectId": "ngtsp9bx",
+      "taskId": "nous4hm8",
+      "taskTitle": "Block adjustment delta parts cam generation",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Sanjith"
+    },
+    {
+      "timestamp": "2026-07-01T10:33:49.196Z",
+      "projectId": "ngtsp9bx",
+      "taskId": "nzx5j1qj",
+      "taskTitle": "Next version block angle adjustment mechanism",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Sanjith"
+    },
+    {
+      "timestamp": "2026-07-01T11:00:38.594Z",
+      "projectId": "nulg3pjo",
+      "taskId": "nnj4gklx",
+      "taskTitle": "Qualify new PP",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-07-01T11:11:17.934Z",
+      "projectId": "nuxgapgh",
+      "taskId": "n9jt9mld",
+      "taskTitle": "ID upgrades and release",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-07-01T11:11:22.230Z",
+      "projectId": "nuxgapgh",
+      "taskId": "n3lv5351",
+      "taskTitle": "Add another front panel window in ID",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-07-01T11:11:56.989Z",
+      "projectId": "no0kn5he",
+      "taskId": "n1d8wiv1",
+      "taskTitle": "Delta SPG upgrade",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-07-01T11:11:59.093Z",
+      "projectId": "no0kn5he",
+      "taskId": "nodgor67",
+      "taskTitle": "Delta SPG upgrade",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-07-01T11:24:01.772Z",
+      "projectId": "root",
+      "taskId": "nw8gb3zt",
+      "taskTitle": "Cleaning tubs DFA ",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-01T11:31:53.348Z",
+      "projectId": "root",
+      "taskId": "n2zgy0ht",
+      "taskTitle": "Release Pool pending parts",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T07:00:51.974Z",
+      "projectId": "npx5ry0k",
+      "taskId": "nnjxqcg3",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T09:48:32.748Z",
+      "projectId": "no0kn5he",
+      "taskId": "npcoxnki",
+      "taskTitle": "Install air filter duct 3dp guide",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Navadeep"
+    },
+    {
+      "timestamp": "2026-07-02T09:49:58.328Z",
+      "projectId": "ngyzdrp0",
+      "taskId": "n0t3e9qn",
+      "taskTitle": "make current encoder mount static(it is currently on spring washer)",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Sanjith"
+    },
+    {
+      "timestamp": "2026-07-02T10:52:36.196Z",
+      "projectId": "npx5ry0k",
+      "taskId": "nh3udnaa",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T10:53:48.460Z",
+      "projectId": "npx5ry0k",
+      "taskId": "nwkut8q8",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T10:55:18.931Z",
+      "projectId": "npx5ry0k",
+      "taskId": "n7yjyion",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T10:57:40.195Z",
+      "projectId": "npx5ry0k",
+      "taskId": "noi5bz22",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T11:08:35.615Z",
+      "projectId": "npx5ry0k",
+      "taskId": "np158vtw",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T11:08:36.599Z",
+      "projectId": "npx5ry0k",
+      "taskId": "ntedek7r",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T11:08:38.610Z",
+      "projectId": "npx5ry0k",
+      "taskId": "nuxlujtx",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T11:10:46.799Z",
+      "projectId": "npx5ry0k",
+      "taskId": "n4q7bp1r",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T12:57:54.318Z",
+      "projectId": "no0kn5he",
+      "taskId": "n2zgy0ht",
+      "taskTitle": "Release Pool pending parts",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-07-02T12:58:10.886Z",
+      "projectId": "no0kn5he",
+      "taskId": "n2p94neh",
+      "taskTitle": "LP Mech assembly",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Purushottam"
+    },
+    {
+      "timestamp": "2026-07-02T12:58:33.510Z",
+      "projectId": "npx5ry0k",
+      "taskId": "n2n2svw6",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T13:02:33.278Z",
+      "projectId": "no0kn5he",
+      "taskId": "n55cyy05",
+      "taskTitle": "ABC integration",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-07-02T13:08:09.461Z",
+      "projectId": "npx5ry0k",
+      "taskId": "no19kqcs",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-02T13:13:29.814Z",
+      "projectId": "npx5ry0k",
+      "taskId": "npemtvgc",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-03T07:35:18.217Z",
+      "projectId": "no0kn5he",
+      "taskId": "nxxwc1h1",
+      "taskTitle": "Temporary extended Filter channel using 3DP",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress_bg",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-07-03T07:35:21.376Z",
+      "projectId": "no0kn5he",
+      "taskId": "nxxwc1h1",
+      "taskTitle": "Temporary extended Filter channel using 3DP",
+      "action": "status_change",
+      "fromStatus": "inprogress_bg",
+      "toStatus": "inprogress",
+      "assignee": "Shrijal"
+    },
+    {
+      "timestamp": "2026-07-03T09:44:03.481Z",
+      "projectId": "npx5ry0k",
+      "taskId": "nsxznnhq",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-03T09:45:39.607Z",
+      "projectId": "nnb0ae85",
+      "taskId": "nsxznnhq",
+      "taskTitle": "Design 3 guide LS probing for angle measurement",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-03T09:47:32.249Z",
+      "projectId": "npx5ry0k",
+      "taskId": "np2fl08r",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-03T16:01:09.438Z",
+      "projectId": "npx5ry0k",
+      "taskId": "nvqli5xm",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-03T16:44:21.017Z",
+      "projectId": "nnb0ae85",
+      "taskId": "n4q7bp1r",
+      "taskTitle": "Explore flux flip method",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Ritesh"
+    },
+    {
+      "timestamp": "2026-07-03T16:45:33.385Z",
+      "projectId": "nnb0ae85",
+      "taskId": "nsxznnhq",
+      "taskTitle": "Design 3 guide LS probing for angle measurement",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Sanjith"
+    },
+    {
+      "timestamp": "2026-07-03T16:46:23.673Z",
+      "projectId": "npx5ry0k",
+      "taskId": "nx7b8rrw",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-03T16:47:47.344Z",
+      "projectId": "nnb0ae85",
+      "taskId": "nx7b8rrw",
+      "taskTitle": "Install stiffer spring in block angle adjustment locking",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Sanjith"
+    },
+    {
+      "timestamp": "2026-07-03T16:51:14.162Z",
+      "projectId": "npx5ry0k",
+      "taskId": "nv7z7ted",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-03T16:52:02.211Z",
+      "projectId": "nzllt0hd",
+      "taskId": "npemtvgc",
+      "taskTitle": "Assemble 30 block tray x2nos",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Dhruv"
+    },
+    {
+      "timestamp": "2026-07-03T16:53:40.914Z",
+      "projectId": "no0kn5he",
+      "taskId": "n2n2svw6",
+      "taskTitle": "Filtration mech assembly",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Purushottam"
+    },
+    {
+      "timestamp": "2026-07-03T16:53:45.018Z",
+      "projectId": "nzllt0hd",
+      "taskId": "no19kqcs",
+      "taskTitle": "Release delta parts for Tintin1 & 2",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Pavan M."
+    },
+    {
+      "timestamp": "2026-07-03T16:53:52.082Z",
+      "projectId": "nnb0ae85",
+      "taskId": "nvqli5xm",
+      "taskTitle": "RCA of combined error in cutting from measurement and correction",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Ritesh"
+    },
+    {
+      "timestamp": "2026-07-03T16:53:56.809Z",
+      "projectId": "nnb0ae85",
+      "taskId": "np2fl08r",
+      "taskTitle": "Find options for incremental/absolute linear encoder",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Ritesh"
+    },
+    {
+      "timestamp": "2026-07-03T16:55:50.818Z",
+      "projectId": "no0kn5he",
+      "taskId": "nnxy32ap",
+      "taskTitle": "Internals Mech Assembly",
+      "action": "status_change",
+      "fromStatus": "inprogress",
+      "toStatus": "done",
+      "assignee": "Srinivas"
+    },
+    {
+      "timestamp": "2026-07-03T16:57:18.186Z",
+      "projectId": "n01ck7h9",
+      "taskId": "nwkut8q8",
+      "taskTitle": "More safety pause buttons on ID",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-07-03T17:03:42.773Z",
+      "projectId": "n01ck7h9",
+      "taskId": "n9y1we76",
+      "taskTitle": "SPG ballscrews are rusting",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-07-03T17:11:55.820Z",
+      "projectId": "npx5ry0k",
+      "taskId": "nowya5jz",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-03T17:13:15.995Z",
+      "projectId": "n01ck7h9",
+      "taskId": "npfekcsx",
+      "taskTitle": "Mainjaw motor mount came loose-add positive locking in design",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Sanjith"
+    },
+    {
+      "timestamp": "2026-07-03T17:19:19.149Z",
+      "projectId": "n01ck7h9",
+      "taskId": "nwkut8q8",
+      "taskTitle": "More safety pause buttons on ID",
+      "action": "status_change",
+      "fromStatus": "done",
+      "toStatus": "todo",
+      "assignee": "Chitrang"
+    },
+    {
+      "timestamp": "2026-07-03T17:33:09.398Z",
+      "projectId": "nuxgapgh",
+      "taskId": "nahxnnw7",
+      "taskTitle": "Refill FRS showing +ve reading during drain",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Ritesh"
+    },
+    {
+      "timestamp": "2026-07-03T17:37:25.751Z",
+      "projectId": "nrxkv9mb",
+      "taskId": "nicdnykb",
+      "taskTitle": "deeper RCA",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "inprogress",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-03T17:39:12.351Z",
+      "projectId": "ntwmw0va",
+      "taskId": "nn2fpbi3",
+      "taskTitle": "Convert mounting profiles to 40x80",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Navadeep"
+    },
+    {
+      "timestamp": "2026-07-03T17:55:02.146Z",
+      "projectId": "npx5ry0k",
+      "taskId": "n1j3ysc6",
+      "taskTitle": "New Task",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "todo",
+      "assignee": "User"
+    },
+    {
+      "timestamp": "2026-07-03T17:57:00.401Z",
+      "projectId": "n01ck7h9",
+      "taskId": "nu8sqyxz",
+      "taskTitle": "Mainjaw spring force turned out to be low for small blocks",
+      "action": "status_change",
+      "fromStatus": "todo",
+      "toStatus": "done",
+      "assignee": "Sanjith"
+    }
+  ]
 }
