@@ -1266,11 +1266,11 @@ async function loadStartupData() {
                     localStorage.setItem('idealog', JSON.stringify(data));
                     if (remoteData.sheetColumns) {
                         sheetColumns = remoteData.sheetColumns;
-                        localStorage.setItem('idealog_sheet_columns', JSON.stringify(sheetColumns));
+                        localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
                     }
                     if (remoteData.objectLists) {
-                        localStorage.setItem('idealog_object_lists', JSON.stringify(remoteData.objectLists));
                         objectLists = remoteData.objectLists;
+                        localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
                     }
                     if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
                         collapsed.clear();
@@ -5193,7 +5193,7 @@ async function pushStateToSupabase() {
     
     const dbPayload = {
         idealog: JSON.parse(localStorage.getItem('idealog')),
-        sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_columns')),
+        sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_cols')),
         objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
         collapsed: Array.from(collapsed)
     };
