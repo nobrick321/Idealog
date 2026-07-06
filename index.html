@@ -1202,6 +1202,10 @@ async function loadStartupData() {
                         collapsed.clear();
                         json.collapsed.forEach(id => collapsed.add(id));
                     }
+                    if (json.objectLists) {
+                        localStorage.setItem('idealog_object_lists', JSON.stringify(json.objectLists));
+                        objectLists = json.objectLists;
+                    }
                     redraw();
                     return;
                 }
@@ -4972,6 +4976,7 @@ function exportBackupData() {
     const backupState = {
         idealog: JSON.parse(localStorage.getItem('idealog')),
         sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_columns')),
+        objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
         collapsed: Array.from(collapsed),
         history: data.history || []
     };
@@ -5009,6 +5014,10 @@ function importBackupData(event) {
             if (importedState.sheetColumns) {
                 localStorage.setItem('idealog_sheet_columns', JSON.stringify(importedState.sheetColumns));
             }
+            if (importedState.objectLists) {
+                localStorage.setItem('idealog_object_lists', JSON.stringify(importedState.objectLists));
+                objectLists = importedState.objectLists;
+            }
             
             // Update in-memory workspace variables
             data = importedState.idealog;
@@ -5042,6 +5051,7 @@ function exportLocalDataJson() {
     const backupState = {
         idealog: JSON.parse(localStorage.getItem('idealog')),
         sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_columns')),
+        objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
         collapsed: Array.from(collapsed)
     };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupState, null, 2));
@@ -5070,6 +5080,10 @@ async function pullLatestFromGit() {
                 if (json.collapsed && Array.isArray(json.collapsed)) {
                     collapsed.clear();
                     json.collapsed.forEach(id => collapsed.add(id));
+                }
+                if (json.objectLists) {
+                    localStorage.setItem('idealog_object_lists', JSON.stringify(json.objectLists));
+                    objectLists = json.objectLists;
                 }
                 
                 // Hide outdated warning badge on successful pull
