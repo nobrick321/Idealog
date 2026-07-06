@@ -5113,11 +5113,11 @@ function importBackupData(event) {
 function openSupabaseSettingsModal() {
     document.getElementById('sb-url-input').value = localStorage.getItem('idealog_sb_url') || '';
     document.getElementById('sb-key-input').value = localStorage.getItem('idealog_sb_key') || '';
-    document.getElementById('supabase-config-modal').classList.add('open');
+    document.getElementById('supabase-config-modal').style.display = 'flex';
 }
 
 function closeSupabaseSettingsModal() {
-    document.getElementById('supabase-config-modal').classList.remove('open');
+    document.getElementById('supabase-config-modal').style.display = 'none';
 }
 
 function updateSupabaseStatusBadge(status, text, colorOverride = null) {
