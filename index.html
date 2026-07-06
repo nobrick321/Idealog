@@ -901,6 +901,10 @@
         </div>
         <div class="header-spacer"></div>
         <div style="display: flex; gap: 6px; align-items: center; margin-right: 12px;">
+            <!-- Out-of-sync alert indicator badge -->
+            <div id="git-sync-status" style="display: none; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; font-size: 11px; font-weight: 600; margin-right: 8px;">
+                ⚠️ Outdated Local Data
+            </div>
             <button onclick="pullLatestFromGit()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: #818cf8; cursor: pointer; transition: all 0.15s ease;">
                 🔄 Pull Latest
             </button>
@@ -1173,37 +1177,56 @@ const collapsed = new Set();
 
 // Load database state from data.json on startup async
 async function loadStartupData() {
-    try {
-        const response = await fetch('data.json');
-        if (response.ok) {
-            const json = await response.json();
-            if (json.idealog) {
-                data = json.idealog;
-                localStorage.setItem('idealog', JSON.stringify(data));
-                
-                if (json.sheetColumns) {
-                    sheetColumns = json.sheetColumns;
-                    localStorage.setItem('idealog_sheet_columns', JSON.stringify(sheetColumns));
-                }
-                if (json.collapsed && Array.isArray(json.collapsed)) {
-                    collapsed.clear();
-                    json.collapsed.forEach(id => collapsed.add(id));
-                }
-                console.log("Idealog data successfully synced from data.json");
-                redraw();
-                return;
-            }
-        }
-    } catch (e) {
-        console.warn("Could not fetch data.json, falling back to local storage:", e);
-    }
-    
-    // LocalStorage Fallback if data.json is missing or fails
+    // 1. Initially load from localStorage to render immediately
     const localDb = localStorage.getItem('idealog');
     if (localDb) {
         data = JSON.parse(localDb);
     }
     redraw();
+
+    // 2. Fetch remote data.json to compare and detect if local copy is outdated
+    try {
+        const response = await fetch('data.json?t=' + Date.now());
+        if (response.ok) {
+            const json = await response.json();
+            if (json.idealog) {
+                // If local storage is empty, initialize it immediately with the fetched remote state
+                if (!localDb) {
+                    data = json.idealog;
+                    localStorage.setItem('idealog', JSON.stringify(data));
+                    if (json.sheetColumns) {
+                        sheetColumns = json.sheetColumns;
+                        localStorage.setItem('idealog_sheet_columns', JSON.stringify(sheetColumns));
+                    }
+                    if (json.collapsed && Array.isArray(json.collapsed)) {
+                        collapsed.clear();
+                        json.collapsed.forEach(id => collapsed.add(id));
+                    }
+                    redraw();
+                    return;
+                }
+                
+                // Compare structure modification flags
+                const remoteUpdated = json.idealog.updatedAt || '';
+                const localUpdated = data.updatedAt || '';
+                
+                const remoteTime = remoteUpdated ? new Date(remoteUpdated).getTime() : 0;
+                const localTime = localUpdated ? new Date(localUpdated).getTime() : 0;
+                
+                const statusBadge = document.getElementById('git-sync-status');
+                if (statusBadge) {
+                    // Show warning badge if the remote file is newer than local storage copy
+                    if (remoteTime > localTime) {
+                        statusBadge.style.display = 'flex';
+                    } else {
+                        statusBadge.style.display = 'none';
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("Could not check git sync status:", e);
+    }
 }
 window.addEventListener('DOMContentLoaded', loadStartupData);
 
@@ -5048,6 +5071,11 @@ async function pullLatestFromGit() {
                     collapsed.clear();
                     json.collapsed.forEach(id => collapsed.add(id));
                 }
+                
+                // Hide outdated warning badge on successful pull
+                const statusBadge = document.getElementById('git-sync-status');
+                if (statusBadge) statusBadge.style.display = 'none';
+                
                 alert("Successfully pulled latest data state from GitHub! App synced.");
                 redraw();
             } else {
