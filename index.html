@@ -1366,13 +1366,13 @@ async function loadStartupData() {
             supabaseClient = supabase.createClient(sbUrl, sbKey);
             updateSupabaseStatusBadge('syncing', 'Syncing...');
             
-            // Pull the latest synced document from Supabase
-            const { data: dbRows, error } = await supabaseClient
+            // Pull the latest synced document from Supabase using array selects instead of single()
+            const { data: dbRowsArray, error } = await supabaseClient
                 .from('idealog_sync')
                 .select('data')
-                .eq('id', 'db_state')
-                .single();
+                .eq('id', 'db_state');
                 
+            const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null;
             if (error) throw error;
             
             if (dbRows && dbRows.data && dbRows.data.idealog) {
