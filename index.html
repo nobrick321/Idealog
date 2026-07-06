@@ -924,8 +924,8 @@
         <div id="spreadsheet-view" style="display: none; width: 100%; height: 100%; flex-direction: column;">
             <div class="sheet-tabs" style="justify-content: space-between; align-items: center; padding-right: 16px;">
                 <div style="display: flex; gap: 4px; align-items: center;">
-                    <button class="sheet-tab active" id="stab-tasks" onclick="switchSheetTab('tasks')">Task Sheet</button>
-                    <button class="sheet-tab" id="stab-pivot" onclick="switchSheetTab('pivot')">Pivot Table</button>
+                    <button class="sheet-tab active" id="stab-pivot" onclick="switchSheetTab('pivot')">Pivot Table</button>
+                    <button class="sheet-tab" id="stab-tasks" onclick="switchSheetTab('tasks')">Raw Tasks</button>
                     <button class="sheet-tab" id="stab-lists" onclick="switchSheetTab('lists')">Object Lists</button>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
@@ -2079,7 +2079,7 @@ function renderGantt() {
 }
 
 // --- SPREADSHEET & PIVOT TABLE VIEW ───
-let currentSheetTab = 'tasks';
+let currentSheetTab = 'pivot';
 let pivotRowDim = 'project';
 let pivotColDim = 'status';
 // Dynamic column list stored in localStorage or default to system/subsystem
