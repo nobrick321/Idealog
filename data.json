@@ -1,0 +1,72 @@
+{
+  "idealog": {
+    "id": "root",
+    "title": "My Project",
+    "status": "inprogress",
+    "assignee": "",
+    "tags": [],
+    "notes": "",
+    "children": [
+      {
+        "id": "n1",
+        "title": "Product Design",
+        "status": "inprogress",
+        "assignee": "Alice",
+        "tags": ["design", "q3"],
+        "notes": "Focus on accessibility.",
+        "children": [
+          { "id": "n1a", "title": "Wireframes", "status": "done", "assignee": "Alice", "tags": ["design"], "notes": "", "children": [] },
+          { "id": "n1b", "title": "UI Components", "status": "inprogress", "assignee": "Alice", "tags": ["design", "frontend"], "notes": "", "children": [] },
+          { "id": "n1c", "title": "User Testing", "status": "todo", "assignee": "Bob", "tags": ["research"], "notes": "", "children": [] }
+        ]
+      },
+      {
+        "id": "n2",
+        "title": "Backend",
+        "status": "inprogress",
+        "assignee": "Charlie",
+        "tags": ["backend", "q3"],
+        "notes": "",
+        "children": [
+          { "id": "n2a", "title": "Auth API", "status": "inprogress", "assignee": "Charlie", "tags": ["backend", "auth"], "notes": "", "children": [] },
+          { "id": "n2b", "title": "Data Models", "status": "done", "assignee": "Charlie", "tags": ["backend"], "notes": "", "children": [] },
+          { "id": "n2c", "title": "REST Endpoints", "status": "todo", "assignee": "Dana", "tags": ["backend", "api"], "notes": "", "children": [] }
+        ]
+      },
+      {
+        "id": "n3",
+        "title": "Marketing",
+        "status": "todo",
+        "assignee": "Eve",
+        "tags": ["marketing"],
+        "notes": "",
+        "children": [
+          { "id": "n3a", "title": "Landing Page", "status": "todo", "assignee": "Eve", "tags": ["marketing", "frontend"], "notes": "", "children": [] },
+          { "id": "n3b", "title": "Launch Campaign", "status": "todo", "assignee": "Eve", "tags": ["marketing"], "notes": "", "children": [] }
+        ]
+      },
+      {
+        "id": "n4",
+        "title": "Research",
+        "status": "done",
+        "assignee": "Bob",
+        "tags": ["research", "q2"],
+        "notes": "All interviews complete.",
+        "children": [
+          { "id": "n4a", "title": "Competitor Analysis", "status": "done", "assignee": "Bob", "tags": ["research"], "notes": "", "children": [] },
+          { "id": "n4b", "title": "User Interviews", "status": "done", "assignee": "Bob", "tags": ["research"], "notes": "", "children": [] }
+        ]
+      }
+    ],
+    "history": [
+      { "timestamp": "2026-06-10T10:00:00Z", "projectId": "n4", "taskId": "n4a", "taskTitle": "Competitor Analysis", "action": "status_change", "fromStatus": "todo", "toStatus": "done", "assignee": "Bob" },
+      { "timestamp": "2026-06-15T14:30:00Z", "projectId": "n4", "taskId": "n4b", "taskTitle": "User Interviews", "action": "status_change", "fromStatus": "todo", "toStatus": "done", "assignee": "Bob" },
+      { "timestamp": "2026-06-18T09:15:00Z", "projectId": "n2", "taskId": "n2b", "taskTitle": "Data Models", "action": "status_change", "fromStatus": "todo", "toStatus": "done", "assignee": "Charlie" },
+      { "timestamp": "2026-06-20T16:00:00Z", "projectId": "n1", "taskId": "n1a", "taskTitle": "Wireframes", "action": "status_change", "fromStatus": "todo", "toStatus": "done", "assignee": "Alice" },
+      { "timestamp": "2026-06-22T09:30:00Z", "projectId": "n1", "taskId": "n1b", "taskTitle": "UI Components", "action": "status_change", "fromStatus": "todo", "toStatus": "inprogress", "assignee": "Alice" },
+      { "timestamp": "2026-06-22T11:00:00Z", "projectId": "n2", "taskId": "n2a", "taskTitle": "Auth API", "action": "status_change", "fromStatus": "todo", "toStatus": "inprogress", "assignee": "Charlie" }
+    ]
+  },
+  "sheetColumns": [],
+  "collapsed": []
+}

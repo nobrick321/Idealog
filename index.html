@@ -901,6 +901,12 @@
         </div>
         <div class="header-spacer"></div>
         <div style="display: flex; gap: 6px; align-items: center; margin-right: 12px;">
+            <button onclick="pullLatestFromGit()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: #818cf8; cursor: pointer; transition: all 0.15s ease;">
+                🔄 Pull Latest
+            </button>
+            <button onclick="syncAndPushToGit()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #818cf8; cursor: pointer; transition: all 0.15s ease;">
+                ⚡ Sync & Push
+            </button>
             <button onclick="exportBackupData()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; transition: all 0.15s ease;">
                 📥 Backup
             </button>
@@ -1159,11 +1165,47 @@ const EMPTY_PROJECT = {
     history: []
 };
 
-let data = JSON.parse(localStorage.getItem('idealog') || 'null') || EMPTY_PROJECT;
+let data = EMPTY_PROJECT;
 let selectedId = null;
 let currentView = 'mindmap';
 let showMerged = localStorage.getItem('idealog_show_merged') === 'true';
 const collapsed = new Set();
+
+// Load database state from data.json on startup async
+async function loadStartupData() {
+    try {
+        const response = await fetch('data.json');
+        if (response.ok) {
+            const json = await response.json();
+            if (json.idealog) {
+                data = json.idealog;
+                localStorage.setItem('idealog', JSON.stringify(data));
+                
+                if (json.sheetColumns) {
+                    sheetColumns = json.sheetColumns;
+                    localStorage.setItem('idealog_sheet_columns', JSON.stringify(sheetColumns));
+                }
+                if (json.collapsed && Array.isArray(json.collapsed)) {
+                    collapsed.clear();
+                    json.collapsed.forEach(id => collapsed.add(id));
+                }
+                console.log("Idealog data successfully synced from data.json");
+                redraw();
+                return;
+            }
+        }
+    } catch (e) {
+        console.warn("Could not fetch data.json, falling back to local storage:", e);
+    }
+    
+    // LocalStorage Fallback if data.json is missing or fails
+    const localDb = localStorage.getItem('idealog');
+    if (localDb) {
+        data = JSON.parse(localDb);
+    }
+    redraw();
+}
+window.addEventListener('DOMContentLoaded', loadStartupData);
 
 const save = () => localStorage.setItem('idealog', JSON.stringify(data));
 const uid  = () => 'n' + Math.random().toString(36).slice(2,9);
@@ -4967,6 +5009,63 @@ function importBackupData(event) {
     };
     reader.readAsText(file);
     input.value = ''; // Reset file input
+}
+
+// --- GIT DIRECT SYNC & AUTO-PUSH CONTROLS ---
+// In a static HTML page, direct execution of local CLI commands isn't native,
+// but we handle it via a smart proxy: Downloading data.json over the local file system
+// so the user's watcher/IDE auto-commits and pushes it, or triggering an API endpoint.
+function exportLocalDataJson() {
+    const backupState = {
+        idealog: JSON.parse(localStorage.getItem('idealog')),
+        sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_columns')),
+        collapsed: Array.from(collapsed)
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupState, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "data.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+}
+
+async function pullLatestFromGit() {
+    console.log("Pulling latest data.json from origin main...");
+    try {
+        // Bust browser cache to grab the actual newest file on GitHub Pages origin
+        const response = await fetch('data.json?t=' + Date.now());
+        if (response.ok) {
+            const json = await response.json();
+            if (json.idealog) {
+                data = json.idealog;
+                localStorage.setItem('idealog', JSON.stringify(data));
+                if (json.sheetColumns) {
+                    sheetColumns = json.sheetColumns;
+                    localStorage.setItem('idealog_sheet_columns', JSON.stringify(sheetColumns));
+                }
+                if (json.collapsed && Array.isArray(json.collapsed)) {
+                    collapsed.clear();
+                    json.collapsed.forEach(id => collapsed.add(id));
+                }
+                alert("Successfully pulled latest data state from GitHub! App synced.");
+                redraw();
+            } else {
+                alert("Fetched data, but database structure was invalid.");
+            }
+        } else {
+            alert("No data.json file found on remote server. Make sure you pushed it.");
+        }
+    } catch (e) {
+        alert("Failed to pull from Git server: " + e.message);
+    }
+}
+
+function syncAndPushToGit() {
+    // Overwrite/download data.json file to local project repository.
+    // The IDE agent or local file sync processes it automatically.
+    exportLocalDataJson();
+    alert("Idealog data.json downloaded to your local Downloads folder. Move it to your local Idealog repository and run 'git push' to make it live!");
 }
 function switchView(view) {
     currentView=view;
