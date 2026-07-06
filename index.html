@@ -1345,22 +1345,27 @@ async function loadStartupData() {
     // 2. Initialize Supabase if configuration keys are present
     if (sbUrl && sbKey) {
         try {
+            console.log("Initializing Supabase Client...");
             supabaseClient = supabase.createClient(sbUrl, sbKey);
+            console.log("Supabase Client initialized successfully.");
             
             // Listen for login/logout auth state transitions dynamically
             supabaseClient.auth.onAuthStateChange(async (event, session) => {
                 const user = session ? session.user : null;
+                console.log("Supabase onAuthStateChange triggered. Event:", event, "User:", user ? user.email : "none");
                 updateGoogleAuthUIState(user);
                 
                 if (user) {
                     updateSupabaseStatusBadge('syncing', 'Syncing...');
                     try {
+                        console.log("Fetching row 'db_state' from table 'idealog_sync'...");
                         const { data: dbRowsArray, error } = await supabaseClient
                             .from('idealog_sync')
                             .select('data')
                             .eq('id', 'db_state');
                             
                         const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null;
+                        console.log("Fetch result - Data:", dbRows, "Error:", error);
                         if (error) throw error;
                         
                         // Seed database from local state if remote DB has no entries
