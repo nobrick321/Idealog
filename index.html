@@ -896,6 +896,120 @@
             color: var(--text-dim);
             border-color: var(--border-bright);
         }
+
+        /* ── Mobile Responsive Overrides ── */
+        @media (max-width: 768px) {
+            #header {
+                height: auto;
+                padding: 10px;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            .logo {
+                justify-content: center;
+                margin-right: 0;
+            }
+            .view-switcher {
+                justify-content: center;
+                flex-wrap: wrap;
+                width: 100%;
+            }
+            .view-btn {
+                flex: 1;
+                justify-content: center;
+                padding: 6px 8px;
+                font-size: 11px;
+            }
+            #header > div[style*="display: flex"] {
+                flex-wrap: wrap;
+                justify-content: center;
+                width: 100%;
+            }
+            #header .view-btn, #header button {
+                flex: 1;
+                min-width: 90px;
+                height: 32px;
+                font-size: 10px;
+            }
+
+            /* Main Layout */
+            #main {
+                flex-direction: column;
+            }
+
+            /* Sidebar Properties Drawer becomes responsive sheet drawer at bottom */
+            #properties-panel {
+                position: fixed;
+                bottom: 0;
+                right: 0;
+                left: 0;
+                width: 100% !important;
+                height: 75vh !important;
+                border-left: none;
+                border-top: 1px solid var(--border);
+                transform: translateY(100%);
+                z-index: 2500;
+            }
+            #properties-panel.open {
+                transform: translateY(0);
+            }
+
+            /* Spreadsheet content scroll layouts */
+            .sheet-tabs {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 8px;
+                padding-right: 0 !important;
+            }
+            .sheet-tabs > div {
+                justify-content: space-between;
+                width: 100%;
+            }
+            .sheet-tabs button {
+                flex: 1;
+                text-align: center;
+            }
+
+            /* Object Lists Grid columns wrap */
+            #sheet-content-area {
+                padding: 8px !important;
+            }
+            .object-lists-container {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 12px;
+            }
+            
+            /* Gitboard layouts stack */
+            #gitboard-view {
+                flex-direction: column;
+            }
+            #gb-log-container {
+                width: 100% !important;
+                height: 300px !important;
+                border-left: none;
+                border-top: 1px solid var(--border);
+            }
+
+            /* Gantt view layouts stack */
+            #gantt-view {
+                flex-direction: column;
+            }
+            #gantt-outline-panel {
+                width: 100% !important;
+                height: 250px !important;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            /* Modals adjust */
+            .modal-box {
+                width: 95% !important;
+                max-width: 95% !important;
+                margin: 10px;
+            }
+        }
 </style>
 </head>
 <body>
