@@ -5071,7 +5071,7 @@ function exportBackupData() {
     // Gather all local storage keys associated with Idealog
     const backupState = {
         idealog: JSON.parse(localStorage.getItem('idealog')),
-        sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_columns')),
+        sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_cols')),
         objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
         collapsed: Array.from(collapsed),
         history: data.history || []
