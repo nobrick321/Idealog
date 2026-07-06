@@ -2201,8 +2201,24 @@ let objectLists = JSON.parse(localStorage.getItem('idealog_object_lists') || 'nu
     projects: ['RTM200', 'Next 3 RTM release', 'Blade holder', 'M400', 'MPUH Loader resolution', 'RTM40', 'DFM']
 };
 
+function saveSheetColumns() {
+    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+    if (supabaseClient) {
+        pushStateToSupabase().catch(err => {
+            console.error("Supabase push failed on Sheet Columns save:", err);
+            updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
+        });
+    }
+}
+
 function saveObjectLists() {
     localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+    if (supabaseClient) {
+        pushStateToSupabase().catch(err => {
+            console.error("Supabase push failed on Object Lists save:", err);
+            updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
+        });
+    }
 }
 
 let pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
@@ -2995,14 +3011,14 @@ function addSheetColumn() {
         pivotHierarchy.push(key);
     }
     
-    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+    saveSheetColumns();
     renderSheet();
 }
 
 function renameSheetColumn(idx, newVal) {
     if (!newVal || !newVal.trim()) return;
     sheetColumns[idx].label = newVal.trim();
-    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+    saveSheetColumns();
     renderSheet();
 }
 
@@ -3014,7 +3030,7 @@ function deleteSheetColumn(idx) {
     // Also remove from pivotHierarchy options
     pivotHierarchy = pivotHierarchy.filter(h => h !== col.key);
     
-    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+    saveSheetColumns();
     renderSheet();
 }
 
@@ -3028,7 +3044,7 @@ function handleTaskColDrop(e, idx) {
     if (draggedTaskColIndex !== null && draggedTaskColIndex !== idx) {
         const item = sheetColumns.splice(draggedTaskColIndex, 1)[0];
         sheetColumns.splice(idx, 0, item);
-        localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+        saveSheetColumns();
         renderSheet();
     }
 }
@@ -3103,7 +3119,7 @@ function processImportedData() {
 
                 save();
                 saveObjectLists();
-                localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                saveSheetColumns();
                 localStorage.setItem('idealog_enabled_pivot_dims', JSON.stringify(enabledPivotDims));
                 
                 closeImportModal();
@@ -3326,7 +3342,7 @@ function processImportedData() {
         importedCount++;
     }
 
-    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+    saveSheetColumns();
     saveObjectLists();
     save();
     closeImportModal();
@@ -3414,7 +3430,7 @@ async function pullFromGoogleSheets() {
                     }
                 }
             });
-            localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+            saveSheetColumns();
         }
 
         let updatedCount = 0;
