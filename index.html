@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -901,15 +902,13 @@
         </div>
         <div class="header-spacer"></div>
         <div style="display: flex; gap: 6px; align-items: center; margin-right: 12px;">
-            <!-- Out-of-sync alert indicator badge -->
-            <div id="git-sync-status" style="display: none; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; font-size: 11px; font-weight: 600; margin-right: 8px;">
-                ⚠️ Outdated Local Data
+            <!-- Supabase Cloud Sync Status Indicator Badge -->
+            <div id="supabase-sync-status" onclick="openSupabaseSettingsModal()" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #f87171; font-size: 11px; font-weight: 600; margin-right: 8px; cursor: pointer; transition: all 0.15s ease;">
+                ● Cloud Offline
             </div>
-            <button onclick="pullLatestFromGit()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: #818cf8; cursor: pointer; transition: all 0.15s ease;">
-                🔄 Pull Latest
-            </button>
-            <button onclick="syncAndPushToGit()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: #818cf8; cursor: pointer; transition: all 0.15s ease;">
-                ⚡ Sync & Push
+            
+            <button onclick="openSupabaseSettingsModal()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: #818cf8; cursor: pointer; transition: all 0.15s ease; margin-right: 6px;">
+                ⚙️ Cloud Config
             </button>
             <button onclick="exportBackupData()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; transition: all 0.15s ease;">
                 📥 Backup
@@ -1046,6 +1045,50 @@
         </div>
     </div>
 </div>
+<!-- Supabase Configuration Modal -->
+<div class="modal-overlay" id="supabase-config-modal">
+    <div class="modal-box" style="width: 580px;">
+        <div class="modal-header">
+            <h3>⚙️ Supabase Cloud Configuration</h3>
+            <button class="panel-close" onclick="closeSupabaseSettingsModal()">×</button>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+            <p style="font-size: 11.5px; color: var(--text-dim); line-height: 1.5; margin-bottom: 2px;">
+                Connect Idealog directly to your personal **Supabase** Postgres instance. Data will synchronize automatically in the background across all your devices on every edit.
+            </p>
+            
+            <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; padding: 12px; font-size: 11px; color: #f59e0b; line-height: 1.5;">
+                <strong>SQL Setup Script:</strong> Run this query in your Supabase SQL Editor to create the sync table:
+                <pre style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 5px; font-family: monospace; font-size: 10px; margin-top: 6px; overflow-x: auto; color: #cbd5e1; border: 1px solid rgba(255,255,255,0.05);">
+CREATE TABLE IF NOT EXISTS idealog_sync (
+  id text PRIMARY KEY,
+  data jsonb NOT NULL,
+  updated_at timestamp with time zone DEFAULT now()
+);
+INSERT INTO idealog_sync (id, data) VALUES ('db_state', '{}') ON CONFLICT DO NOTHING;
+ALTER TABLE idealog_sync ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public Permissive" ON idealog_sync FOR ALL USING (true);</pre>
+            </div>
+            
+            <div class="prop-group">
+                <div class="prop-label">Supabase Project URL</div>
+                <input class="prop-input" id="sb-url-input" type="text" placeholder="https://xxxxxx.supabase.co">
+            </div>
+            
+            <div class="prop-group">
+                <div class="prop-label">Supabase Anon Key API Key</div>
+                <input class="prop-input" id="sb-key-input" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+            </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px;">
+            <button class="btn-sm btn-secondary" onclick="disconnectSupabase()" style="max-width:140px; border-color: rgba(239,68,68,0.25); color: #f87171;">Disconnect</button>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn-sm btn-secondary" onclick="closeSupabaseSettingsModal()" style="max-width:80px;">Cancel</button>
+                <button class="btn-sm" onclick="saveSupabaseSettings()" style="max-width:140px; background:var(--accent); color:white;">Connect & Sync</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
 const DEFAULT = {
     id:'root', title:'My Project', status:'inprogress', assignee:'', tags:[], notes:'',
@@ -1175,66 +1218,89 @@ let currentView = 'mindmap';
 let showMerged = localStorage.getItem('idealog_show_merged') === 'true';
 const collapsed = new Set();
 
-// Load database state from data.json on startup async
+// --- SUPABASE CONFIGURATION STATE ---
+let supabaseClient = null;
+const sbUrl = localStorage.getItem('idealog_sb_url') || '';
+const sbKey = localStorage.getItem('idealog_sb_key') || '';
+
+// Load database state from Supabase or localStorage on startup
 async function loadStartupData() {
-    // 1. Initially load from localStorage to render immediately
+    // 1. Load from localStorage first to render UI immediately
     const localDb = localStorage.getItem('idealog');
     if (localDb) {
         data = JSON.parse(localDb);
     }
     redraw();
 
-    // 2. Fetch remote data.json to compare and detect if local copy is outdated
-    try {
-        const response = await fetch('data.json?t=' + Date.now());
-        if (response.ok) {
-            const json = await response.json();
-            if (json.idealog) {
-                // If local storage is empty, initialize it immediately with the fetched remote state
-                if (!localDb) {
-                    data = json.idealog;
+    // 2. Initialize Supabase if configuration keys are present
+    if (sbUrl && sbKey) {
+        try {
+            supabaseClient = supabase.createClient(sbUrl, sbKey);
+            updateSupabaseStatusBadge('syncing', 'Syncing...');
+            
+            // Pull the latest synced document from Supabase
+            const { data: dbRows, error } = await supabaseClient
+                .from('idealog_sync')
+                .select('data')
+                .eq('id', 'db_state')
+                .single();
+                
+            if (error) throw error;
+            
+            if (dbRows && dbRows.data && dbRows.data.idealog) {
+                const remoteData = dbRows.data;
+                
+                // Compare timestamps: resolve newest version
+                const remoteTime = remoteData.idealog.updatedAt ? new Date(remoteData.idealog.updatedAt).getTime() : 0;
+                const localTime = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+                
+                if (remoteTime > localTime || !localDb) {
+                    console.log("Loading newer state from Supabase cloud database...");
+                    data = remoteData.idealog;
                     localStorage.setItem('idealog', JSON.stringify(data));
-                    if (json.sheetColumns) {
-                        sheetColumns = json.sheetColumns;
+                    if (remoteData.sheetColumns) {
+                        sheetColumns = remoteData.sheetColumns;
                         localStorage.setItem('idealog_sheet_columns', JSON.stringify(sheetColumns));
                     }
-                    if (json.collapsed && Array.isArray(json.collapsed)) {
-                        collapsed.clear();
-                        json.collapsed.forEach(id => collapsed.add(id));
+                    if (remoteData.objectLists) {
+                        localStorage.setItem('idealog_object_lists', JSON.stringify(remoteData.objectLists));
+                        objectLists = remoteData.objectLists;
                     }
-                    if (json.objectLists) {
-                        localStorage.setItem('idealog_object_lists', JSON.stringify(json.objectLists));
-                        objectLists = json.objectLists;
+                    if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
+                        collapsed.clear();
+                        remoteData.collapsed.forEach(id => collapsed.add(id));
                     }
                     redraw();
-                    return;
+                } else if (localTime > remoteTime) {
+                    console.log("Local state is newer than Supabase. Pushing local changes to Supabase...");
+                    await pushStateToSupabase();
                 }
                 
-                // Compare structure modification flags
-                const remoteUpdated = json.idealog.updatedAt || '';
-                const localUpdated = data.updatedAt || '';
-                
-                const remoteTime = remoteUpdated ? new Date(remoteUpdated).getTime() : 0;
-                const localTime = localUpdated ? new Date(localUpdated).getTime() : 0;
-                
-                const statusBadge = document.getElementById('git-sync-status');
-                if (statusBadge) {
-                    // Show warning badge if the remote file is newer than local storage copy
-                    if (remoteTime > localTime) {
-                        statusBadge.style.display = 'flex';
-                    } else {
-                        statusBadge.style.display = 'none';
-                    }
-                }
+                updateSupabaseStatusBadge('online', '● Cloud Online');
+            } else {
+                // If cloud database is empty, seed it with local state
+                await pushStateToSupabase();
+                updateSupabaseStatusBadge('online', '● Cloud Online');
             }
+        } catch (e) {
+            console.error("Supabase connection error on load:", e);
+            updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
         }
-    } catch (e) {
-        console.warn("Could not check git sync status:", e);
+    } else {
+        updateSupabaseStatusBadge('offline', '● Cloud Config Required', '#94a3b8');
     }
 }
 window.addEventListener('DOMContentLoaded', loadStartupData);
 
-const save = () => localStorage.setItem('idealog', JSON.stringify(data));
+const save = () => {
+    localStorage.setItem('idealog', JSON.stringify(data));
+    if (supabaseClient) {
+        pushStateToSupabase().catch(err => {
+            console.error("Delayed Supabase push failed:", err);
+            updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
+        });
+    }
+};
 const uid  = () => 'n' + Math.random().toString(36).slice(2,9);
 
 function allNodes(node, out=[]) { out.push(node); (node.children||[]).forEach(c=>allNodes(c,out)); return out; }
@@ -5043,71 +5109,79 @@ function importBackupData(event) {
     input.value = ''; // Reset file input
 }
 
-// --- GIT DIRECT SYNC & AUTO-PUSH CONTROLS ---
-// In a static HTML page, direct execution of local CLI commands isn't native,
-// but we handle it via a smart proxy: Downloading data.json over the local file system
-// so the user's watcher/IDE auto-commits and pushes it, or triggering an API endpoint.
-function exportLocalDataJson() {
-    const backupState = {
+// --- SUPABASE CLOUD SYNC DIRECT CONTROLS ---
+function openSupabaseSettingsModal() {
+    document.getElementById('sb-url-input').value = localStorage.getItem('idealog_sb_url') || '';
+    document.getElementById('sb-key-input').value = localStorage.getItem('idealog_sb_key') || '';
+    document.getElementById('supabase-config-modal').classList.add('open');
+}
+
+function closeSupabaseSettingsModal() {
+    document.getElementById('supabase-config-modal').classList.remove('open');
+}
+
+function updateSupabaseStatusBadge(status, text, colorOverride = null) {
+    const badge = document.getElementById('supabase-sync-status');
+    if (!badge) return;
+    
+    badge.textContent = text;
+    badge.className = '';
+    
+    if (status === 'online') {
+        badge.style.cssText = 'display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); color: #34d399; font-size: 11px; font-weight: 600; margin-right: 8px; cursor: pointer;';
+    } else if (status === 'syncing') {
+        badge.style.cssText = 'display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.25); color: #fbbf24; font-size: 11px; font-weight: 600; margin-right: 8px; cursor: pointer;';
+    } else {
+        const color = colorOverride || '#f87171';
+        badge.style.cssText = `display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: ${color}; font-size: 11px; font-weight: 600; margin-right: 8px; cursor: pointer;`;
+    }
+}
+
+async function saveSupabaseSettings() {
+    const url = document.getElementById('sb-url-input').value.trim();
+    const key = document.getElementById('sb-key-input').value.trim();
+    
+    if (!url || !key) {
+        alert("Please fill in both the Project URL and Anon API key.");
+        return;
+    }
+    
+    localStorage.setItem('idealog_sb_url', url);
+    localStorage.setItem('idealog_sb_key', key);
+    
+    closeSupabaseSettingsModal();
+    alert("Supabase keys saved! Connecting and running initial sync check...");
+    
+    // Trigger startup loader logic using the newly saved keys
+    location.reload();
+}
+
+function disconnectSupabase() {
+    if (confirm("Are you sure you want to disconnect from Supabase? Your data will remain stored in local storage.")) {
+        localStorage.removeItem('idealog_sb_url');
+        localStorage.removeItem('idealog_sb_key');
+        closeSupabaseSettingsModal();
+        location.reload();
+    }
+}
+
+// Push local state into Supabase cloud table row
+async function pushStateToSupabase() {
+    if (!supabaseClient) return;
+    
+    const dbPayload = {
         idealog: JSON.parse(localStorage.getItem('idealog')),
         sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_columns')),
         objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
         collapsed: Array.from(collapsed)
     };
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupState, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "data.json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-}
-
-async function pullLatestFromGit() {
-    console.log("Pulling latest data.json from origin main...");
-    try {
-        // Bust browser cache to grab the actual newest file on GitHub Pages origin
-        const response = await fetch('data.json?t=' + Date.now());
-        if (response.ok) {
-            const json = await response.json();
-            if (json.idealog) {
-                data = json.idealog;
-                localStorage.setItem('idealog', JSON.stringify(data));
-                if (json.sheetColumns) {
-                    sheetColumns = json.sheetColumns;
-                    localStorage.setItem('idealog_sheet_columns', JSON.stringify(sheetColumns));
-                }
-                if (json.collapsed && Array.isArray(json.collapsed)) {
-                    collapsed.clear();
-                    json.collapsed.forEach(id => collapsed.add(id));
-                }
-                if (json.objectLists) {
-                    localStorage.setItem('idealog_object_lists', JSON.stringify(json.objectLists));
-                    objectLists = json.objectLists;
-                }
-                
-                // Hide outdated warning badge on successful pull
-                const statusBadge = document.getElementById('git-sync-status');
-                if (statusBadge) statusBadge.style.display = 'none';
-                
-                alert("Successfully pulled latest data state from GitHub! App synced.");
-                redraw();
-            } else {
-                alert("Fetched data, but database structure was invalid.");
-            }
-        } else {
-            alert("No data.json file found on remote server. Make sure you pushed it.");
-        }
-    } catch (e) {
-        alert("Failed to pull from Git server: " + e.message);
-    }
-}
-
-function syncAndPushToGit() {
-    // Overwrite/download data.json file to local project repository.
-    // The IDE agent or local file sync processes it automatically.
-    exportLocalDataJson();
-    alert("Idealog data.json downloaded to your local Downloads folder. Move it to your local Idealog repository and run 'git push' to make it live!");
+    
+    const { error } = await supabaseClient
+        .from('idealog_sync')
+        .upsert({ id: 'db_state', data: dbPayload, updated_at: new Date().toISOString() });
+        
+    if (error) throw error;
+    console.log("State pushed to Supabase cloud successfully.");
 }
 function switchView(view) {
     currentView=view;
