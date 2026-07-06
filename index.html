@@ -1236,6 +1236,14 @@ async function loadStartupData() {
     if (localDb) {
         data = JSON.parse(localDb);
     }
+    const localCols = localStorage.getItem('idealog_sheet_cols');
+    if (localCols) {
+        sheetColumns = JSON.parse(localCols);
+    }
+    const localLists = localStorage.getItem('idealog_object_lists');
+    if (localLists) {
+        objectLists = JSON.parse(localLists);
+    }
     redraw();
 
     // 2. Initialize Supabase if configuration keys are present
