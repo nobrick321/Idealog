@@ -1186,7 +1186,11 @@
                 </button>
             </div>
         </div>
-        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
+        <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; align-items: center;">
+            <div style="display: flex; gap: 6px;">
+                <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force upload local storage data to Supabase cloud? This will overwrite the cloud database state.')) { try { await pushStateToSupabase(); alert('State forced up to Supabase successfully!'); } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); color: #34d399;">Force Push</button>
+                <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force download data from Supabase cloud? This will overwrite your local browser storage state.')) { try { const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state'); const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null; if(error) throw error; if(dbRows && dbRows.data && dbRows.data.idealog) { data = dbRows.data.idealog; localStorage.setItem('idealog', JSON.stringify(data)); if (dbRows.data.sheetColumns) { sheetColumns = dbRows.data.sheetColumns; localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns)); } if (dbRows.data.objectLists) { objectLists = dbRows.data.objectLists; localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists)); } redraw(); alert('State forced down from Supabase successfully!'); } else { alert('No remote state found to pull.'); } } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
+            </div>
             <button class="btn-sm btn-secondary" onclick="closeSupabaseSettingsModal()" style="max-width:80px;">Close</button>
         </div>
     </div>
