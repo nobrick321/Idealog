@@ -5250,8 +5250,6 @@ function importBackupData(event) {
 
 // --- SUPABASE CLOUD SYNC DIRECT CONTROLS ---
 function openSupabaseSettingsModal() {
-    document.getElementById('sb-url-input').value = localStorage.getItem('idealog_sb_url') || '';
-    document.getElementById('sb-key-input').value = localStorage.getItem('idealog_sb_key') || '';
     document.getElementById('supabase-config-modal').classList.add('open');
 }
 
