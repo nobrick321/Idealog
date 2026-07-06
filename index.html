@@ -900,6 +900,15 @@
             <button class="view-btn" id="btn-gitboard" onclick="switchView('gitboard')">⇆ Git Board</button>
         </div>
         <div class="header-spacer"></div>
+        <div style="display: flex; gap: 6px; align-items: center; margin-right: 12px;">
+            <button onclick="exportBackupData()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; transition: all 0.15s ease;">
+                📥 Backup
+            </button>
+            <button onclick="triggerImportFileInput()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; transition: all 0.15s ease;">
+                📤 Restore
+            </button>
+            <input type="file" id="backup-import-file-input" style="display: none;" accept=".json" onchange="importBackupData(event)">
+        </div>
     </header>
     <div id="main">
         <div id="gitboard-view" style="display: none; width: 100%; height: 100%;">
@@ -4892,7 +4901,73 @@ function deleteSelected() {
     redraw();
 }
 
-// --- VIEWS ---
+// --- DATA BACKUP & RESTORE Across Devices ---
+function exportBackupData() {
+    // Gather all local storage keys associated with Idealog
+    const backupState = {
+        idealog: JSON.parse(localStorage.getItem('idealog')),
+        sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_columns')),
+        collapsed: Array.from(collapsed),
+        history: data.history || []
+    };
+    
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupState, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `idealog_backup_${new Date().toISOString().slice(0,10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+}
+
+function triggerImportFileInput() {
+    const fileInp = document.getElementById('backup-import-file-input');
+    if (fileInp) fileInp.click();
+}
+
+function importBackupData(event) {
+    const input = event.target;
+    if (!input.files || input.files.length === 0) return;
+    
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = function() {
+        try {
+            const importedState = JSON.parse(reader.result);
+            if (!importedState.idealog) {
+                alert("Invalid backup file. Could not find Idealog database structure.");
+                return;
+            }
+            
+            // Save imported state into localStorage
+            localStorage.setItem('idealog', JSON.stringify(importedState.idealog));
+            if (importedState.sheetColumns) {
+                localStorage.setItem('idealog_sheet_columns', JSON.stringify(importedState.sheetColumns));
+            }
+            
+            // Update in-memory workspace variables
+            data = importedState.idealog;
+            
+            // Restore collapsed state set
+            collapsed.clear();
+            if (importedState.collapsed && Array.isArray(importedState.collapsed)) {
+                importedState.collapsed.forEach(id => collapsed.add(id));
+            }
+            
+            // Re-sync sheet headers definitions
+            if (importedState.sheetColumns) {
+                sheetColumns = importedState.sheetColumns;
+            }
+            
+            alert("Backup restored successfully! Idealog has updated to the backup state.");
+            redraw();
+        } catch (e) {
+            alert("Error parsing backup JSON file: " + e.message);
+        }
+    };
+    reader.readAsText(file);
+    input.value = ''; // Reset file input
+}
 function switchView(view) {
     currentView=view;
     document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
