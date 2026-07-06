@@ -294,6 +294,9 @@
             justify-content: center;
             z-index: 3000;
         }
+        .modal-overlay.open {
+            display: flex !important;
+        }
         .modal-box {
             background: #0d131f;
             border: 1px solid var(--border-bright);
@@ -5113,11 +5116,11 @@ function importBackupData(event) {
 function openSupabaseSettingsModal() {
     document.getElementById('sb-url-input').value = localStorage.getItem('idealog_sb_url') || '';
     document.getElementById('sb-key-input').value = localStorage.getItem('idealog_sb_key') || '';
-    document.getElementById('supabase-config-modal').style.display = 'flex';
+    document.getElementById('supabase-config-modal').classList.add('open');
 }
 
 function closeSupabaseSettingsModal() {
-    document.getElementById('supabase-config-modal').style.display = 'none';
+    document.getElementById('supabase-config-modal').classList.remove('open');
 }
 
 function updateSupabaseStatusBadge(status, text, colorOverride = null) {
