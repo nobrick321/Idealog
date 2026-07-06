@@ -1172,40 +1172,22 @@
             <h3>⚙️ Supabase Cloud Configuration</h3>
             <button class="panel-close" onclick="closeSupabaseSettingsModal()">×</button>
         </div>
-        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
-            <p style="font-size: 11.5px; color: var(--text-dim); line-height: 1.5; margin-bottom: 2px;">
-                Connect Idealog directly to your personal **Supabase** Postgres instance. Data will synchronize automatically in the background across all your devices on every edit.
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; text-align: center; padding: 20px 10px;">
+            <p style="font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px;">
+                Connect Idealog directly to your personal **Supabase** database instance. Data will synchronize automatically in the background across all devices.
             </p>
             
-            <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; padding: 12px; font-size: 11px; color: #f59e0b; line-height: 1.5;">
-                <strong>SQL Setup Script:</strong> Run this query in your Supabase SQL Editor to create the sync table:
-                <pre style="background: rgba(0,0,0,0.3); padding: 8px; border-radius: 5px; font-family: monospace; font-size: 10px; margin-top: 6px; overflow-x: auto; color: #cbd5e1; border: 1px solid rgba(255,255,255,0.05);">
-CREATE TABLE IF NOT EXISTS idealog_sync (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL,
-  updated_at timestamp with time zone DEFAULT now()
-);
-INSERT INTO idealog_sync (id, data) VALUES ('db_state', '{}') ON CONFLICT DO NOTHING;
-ALTER TABLE idealog_sync ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Permissive" ON idealog_sync FOR ALL USING (true);</pre>
-            </div>
-            
-            <div class="prop-group">
-                <div class="prop-label">Supabase Project URL</div>
-                <input class="prop-input" id="sb-url-input" type="text" placeholder="https://xxxxxx.supabase.co">
-            </div>
-            
-            <div class="prop-group">
-                <div class="prop-label">Supabase Anon Key API Key</div>
-                <input class="prop-input" id="sb-key-input" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 5px 0; display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                <div id="google-auth-status" style="font-size: 12px; color: var(--text-muted); font-weight: 500;">
+                    Checking connection status...
+                </div>
+                <button id="btn-google-signin" class="btn-sm" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 220px; height: 38px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; font-size: 12.5px; cursor: pointer; transition: all 0.15s ease;">
+                    Sign in with Google
+                </button>
             </div>
         </div>
-        <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px;">
-            <button class="btn-sm btn-secondary" onclick="disconnectSupabase()" style="max-width:140px; border-color: rgba(239,68,68,0.25); color: #f87171;">Disconnect</button>
-            <div style="display: flex; gap: 8px;">
-                <button class="btn-sm btn-secondary" onclick="closeSupabaseSettingsModal()" style="max-width:80px;">Cancel</button>
-                <button class="btn-sm" onclick="saveSupabaseSettings()" style="max-width:140px; background:var(--accent); color:white;">Connect & Sync</button>
-            </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="btn-sm btn-secondary" onclick="closeSupabaseSettingsModal()" style="max-width:80px;">Close</button>
         </div>
     </div>
 </div>
@@ -1340,8 +1322,8 @@ const collapsed = new Set();
 
 // --- SUPABASE CONFIGURATION STATE ---
 let supabaseClient = null;
-const sbUrl = localStorage.getItem('idealog_sb_url') || '';
-const sbKey = localStorage.getItem('idealog_sb_key') || '';
+const sbUrl = 'https://pprgomclbxmonnogdnrr.supabase.co';
+const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcmdvbWNsYnhtb25ub2dkbnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNDI3MzUsImV4cCI6MjA5ODkxODczNX0.po4AqnZ64AMacf7CAloNsIGb3ILZJ1hGU2exnmYj4oY';
 
 // Load database state from Supabase or localStorage on startup
 async function loadStartupData() {
@@ -1364,52 +1346,65 @@ async function loadStartupData() {
     if (sbUrl && sbKey) {
         try {
             supabaseClient = supabase.createClient(sbUrl, sbKey);
-            updateSupabaseStatusBadge('syncing', 'Syncing...');
             
-            // Pull the latest synced document from Supabase using array selects instead of single()
-            const { data: dbRowsArray, error } = await supabaseClient
-                .from('idealog_sync')
-                .select('data')
-                .eq('id', 'db_state');
+            // Listen for login/logout auth state transitions dynamically
+            supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                const user = session ? session.user : null;
+                updateGoogleAuthUIState(user);
                 
-            const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null;
-            if (error) throw error;
-            
-            if (dbRows && dbRows.data && dbRows.data.idealog) {
-                const remoteData = dbRows.data;
-                
-                // Compare timestamps: resolve newest version
-                const remoteTime = remoteData.idealog.updatedAt ? new Date(remoteData.idealog.updatedAt).getTime() : 0;
-                const localTime = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
-                
-                if (remoteTime > localTime || !localDb) {
-                    console.log("Loading newer state from Supabase cloud database...");
-                    data = remoteData.idealog;
-                    localStorage.setItem('idealog', JSON.stringify(data));
-                    if (remoteData.sheetColumns) {
-                        sheetColumns = remoteData.sheetColumns;
-                        localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                if (user) {
+                    updateSupabaseStatusBadge('syncing', 'Syncing...');
+                    try {
+                        const { data: dbRowsArray, error } = await supabaseClient
+                            .from('idealog_sync')
+                            .select('data')
+                            .eq('id', 'db_state');
+                            
+                        const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null;
+                        if (error) throw error;
+                        
+                        // Seed database from local state if remote DB has no entries
+                        if (!dbRows || !dbRows.data || !dbRows.data.idealog) {
+                            console.log("Remote database is empty. Seeding remote database with local state...");
+                            await pushStateToSupabase();
+                            updateSupabaseStatusBadge('online', '● Cloud Online');
+                            return;
+                        }
+
+                        const remoteData = dbRows.data;
+                        const remoteTime = remoteData.idealog.updatedAt ? new Date(remoteData.idealog.updatedAt).getTime() : 0;
+                        const localTime = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+                        
+                        if (remoteTime > localTime || !localDb || data.children.length === 0) {
+                            console.log("Loading newer state from Supabase cloud database...");
+                            data = remoteData.idealog;
+                            localStorage.setItem('idealog', JSON.stringify(data));
+                            if (remoteData.sheetColumns) {
+                                sheetColumns = remoteData.sheetColumns;
+                                localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                            }
+                            if (remoteData.objectLists) {
+                                objectLists = remoteData.objectLists;
+                                localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+                            }
+                            if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
+                                collapsed.clear();
+                                remoteData.collapsed.forEach(id => collapsed.add(id));
+                            }
+                            redraw();
+                        } else if (localTime > remoteTime) {
+                            console.log("Local state is newer than Supabase. Pushing local changes to Supabase...");
+                            await pushStateToSupabase();
+                        }
+                        updateSupabaseStatusBadge('online', '● Cloud Online');
+                    } catch (err) {
+                        console.error("Database sync error:", err);
+                        updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
                     }
-                    if (remoteData.objectLists) {
-                        objectLists = remoteData.objectLists;
-                        localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
-                    }
-                    if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
-                        collapsed.clear();
-                        remoteData.collapsed.forEach(id => collapsed.add(id));
-                    }
-                    redraw();
-                } else if (localTime > remoteTime) {
-                    console.log("Local state is newer than Supabase. Pushing local changes to Supabase...");
-                    await pushStateToSupabase();
+                } else {
+                    updateSupabaseStatusBadge('offline', '● Cloud Offline (Sign In)', '#94a3b8');
                 }
-                
-                updateSupabaseStatusBadge('online', '● Cloud Online');
-            } else {
-                // If cloud database is empty, seed it with local state
-                await pushStateToSupabase();
-                updateSupabaseStatusBadge('online', '● Cloud Online');
-            }
+            });
         } catch (e) {
             console.error("Supabase connection error on load:", e);
             updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
@@ -5281,37 +5276,73 @@ function updateSupabaseStatusBadge(status, text, colorOverride = null) {
     }
 }
 
-async function saveSupabaseSettings() {
-    const url = document.getElementById('sb-url-input').value.trim();
-    const key = document.getElementById('sb-key-input').value.trim();
-    
-    if (!url || !key) {
-        alert("Please fill in both the Project URL and Anon API key.");
-        return;
+// Google OAuth Helpers
+async function signInWithGoogle() {
+    if (!supabaseClient) return;
+    try {
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin + window.location.pathname
+            }
+        });
+        if (error) throw error;
+    } catch (e) {
+        alert("Error starting Google Sign-in: " + e.message);
     }
-    
-    localStorage.setItem('idealog_sb_url', url);
-    localStorage.setItem('idealog_sb_key', key);
-    
-    closeSupabaseSettingsModal();
-    alert("Supabase keys saved! Connecting and running initial sync check...");
-    
-    // Trigger startup loader logic using the newly saved keys
-    location.reload();
 }
 
-function disconnectSupabase() {
-    if (confirm("Are you sure you want to disconnect from Supabase? Your data will remain stored in local storage.")) {
-        localStorage.removeItem('idealog_sb_url');
-        localStorage.removeItem('idealog_sb_key');
-        closeSupabaseSettingsModal();
+async function signOutGoogle() {
+    if (!supabaseClient) return;
+    try {
+        await supabaseClient.auth.signOut();
         location.reload();
+    } catch (e) {
+        alert("Error signing out: " + e.message);
+    }
+}
+
+function updateGoogleAuthUIState(user) {
+    const statusLabel = document.getElementById('google-auth-status');
+    const authBtn = document.getElementById('btn-google-signin');
+    if (!statusLabel || !authBtn) return;
+    
+    if (user) {
+        statusLabel.innerHTML = `Signed in as <strong style="color: #34d399;">${user.email}</strong>`;
+        authBtn.textContent = 'Sign out from Google';
+        authBtn.onclick = signOutGoogle;
+        authBtn.style.color = '#f87171';
+        authBtn.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+        authBtn.style.background = 'rgba(239, 68, 68, 0.04)';
+    } else {
+        statusLabel.textContent = 'Not signed in with Google';
+        authBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px;">
+                <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.23 2.673 1.24 6.55l4.026 3.215z"/>
+                <path fill="#4285F4" d="M23.64 12.273c0-.818-.073-1.609-.208-2.373H12v4.582h6.527C18.245 15.655 17.02 17 15.26 18.173v3.018h9.082c5.309-4.882 8.355-12.073 8.355-14.882z"/>
+                <path fill="#FBBC05" d="M5.266 14.235 1.24 17.45A12.002 12.002 0 0 1 0 12c0-1.927.455-3.755 1.24-5.45l4.026 3.215a7.042 7.042 0 0 0-.25 2.235c0 .818.09 1.6.25 2.235z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.973-1.073 7.964-2.918l-3.082-3.018c-.855.573-1.955.918-3.136.918-3.136 0-5.782-2.118-6.732-4.964L1.24 17.45C3.23 21.327 7.27 24 12 24z"/>
+            </svg>
+            Sign in with Google
+        `;
+        authBtn.onclick = signInWithGoogle;
+        authBtn.style.color = '';
+        authBtn.style.borderColor = '';
+        authBtn.style.background = '';
     }
 }
 
 // Push local state into Supabase cloud table row
 async function pushStateToSupabase() {
     if (!supabaseClient) return;
+    
+    // Verify user session is authenticated before pushing database sync payloads
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) {
+        console.warn("Attempted to sync with Supabase while not logged in.");
+        updateSupabaseStatusBadge('offline', '● Cloud Offline (Sign In)', '#94a3b8');
+        return;
+    }
     
     const dbPayload = {
         idealog: JSON.parse(localStorage.getItem('idealog')),
