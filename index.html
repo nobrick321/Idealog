@@ -10105,6 +10105,22 @@ async function loadStartupData() {
         objectLists = JSON.parse(localLists);
     }
     
+    // Auto-populate codenames and deployments list arrays dynamically from task tree fields
+    if (!objectLists.custom_zbal2zx) objectLists.custom_zbal2zx = [];
+    if (!objectLists.custom_aar1e85) objectLists.custom_aar1e85 = [];
+    
+    const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    tasks.forEach(t => {
+        if (t.custom_zbal2zx && !objectLists.custom_zbal2zx.includes(t.custom_zbal2zx)) {
+            objectLists.custom_zbal2zx.push(t.custom_zbal2zx);
+        }
+        if (t.custom_aar1e85 && !objectLists.custom_aar1e85.includes(t.custom_aar1e85)) {
+            objectLists.custom_aar1e85.push(t.custom_aar1e85);
+        }
+    });
+    
+    localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+    
     // Recalculate hierarchy parameters dynamically with newly validated sheetColumns
     pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
     enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
