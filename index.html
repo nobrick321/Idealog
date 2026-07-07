@@ -10744,7 +10744,21 @@ async function loadStartupData() {
     }
     const localCols = localStorage.getItem('idealog_sheet_cols');
     if (localCols) {
-        sheetColumns = JSON.parse(localCols);
+        try {
+            const parsed = JSON.parse(localCols);
+            if (Array.isArray(parsed)) {
+                // Deduplicate by key to prevent duplicate columns in cache
+                const seen = new Set();
+                sheetColumns = parsed.filter(col => {
+                    if (!col || !col.key) return false;
+                    const isDup = seen.has(col.key);
+                    seen.add(col.key);
+                    return !isDup;
+                });
+            }
+        } catch (e) {
+            console.error("Error parsing local sheet columns:", e);
+        }
     }
     // Verify codename and deployment are present in startup columns list
     if (!sheetColumns.some(c => c.key === 'custom_zbal2zx')) {
