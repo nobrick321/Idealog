@@ -2450,12 +2450,14 @@ function renderGantt() {
 let currentSheetTab = 'pivot';
 let pivotRowDim = 'project';
 let pivotColDim = 'status';
-// Dynamic column list stored in localStorage or default to system/subsystem
+// Dynamic column list stored in localStorage or default to system/subsystem/codename/deployment
 let parsedCols = JSON.parse(localStorage.getItem('idealog_sheet_cols') || 'null');
 if (!Array.isArray(parsedCols)) {
     parsedCols = [
         { key: 'system', label: 'System' },
-        { key: 'subsystem', label: 'Subsystem' }
+        { key: 'subsystem', label: 'Subsystem' },
+        { key: 'codename', label: 'CODENAME' },
+        { key: 'deployment', label: 'DEPLOYMENT' }
     ];
 }
 let sheetColumns = parsedCols.filter(col => col && col.label && col.label.toLowerCase() !== 'project');
@@ -3426,9 +3428,11 @@ function processImportedData() {
     // Reset default dynamic columns
     sheetColumns = [
         { key: 'system', label: 'System' },
-        { key: 'subsystem', label: 'Subsystem' }
+        { key: 'subsystem', label: 'Subsystem' },
+        { key: 'codename', label: 'CODENAME' },
+        { key: 'deployment', label: 'DEPLOYMENT' }
     ];
-    pivotHierarchy = ['project', 'system', 'subsystem', 'status', 'assignee'];
+    pivotHierarchy = ['project', 'system', 'subsystem', 'codename', 'deployment', 'status', 'assignee'];
 
     // Clear Object Lists
     objectLists = {
@@ -3454,8 +3458,8 @@ function processImportedData() {
             // Check if existing dynamic custom column exists
             let existingCol = sheetColumns.find(c => c.label.toLowerCase() === lowerHdr);
             if (!existingCol) {
-                // Use static key if 'system' or 'subsystem'
-                const key = (lowerHdr === 'system' || lowerHdr === 'subsystem') ? lowerHdr : 'custom_' + Math.random().toString(36).slice(2, 9);
+                // Use static key if 'system', 'subsystem', 'codename', or 'deployment'
+                const key = (lowerHdr === 'system' || lowerHdr === 'subsystem' || lowerHdr === 'codename' || lowerHdr === 'deployment') ? lowerHdr : 'custom_' + Math.random().toString(36).slice(2, 9);
                 existingCol = { key, label: hdr };
                 sheetColumns.push(existingCol);
                 if (!pivotHierarchy.includes(key)) {
