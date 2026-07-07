@@ -2646,7 +2646,7 @@ function renderTaskSheet() {
     const area = document.getElementById('sheet-content-area');
     area.innerHTML = '';
 
-    const rawTasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    const rawTasks = allNodes(data).filter(n => n.id !== 'root' && (!n.children || n.children.length === 0));
     const tasks = rawTasks.filter(t => !shouldHideTask(t));
     const projects = getProjectsList();
 
@@ -4059,7 +4059,7 @@ function renderPivotTable() {
     const area = document.getElementById('sheet-content-area');
     area.innerHTML = '';
 
-    const rawTasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    const rawTasks = allNodes(data).filter(n => n.id !== 'root' && (!n.children || n.children.length === 0));
     const tasks = rawTasks.filter(t => !shouldHideTask(t));
     const projects = getProjectsList();
 
