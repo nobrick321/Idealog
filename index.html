@@ -1023,9 +1023,15 @@
         <div class="header-spacer"></div>
         <div style="display: flex; gap: 6px; align-items: center; margin-right: 12px;">
             <!-- Supabase Cloud Sync Status Indicator Badge -->
-            <div id="supabase-sync-status" onclick="openSupabaseSettingsModal()" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #f87171; font-size: 11px; font-weight: 600; margin-right: 8px; cursor: pointer; transition: all 0.15s ease;">
+            <div id="supabase-sync-status" onclick="openSupabaseSettingsModal()" style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #f87171; font-size: 11px; font-weight: 600; margin-right: 2px; cursor: pointer; transition: all 0.15s ease;">
                 ● Cloud Offline
             </div>
+            
+            <!-- Auto-Sync Toggle Control -->
+            <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; height: 30px; font-size: 11px; font-weight: 600; color: var(--text-dim); user-select: none;">
+                <input type="checkbox" id="sync-active-toggle" checked onchange="toggleAutoSyncState(this.checked)" style="accent-color: var(--accent); cursor: pointer; width: 13px; height: 13px; margin: 0;">
+                Auto-Sync
+            </label>
             
             <button onclick="openSupabaseSettingsModal()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: #818cf8; cursor: pointer; transition: all 0.15s ease; margin-right: 6px;">
                 ⚙️ Cloud Config
@@ -1324,6 +1330,77 @@ let currentView = 'mindmap';
 let showMerged = localStorage.getItem('idealog_show_merged') === 'true';
 const collapsed = new Set();
 
+// --- AUTO-SYNC TOGGLE CONFIG STATE ---
+let isAutoSyncEnabled = localStorage.getItem('idealog_auto_sync') !== 'false';
+let syncPollingInterval = null;
+
+function toggleAutoSyncState(enabled) {
+    isAutoSyncEnabled = enabled;
+    localStorage.setItem('idealog_auto_sync', enabled);
+    console.log("Auto-Sync toggled:", enabled);
+    
+    // Manage background polling interval
+    if (enabled) {
+        startSyncPolling();
+    } else {
+        stopSyncPolling();
+    }
+}
+
+// Background Pull Polling
+function startSyncPolling() {
+    stopSyncPolling();
+    if (!supabaseClient) return;
+    
+    syncPollingInterval = setInterval(async () => {
+        if (!isAutoSyncEnabled || !supabaseClient) return;
+        
+        try {
+            // Check session status before calling fetch
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            if (!user) return;
+            
+            const { data: dbRowsArray, error } = await supabaseClient
+                .from('idealog_sync')
+                .select('data')
+                .eq('id', 'db_state');
+                
+            const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null;
+            if (error || !dbRows || !dbRows.data || !dbRows.data.idealog) return;
+            
+            const remoteData = dbRows.data;
+            const remoteTime = remoteData.idealog.updatedAt ? new Date(remoteData.idealog.updatedAt).getTime() : 0;
+            const localTime = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+            
+            // Overwrite and redraw only if remote changes exist and are newer
+            if (remoteTime > localTime) {
+                console.log("Polling: Detected newer state on Supabase. Downloading...");
+                data = remoteData.idealog;
+                localStorage.setItem('idealog', JSON.stringify(data));
+                if (remoteData.sheetColumns) {
+                    sheetColumns = remoteData.sheetColumns;
+                    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                }
+                if (remoteData.objectLists) {
+                    objectLists = remoteData.objectLists;
+                    localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+                }
+                redraw();
+                updateSupabaseStatusBadge('online', '● Cloud Online (Synced)');
+            }
+        } catch (e) {
+            console.warn("Polling fetch failed:", e);
+        }
+    }, 30000); // Poll every 30 seconds
+}
+
+function stopSyncPolling() {
+    if (syncPollingInterval) {
+        clearInterval(syncPollingInterval);
+        syncPollingInterval = null;
+    }
+}
+
 // --- SUPABASE CONFIGURATION STATE ---
 let supabaseClient = null;
 const sbUrl = 'https://pprgomclbxmonnogdnrr.supabase.co';
@@ -1331,6 +1408,10 @@ const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJl
 
 // Load database state from Supabase or localStorage on startup
 async function loadStartupData() {
+    // Sync toggle UI initial checkbox state
+    const toggleEl = document.getElementById('sync-active-toggle');
+    if (toggleEl) toggleEl.checked = isAutoSyncEnabled;
+
     // 1. Load from localStorage first to render UI immediately
     const localDb = localStorage.getItem('idealog');
     if (localDb) {
@@ -1362,6 +1443,11 @@ async function loadStartupData() {
                 if (user) {
                     updateSupabaseStatusBadge('syncing', 'Syncing...');
                     
+                    // Start background polling if enabled
+                    if (isAutoSyncEnabled) {
+                        startSyncPolling();
+                    }
+                    
                     // Delay query execution by 500ms to let Google OAuth routing settle cleanly
                     setTimeout(async () => {
                         try {
@@ -1387,26 +1473,29 @@ async function loadStartupData() {
                             const remoteTime = remoteData.idealog.updatedAt ? new Date(remoteData.idealog.updatedAt).getTime() : 0;
                             const localTime = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
                             
-                            if (remoteTime > localTime || !localDb || data.children.length === 0) {
-                                console.log("Loading newer state from Supabase cloud database...");
-                                data = remoteData.idealog;
-                                localStorage.setItem('idealog', JSON.stringify(data));
-                                if (remoteData.sheetColumns) {
-                                    sheetColumns = remoteData.sheetColumns;
-                                    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                            // Overwrite only if auto-sync is active
+                            if (isAutoSyncEnabled) {
+                                if (remoteTime > localTime || !localDb || data.children.length === 0) {
+                                    console.log("Loading newer state from Supabase cloud database...");
+                                    data = remoteData.idealog;
+                                    localStorage.setItem('idealog', JSON.stringify(data));
+                                    if (remoteData.sheetColumns) {
+                                        sheetColumns = remoteData.sheetColumns;
+                                        localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                                    }
+                                    if (remoteData.objectLists) {
+                                        objectLists = remoteData.objectLists;
+                                        localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+                                    }
+                                    if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
+                                        collapsed.clear();
+                                        remoteData.collapsed.forEach(id => collapsed.add(id));
+                                    }
+                                    redraw();
+                                } else if (localTime > remoteTime) {
+                                    console.log("Local state is newer than Supabase. Pushing local changes to Supabase...");
+                                    await pushStateToSupabase();
                                 }
-                                if (remoteData.objectLists) {
-                                    objectLists = remoteData.objectLists;
-                                    localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
-                                }
-                                if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
-                                    collapsed.clear();
-                                    remoteData.collapsed.forEach(id => collapsed.add(id));
-                                }
-                                redraw();
-                            } else if (localTime > remoteTime) {
-                                console.log("Local state is newer than Supabase. Pushing local changes to Supabase...");
-                                await pushStateToSupabase();
                             }
                             updateSupabaseStatusBadge('online', '● Cloud Online');
                         } catch (err) {
@@ -1415,6 +1504,7 @@ async function loadStartupData() {
                         }
                     }, 500);
                 } else {
+                    stopSyncPolling();
                     updateSupabaseStatusBadge('offline', '● Cloud Offline (Sign In)', '#94a3b8');
                 }
             });
@@ -1430,7 +1520,7 @@ window.addEventListener('DOMContentLoaded', loadStartupData);
 
 const save = () => {
     localStorage.setItem('idealog', JSON.stringify(data));
-    if (supabaseClient) {
+    if (supabaseClient && isAutoSyncEnabled) {
         pushStateToSupabase().catch(err => {
             console.error("Delayed Supabase push failed:", err);
             updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
