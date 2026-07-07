@@ -977,8 +977,8 @@
                 height: auto !important;
             }
             #properties-panel .status-pill {
-                padding: 10px 0 !important;
-                font-size: 13px !important;
+                padding: 6px 0 !important;
+                font-size: 10px !important;
             }
             #properties-panel .tags-input-wrap {
                 padding: 10px !important;
@@ -1119,11 +1119,11 @@
             <div class="panel-body">
                 <div class="prop-group">
                     <div class="prop-label">Status</div>
-                    <div class="status-row" style="flex-wrap: wrap; gap: 6px;">
-                        <button class="status-pill" id="spill-todo" onclick="setStatus('todo')">Todo</button>
-                        <button class="status-pill" id="spill-inprogress" onclick="setStatus('inprogress')">In Progress</button>
-                        <button class="status-pill" id="spill-inprogress_bg" onclick="setStatus('inprogress_bg')" style="flex-basis: 100%;">In Progress in BG</button>
-                        <button class="status-pill" id="spill-done" onclick="setStatus('done')">Done</button>
+                    <div class="status-row" style="display: flex; gap: 4px; width: 100%;">
+                        <button class="status-pill" id="spill-todo" onclick="setStatus('todo')" style="font-size: 10px !important; padding: 6px 0 !important; white-space: nowrap;">Todo</button>
+                        <button class="status-pill" id="spill-inprogress" onclick="setStatus('inprogress')" style="font-size: 10px !important; padding: 6px 0 !important; white-space: nowrap;">In Progress</button>
+                        <button class="status-pill" id="spill-inprogress_bg" onclick="setStatus('inprogress_bg')" style="font-size: 10px !important; padding: 6px 0 !important; white-space: nowrap;">In BG</button>
+                        <button class="status-pill" id="spill-done" onclick="setStatus('done')" style="font-size: 10px !important; padding: 6px 0 !important; white-space: nowrap;">Done</button>
                     </div>
                 </div>
                 <div class="prop-group">
