@@ -1469,6 +1469,15 @@ async function loadStartupData() {
     if (localCols) {
         sheetColumns = JSON.parse(localCols);
     }
+    // Verify codename and deployment are present in startup columns list
+    if (!sheetColumns.some(c => c.key === 'codename')) {
+        sheetColumns.push({ key: 'codename', label: 'CODENAME' });
+    }
+    if (!sheetColumns.some(c => c.key === 'deployment')) {
+        sheetColumns.push({ key: 'deployment', label: 'DEPLOYMENT' });
+    }
+    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+
     const localLists = localStorage.getItem('idealog_object_lists');
     if (localLists) {
         objectLists = JSON.parse(localLists);
