@@ -1125,11 +1125,11 @@
             <div class="panel-body">
                 <div class="prop-group">
                     <div class="prop-label">Status</div>
-                    <div class="status-row" style="flex-wrap: wrap; gap: 6px;">
-                        <button class="status-pill" id="spill-todo" onclick="setStatus('todo')">Todo</button>
-                        <button class="status-pill" id="spill-inprogress" onclick="setStatus('inprogress')">In Progress</button>
-                        <button class="status-pill" id="spill-inprogress_bg" onclick="setStatus('inprogress_bg')" style="flex-basis: 100%;">In Progress in BG</button>
-                        <button class="status-pill" id="spill-done" onclick="setStatus('done')">Done</button>
+                    <div class="status-row" style="display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; width: 100%;">
+                        <button class="status-pill" id="spill-todo" onclick="setStatus('todo')" style="font-size: 11px !important; white-space: nowrap; flex: 1;">Todo</button>
+                        <button class="status-pill" id="spill-inprogress" onclick="setStatus('inprogress')" style="font-size: 11px !important; white-space: nowrap; flex: 1.2;">In Progress</button>
+                        <button class="status-pill" id="spill-inprogress_bg" onclick="setStatus('inprogress_bg')" style="font-size: 11px !important; white-space: nowrap; flex: 1.4;">IP (BG)</button>
+                        <button class="status-pill" id="spill-done" onclick="setStatus('done')" style="font-size: 11px !important; white-space: nowrap; flex: 1;">Done</button>
                     </div>
                 </div>
                 <div class="prop-group">
