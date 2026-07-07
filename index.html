@@ -10092,11 +10092,11 @@ async function loadStartupData() {
         sheetColumns = JSON.parse(localCols);
     }
     // Verify codename and deployment are present in startup columns list
-    if (!sheetColumns.some(c => c.key === 'codename')) {
-        sheetColumns.push({ key: 'codename', label: 'CODENAME' });
+    if (!sheetColumns.some(c => c.key === 'custom_zbal2zx')) {
+        sheetColumns.push({ key: 'custom_zbal2zx', label: 'CODENAME' });
     }
-    if (!sheetColumns.some(c => c.key === 'deployment')) {
-        sheetColumns.push({ key: 'deployment', label: 'DEPLOYMENT' });
+    if (!sheetColumns.some(c => c.key === 'custom_aar1e85')) {
+        sheetColumns.push({ key: 'custom_aar1e85', label: 'DEPLOYMENT' });
     }
     localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
 
@@ -11085,8 +11085,8 @@ if (!Array.isArray(parsedCols)) {
     parsedCols = [
         { key: 'system', label: 'System' },
         { key: 'subsystem', label: 'Subsystem' },
-        { key: 'codename', label: 'CODENAME' },
-        { key: 'deployment', label: 'DEPLOYMENT' }
+        { key: 'custom_zbal2zx', label: 'CODENAME' },
+        { key: 'custom_aar1e85', label: 'DEPLOYMENT' }
     ];
 }
 let sheetColumns = parsedCols.filter(col => col && col.label && col.label.toLowerCase() !== 'project');
@@ -12122,9 +12122,11 @@ function processImportedData() {
     // Reset default dynamic columns
     sheetColumns = [
         { key: 'system', label: 'System' },
-        { key: 'subsystem', label: 'Subsystem' }
+        { key: 'subsystem', label: 'Subsystem' },
+        { key: 'custom_zbal2zx', label: 'CODENAME' },
+        { key: 'custom_aar1e85', label: 'DEPLOYMENT' }
     ];
-    pivotHierarchy = ['project', 'system', 'subsystem', 'status', 'assignee'];
+    pivotHierarchy = ['project', 'system', 'subsystem', 'custom_zbal2zx', 'custom_aar1e85', 'status', 'assignee'];
 
     // Clear Object Lists
     objectLists = {
