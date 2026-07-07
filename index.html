@@ -1519,6 +1519,7 @@ async function loadStartupData() {
 window.addEventListener('DOMContentLoaded', loadStartupData);
 
 const save = () => {
+    data.updatedAt = new Date().toISOString();
     localStorage.setItem('idealog', JSON.stringify(data));
     if (supabaseClient && isAutoSyncEnabled) {
         pushStateToSupabase().catch(err => {
