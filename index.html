@@ -14562,14 +14562,20 @@ function selectNode(id) {
     renderCommentsFeed(n);
     
     
-    // Always display the explicit "✓ Save Task" button in the properties panel.
-    // Deleting tasks is kept safe by keeping it on the spreadsheet grid itself.
+    // Display the "✓ Save Task" button in the properties panel ONLY when editing a new unsaved task draft.
     const actionsDiv = document.querySelector('#properties-panel .panel-actions');
     if (actionsDiv) {
-        actionsDiv.innerHTML = `
-            <button class="btn-sm btn-secondary" onclick="saveNewTaskDraft()" style="background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.25); height: 36px; font-weight: 600; font-size: 13px;">✓ Save Task</button>
-            <button class="btn-sm btn-secondary" onclick="addFollowupTask()" style="height: 36px; font-size: 12px;">Followup Task</button>
-        `;
+        if (isNewDraft) {
+            actionsDiv.innerHTML = `
+                <button class="btn-sm btn-secondary" onclick="saveNewTaskDraft()" style="background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.25); height: 36px; font-weight: 600; font-size: 13px;">✓ Save Task</button>
+                <button class="btn-sm btn-danger" onclick="cancelNewTaskDraft()" style="height: 36px; font-size: 12px;">Cancel</button>
+            `;
+        } else {
+            actionsDiv.innerHTML = `
+                <button class="btn-sm btn-secondary" onclick="addFollowupTask()" style="height: 36px; font-size: 12px;">Followup Task</button>
+                <button class="btn-sm btn-danger" onclick="deleteSelected()" style="height: 36px; font-size: 12px;">Delete</button>
+            `;
+        }
     }
 
     setStatusPills(n.status);
