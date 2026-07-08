@@ -10786,6 +10786,73 @@ const collapsed = new Set();
 let isNewDraft = false; // Tracks if the currently selected node is a newly created, un-saved draft task
 let draftTask = null;   // Temporarily holds new task details before they are saved to the tree
 
+// --- AUTO-SYNC TOGGLE CONFIG STATE ---
+let isAutoSyncEnabled = localStorage.getItem('idealog_auto_sync') !== 'false';
+let syncPollingInterval = null;
+
+function toggleAutoSyncState(enabled) {
+    isAutoSyncEnabled = enabled;
+    localStorage.setItem('idealog_auto_sync', enabled);
+    console.log("Auto-Sync toggled:", enabled);
+    
+    if (enabled) {
+        startSyncPolling();
+    } else {
+        stopSyncPolling();
+    }
+}
+
+function startSyncPolling() {
+    stopSyncPolling();
+    if (!supabaseClient) return;
+    
+    syncPollingInterval = setInterval(async () => {
+        if (!isAutoSyncEnabled || !supabaseClient) return;
+        
+        try {
+            const { data: { user } } = await supabaseClient.auth.getUser();
+            if (!user) return;
+            
+            const { data: dbRowsArray, error } = await supabaseClient
+                .from('idealog_sync')
+                .select('data')
+                .eq('id', 'db_state');
+                
+            const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null;
+            if (error || !dbRows || !dbRows.data || !dbRows.data.idealog) return;
+            
+            const remoteData = dbRows.data;
+            const remoteTime = remoteData.idealog.updatedAt ? new Date(remoteData.idealog.updatedAt).getTime() : 0;
+            const localTime = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+            
+            if (remoteTime > localTime) {
+                console.log("Polling: Detected newer state on Supabase. Downloading...");
+                data = remoteData.idealog;
+                localStorage.setItem('idealog', JSON.stringify(data));
+                if (remoteData.sheetColumns) {
+                    sheetColumns = remoteData.sheetColumns;
+                    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                }
+                if (remoteData.objectLists) {
+                    objectLists = remoteData.objectLists;
+                    localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+                }
+                redraw();
+                updateSupabaseStatusBadge('online', '● Cloud Online (Synced)');
+            }
+        } catch (e) {
+            console.warn("Polling fetch failed:", e);
+        }
+    }, 30000); // Poll every 30 seconds
+}
+
+function stopSyncPolling() {
+    if (syncPollingInterval) {
+        clearInterval(syncPollingInterval);
+        syncPollingInterval = null;
+    }
+}
+
 // --- SUPABASE CONFIGURATION STATE ---
 let supabaseClient = null;
 const sbUrl = 'https://pprgomclbxmonnogdnrr.supabase.co';
