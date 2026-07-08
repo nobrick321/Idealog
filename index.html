@@ -10777,6 +10777,7 @@ let selectedId = null;
 let currentView = 'mindmap';
 let showMerged = localStorage.getItem('idealog_show_merged') === 'true';
 const collapsed = new Set();
+let isNewDraft = false; // Tracks if the currently selected node is a newly created, un-saved draft task
 
 // --- SUPABASE CONFIGURATION STATE ---
 let supabaseClient = null;
@@ -10930,6 +10931,8 @@ async function loadStartupData() {
 window.addEventListener('DOMContentLoaded', loadStartupData);
 
 const save = () => {
+    // Skip saving updates to Local Storage or Supabase if this is an unsaved task draft
+    if (isNewDraft) return;
     localStorage.setItem('idealog', JSON.stringify(data));
     if (supabaseClient) {
         pushStateToSupabase().catch(err => {
@@ -12688,7 +12691,10 @@ function addSheetTaskRow() {
         assignee: 'User'
     });
 
-    save();
+    // Treat this newly appended task as an uncommitted draft first
+    isNewDraft = true;
+    
+    // Refresh GUI structure to show the new empty draft row locally
     renderSheet();
     
     // Auto-open sidebar details panel for the newly created task
@@ -14410,6 +14416,10 @@ function addPivotTask(rowVal, colVal) {
 
 // --- PROPERTIES ---
 function selectNode(id) {
+    if (selectedId !== id) {
+        // Switching tasks resolves any previous draft flag
+        isNewDraft = false;
+    }
     selectedId=id;
     const n=findNode(id); if(!n) return;
     document.getElementById('prop-title').value=n.title;
@@ -14463,6 +14473,23 @@ function selectNode(id) {
     // Render the comments chat feed dynamically
     renderCommentsFeed(n);
     
+    
+    // Dynamically show Save Changes and Cancel buttons if editing an unsaved draft task, otherwise standard buttons
+    const actionsDiv = document.querySelector('#properties-panel .panel-actions');
+    if (actionsDiv) {
+        if (isNewDraft) {
+            actionsDiv.innerHTML = `
+                <button class="btn-sm btn-secondary" onclick="saveNewTaskDraft()" style="background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.25);">✓ Save Task</button>
+                <button class="btn-sm btn-danger" onclick="cancelNewTaskDraft()">Cancel</button>
+            `;
+        } else {
+            actionsDiv.innerHTML = `
+                <button class="btn-sm btn-secondary" onclick="addFollowupTask()">Followup Task</button>
+                <button class="btn-sm btn-danger" onclick="deleteSelected()">Delete</button>
+            `;
+        }
+    }
+
     setStatusPills(n.status);
     renderTagPills(n.tags||[]);
     document.getElementById('properties-panel').classList.add('open');
@@ -14753,9 +14780,40 @@ function deleteSelected() {
     if(!selectedId||selectedId==='root') return;
     const parent=findParent(selectedId); if(!parent) return;
     parent.children=parent.children.filter(c=>c.id!==selectedId);
+    isNewDraft = false;
     save(); selectedId=null;
     document.getElementById('properties-panel').classList.remove('open');
     redraw();
+}
+
+function saveNewTaskDraft() {
+    if (!selectedId || selectedId === 'root') return;
+    const n = findNode(selectedId);
+    if (n) {
+        isNewDraft = false;
+        // Save state changes locally and trigger remote Supabase autosync push
+        save();
+        alert("✓ Task saved successfully!");
+        
+        // Refresh properties panel actions buttons layout to standard Followup/Delete
+        selectNode(selectedId);
+    }
+}
+
+function cancelNewTaskDraft() {
+    if (!selectedId || selectedId === 'root') return;
+    const parent = findParent(selectedId);
+    if (parent) {
+        parent.children = parent.children.filter(c => c.id !== selectedId);
+        // Clear history element entry for this cancelled draft task to keep logs clean
+        if (data.history) {
+            data.history = data.history.filter(h => h.taskId !== selectedId);
+        }
+        isNewDraft = false;
+        selectedId = null;
+        document.getElementById('properties-panel').classList.remove('open');
+        redraw();
+    }
 }
 
 // --- DATA BACKUP & RESTORE Across Devices ---
