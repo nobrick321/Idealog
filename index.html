@@ -10903,16 +10903,6 @@ async function loadStartupData() {
     
     const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
     
-    // Auto-clean history ledger: Purge events corresponding to deleted tasks
-    if (data.history) {
-        const taskIds = new Set(tasks.map(t => t.id));
-        const originalLength = data.history.length;
-        data.history = data.history.filter(ev => taskIds.has(ev.taskId));
-        if (data.history.length !== originalLength) {
-            console.log(`Cleaned ${originalLength - data.history.length} orphaned events from happenings ledger.`);
-            localStorage.setItem('idealog', JSON.stringify(data));
-        }
-    }
 
     tasks.forEach(t => {
         if (t.custom_zbal2zx && !objectLists.custom_zbal2zx.includes(t.custom_zbal2zx)) {
