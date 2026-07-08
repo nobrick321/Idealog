@@ -11029,25 +11029,13 @@ const save = () => {
 };
 const uid  = () => 'n' + Math.random().toString(36).slice(2,9);
 
-function allNodes(node, out=[]) { 
-    out.push(node); 
-    (node.children||[]).forEach(c=>allNodes(c,out)); 
-    if (node === data && isNewDraft && draftTask) {
-        out.push(draftTask);
-    }
-    return out; 
-}
+function allNodes(node, out=[]) { out.push(node); (node.children||[]).forEach(c=>allNodes(c,out)); return out; }
 function findNode(id, node=data) {
-    if (draftTask && draftTask.id === id) return draftTask;
     if(node.id===id) return node;
     for(const c of (node.children||[])) { const f=findNode(id,c); if(f) return f; }
     return null;
 }
 function findParent(id, node=data) {
-    if (draftTask && draftTask.id === id) {
-        const parentProj = findNode(draftTask.projectId || 'root');
-        return parentProj;
-    }
     for(const c of (node.children||[])) {
         if(c.id===id) return node;
         const f=findParent(id,c); if(f) return f;
@@ -12768,8 +12756,7 @@ function addSheetTaskRow() {
         createdAt: nowIso,
         updatedAt: nowIso,
         doneAt: null,
-        children: [],
-        projectId: projectNode.id // Link internally to remember parent ID for save later
+        children: []
     };
 
     // Initialize custom dynamic column properties
@@ -12777,11 +12764,24 @@ function addSheetTaskRow() {
         newTask[col.key] = '';
     });
 
-    // Keep draftTask strictly in local variables
-    draftTask = newTask;
-    isNewDraft = true;
-    
-    // Refresh GUI structure
+    // Commit instantly to the data tree
+    projectNode.children = projectNode.children || [];
+    projectNode.children.push(newTask);
+
+    // Write history log event
+    data.history = data.history || [];
+    data.history.push({
+        timestamp: nowIso,
+        projectId: projectNode.id,
+        taskId: newTask.id,
+        taskTitle: newTask.title,
+        action: 'status_change',
+        fromStatus: 'todo',
+        toStatus: 'todo',
+        assignee: 'User'
+    });
+
+    save();
     renderSheet();
     
     // Auto-open sidebar details panel for the newly created task
@@ -14503,15 +14503,6 @@ function addPivotTask(rowVal, colVal) {
 
 // --- PROPERTIES ---
 function selectNode(id) {
-    if (selectedId !== id) {
-        // Discard temporary draft task if user switches selection to a saved task
-        if (isNewDraft && draftTask && id !== draftTask.id) {
-            draftTask = null;
-            isNewDraft = false;
-        } else if (!isNewDraft) {
-            isNewDraft = false;
-        }
-    }
     selectedId=id;
     const n=findNode(id); if(!n) return;
     document.getElementById('prop-title').value=n.title;
@@ -14566,20 +14557,13 @@ function selectNode(id) {
     renderCommentsFeed(n);
     
     
-    // Display the "✓ Save Task" button in the properties panel ONLY when editing a new unsaved task draft.
+    // Display actions for saved tasks
     const actionsDiv = document.querySelector('#properties-panel .panel-actions');
     if (actionsDiv) {
-        if (isNewDraft) {
-            actionsDiv.innerHTML = `
-                <button class="btn-sm btn-secondary" onclick="saveNewTaskDraft()" style="background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.25); height: 36px; font-weight: 600; font-size: 13px;">✓ Save Task</button>
-                <button class="btn-sm btn-danger" onclick="cancelNewTaskDraft()" style="height: 36px; font-size: 12px;">Cancel</button>
-            `;
-        } else {
-            actionsDiv.innerHTML = `
-                <button class="btn-sm btn-secondary" onclick="addFollowupTask()" style="height: 36px; font-size: 12px;">Followup Task</button>
-                <button class="btn-sm btn-danger" onclick="deleteSelected()" style="height: 36px; font-size: 12px;">Delete</button>
-            `;
-        }
+        actionsDiv.innerHTML = `
+            <button class="btn-sm btn-secondary" onclick="addFollowupTask()" style="height: 36px; font-size: 12px;">Followup Task</button>
+            <button class="btn-sm btn-danger" onclick="deleteSelected()" style="height: 36px; font-size: 12px;">Delete</button>
+        `;
     }
 
     setStatusPills(n.status);
@@ -14893,50 +14877,11 @@ function deleteSelected() {
 }
 
 function saveNewTaskDraft() {
-    if (!draftTask) return;
-    
-    // Find parent project node to attach draftTask into
-    const parentProj = findNode(draftTask.projectId || 'root');
-    if (parentProj) {
-        // Safe copy of draft object details
-        const savedTask = {...draftTask};
-        delete savedTask.projectId; // Clean internal property helper
-        
-        parentProj.children = parentProj.children || [];
-        parentProj.children.push(savedTask);
-        
-        // Append history transactions log event
-        data.history = data.history || [];
-        data.history.push({
-            timestamp: new Date().toISOString(),
-            projectId: parentProj.id,
-            taskId: savedTask.id,
-            taskTitle: savedTask.title,
-            action: 'status_change',
-            fromStatus: 'todo',
-            toStatus: savedTask.status || 'todo',
-            assignee: savedTask.assignee || 'User'
-        });
-        
-        const committedId = savedTask.id;
-        draftTask = null;
-        isNewDraft = false;
-        
-        // Save state changes locally and trigger Supabase push
-        save();
-        alert("✓ Task saved successfully!");
-        
-        // Re-select committed task to refresh panel buttons view
-        selectNode(committedId);
-    }
+    // Draft mechanism is deprecated. Tasks are now committed instantly on creation.
 }
 
 function cancelNewTaskDraft() {
-    draftTask = null;
-    isNewDraft = false;
-    selectedId = null;
-    document.getElementById('properties-panel').classList.remove('open');
-    redraw();
+    // Draft mechanism is deprecated. Tasks are now committed instantly on creation.
 }
 
 // --- DATA BACKUP & RESTORE Across Devices ---
