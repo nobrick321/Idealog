@@ -1233,6 +1233,12 @@
                     Sign in with Google
                 </button>
             </div>
+            
+            <!-- Auto-Sync Toggle Control -->
+            <label style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; height: 34px; font-size: 12px; font-weight: 600; color: var(--text-dim); user-select: none; margin: 0 auto; max-width: 220px; width: 100%;">
+                <input type="checkbox" id="sync-active-toggle" checked onchange="toggleAutoSyncState(this.checked)" style="accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; margin: 0;">
+                Enable Auto-Sync
+            </label>
         </div>
         <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; align-items: center;">
             <div style="display: flex; gap: 6px;">
@@ -10846,6 +10852,10 @@ async function loadStartupData() {
     
     redraw();
 
+    // Sync toggle UI initial checkbox state
+    const toggleEl = document.getElementById('sync-active-toggle');
+    if (toggleEl) toggleEl.checked = isAutoSyncEnabled;
+
     // 2. Initialize Supabase if configuration keys are present
     if (sbUrl && sbKey) {
         try {
@@ -10861,6 +10871,10 @@ async function loadStartupData() {
                 
                 if (user) {
                     updateSupabaseStatusBadge('syncing', 'Syncing...');
+                    
+                    if (isAutoSyncEnabled) {
+                        startSyncPolling();
+                    }
                     
                     // Delay query execution by 500ms to let Google OAuth routing settle cleanly
                     setTimeout(async () => {
@@ -10878,7 +10892,9 @@ async function loadStartupData() {
                             // Seed database from local state if remote DB has no entries
                             if (!dbRows || !dbRows.data || !dbRows.data.idealog) {
                                 console.log("Remote database is empty. Seeding remote database with local state...");
-                                await pushStateToSupabase();
+                                if (isAutoSyncEnabled) {
+                                    await pushStateToSupabase();
+                                }
                                 updateSupabaseStatusBadge('online', '● Cloud Online');
                                 return;
                             }
@@ -10887,29 +10903,31 @@ async function loadStartupData() {
                             const remoteTime = remoteData.idealog.updatedAt ? new Date(remoteData.idealog.updatedAt).getTime() : 0;
                             const localTime = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
                             
-                            if (remoteTime > localTime || !localDb || data.children.length === 0) {
-                                console.log("Loading newer state from Supabase cloud database...");
-                                data = remoteData.idealog;
-                                localStorage.setItem('idealog', JSON.stringify(data));
-                                if (remoteData.sheetColumns) {
-                                    sheetColumns = remoteData.sheetColumns;
-                                    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                            if (isAutoSyncEnabled) {
+                                if (remoteTime > localTime || !localDb || data.children.length === 0) {
+                                    console.log("Loading newer state from Supabase cloud database...");
+                                    data = remoteData.idealog;
+                                    localStorage.setItem('idealog', JSON.stringify(data));
+                                    if (remoteData.sheetColumns) {
+                                        sheetColumns = remoteData.sheetColumns;
+                                        localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                                    }
+                                    if (remoteData.objectLists) {
+                                        objectLists = remoteData.objectLists;
+                                        localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+                                    }
+                                    if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
+                                        collapsed.clear();
+                                        remoteData.collapsed.forEach(id => collapsed.add(id));
+                                    }
+                                    // Recalculate hierarchy parameters dynamically on remote pull override
+                                    pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
+                                    enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
+                                    redraw();
+                                } else if (localTime > remoteTime) {
+                                    console.log("Local state is newer than Supabase. Pushing local changes to Supabase...");
+                                    await pushStateToSupabase();
                                 }
-                                if (remoteData.objectLists) {
-                                    objectLists = remoteData.objectLists;
-                                    localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
-                                }
-                                if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
-                                    collapsed.clear();
-                                    remoteData.collapsed.forEach(id => collapsed.add(id));
-                                }
-                                // Recalculate hierarchy parameters dynamically on remote pull override
-                                pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
-                                enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
-                                redraw();
-                            } else if (localTime > remoteTime) {
-                                console.log("Local state is newer than Supabase. Pushing local changes to Supabase...");
-                                await pushStateToSupabase();
                             }
                             updateSupabaseStatusBadge('online', '● Cloud Online');
                         } catch (err) {
@@ -10918,6 +10936,7 @@ async function loadStartupData() {
                         }
                     }, 500);
                 } else {
+                    stopSyncPolling();
                     updateSupabaseStatusBadge('offline', '● Cloud Offline (Sign In)', '#94a3b8');
                 }
             });
@@ -10933,7 +10952,7 @@ window.addEventListener('DOMContentLoaded', loadStartupData);
 
 const save = () => {
     localStorage.setItem('idealog', JSON.stringify(data));
-    if (supabaseClient) {
+    if (supabaseClient && isAutoSyncEnabled) {
         pushStateToSupabase().catch(err => {
             console.error("Delayed Supabase push failed:", err);
             updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
