@@ -11029,7 +11029,14 @@ const save = () => {
 };
 const uid  = () => 'n' + Math.random().toString(36).slice(2,9);
 
-function allNodes(node, out=[]) { out.push(node); (node.children||[]).forEach(c=>allNodes(c,out)); return out; }
+function allNodes(node, out=[]) { 
+    out.push(node); 
+    (node.children||[]).forEach(c=>allNodes(c,out)); 
+    if (node === data && isNewDraft && draftTask) {
+        out.push(draftTask);
+    }
+    return out; 
+}
 function findNode(id, node=data) {
     if (draftTask && draftTask.id === id) return draftTask;
     if(node.id===id) return node;
@@ -12280,9 +12287,6 @@ function updateCascadeRef(type, oldVal, newVal) {
 }
 
 function shouldHideTask(t) {
-    // Hide newly created task draft nodes from views until the Save Task button is explicitly clicked
-    if (isNewDraft && selectedId === t.id) return true;
-    
     if (t.status !== 'done' && t.status !== 'obsolete') return false;
     if (hideDoneFilter === 'none') return false;
     if (hideDoneFilter === 'all') return true;
