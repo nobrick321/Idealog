@@ -12187,6 +12187,9 @@ function updateCascadeRef(type, oldVal, newVal) {
 }
 
 function shouldHideTask(t) {
+    // Hide newly created task draft nodes from views until the Save Task button is explicitly clicked
+    if (isNewDraft && selectedId === t.id) return true;
+    
     if (t.status !== 'done' && t.status !== 'obsolete') return false;
     if (hideDoneFilter === 'none') return false;
     if (hideDoneFilter === 'all') return true;
