@@ -14593,13 +14593,19 @@ function handleTagInput(e) {
         if(!val) return;
         const n=findNode(selectedId); if(!n) return;
         if(!n.tags) n.tags=[];
-        if(!n.tags.includes(val)){ n.tags.push(val); savePropMemoryOnly(); renderTagPills(n.tags); }
+        if(!n.tags.includes(val)){ 
+            n.tags.push(val); 
+            if (isNewDraft) savePropMemoryOnly(); else save();
+            renderTagPills(n.tags); 
+        }
         e.target.value='';
     }
 }
 function removeTag(tag) {
     const n=findNode(selectedId); if(!n) return;
-    n.tags=(n.tags||[]).filter(t=>t!==tag); savePropMemoryOnly(); renderTagPills(n.tags);
+    n.tags=(n.tags||[]).filter(t=>t!==tag); 
+    if (isNewDraft) savePropMemoryOnly(); else save();
+    renderTagPills(n.tags);
 }
 function updateTitle(val) {
     const n=findNode(selectedId); if(!n) return;
@@ -14608,7 +14614,7 @@ function updateTitle(val) {
     if (oldVal.trim() !== newVal.trim()) {
         n.title=val;
         n.updatedAt = new Date().toISOString();
-        savePropMemoryOnly();
+        if (isNewDraft) savePropMemoryOnly(); else save();
     }
     clearTimeout(titleTimer);
     if(currentView==='mindmap' && mmG){
@@ -14665,13 +14671,16 @@ function updateProp(prop,val) {
         }
     }
     
-    savePropMemoryOnly();
+    if (isNewDraft) {
+        savePropMemoryOnly();
+    } else {
+        save();
+    }
     if(currentView!=='mindmap') redraw();
 }
 
 function savePropMemoryOnly() {
-    // Simply redrawing and keeping variables updated in variables in-memory.
-    // Real-time autosaves inside the sidebar panel elements are skipped until "Save Task" button is explicitly clicked.
+    // Simply keeping changes in local variables; no write to Local Storage or Supabase push.
 }
 function closePanel() {
     selectedId=null;
