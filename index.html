@@ -14418,8 +14418,10 @@ function addPivotTask(rowVal, colVal) {
 // --- PROPERTIES ---
 function selectNode(id) {
     if (selectedId !== id) {
-        // Switching tasks resolves any previous draft flag
-        isNewDraft = false;
+        // Switching tasks resolves any previous draft flag, unless we are selecting the newly created draft
+        if (!isNewDraft || id !== selectedId) {
+            isNewDraft = false;
+        }
     }
     selectedId=id;
     const n=findNode(id); if(!n) return;
