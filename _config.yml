@@ -1,0 +1,9 @@
+# Jekyll configuration for GitHub Pages
+# Force Cache-Control headers to ensure browsers always check for updates
+headers:
+  - scope:
+      path: "" # Applies to all files in the repository
+    values:
+      Cache-Control: "no-cache, no-store, must-revalidate"
+      Pragma: "no-cache"
+      Expires: "0"
