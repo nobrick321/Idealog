@@ -10778,6 +10778,7 @@ let currentView = 'mindmap';
 let showMerged = localStorage.getItem('idealog_show_merged') === 'true';
 const collapsed = new Set();
 let isNewDraft = false; // Tracks if the currently selected node is a newly created, un-saved draft task
+let draftTask = null;   // Temporarily holds new task details before they are saved to the tree
 
 // --- SUPABASE CONFIGURATION STATE ---
 let supabaseClient = null;
@@ -10943,11 +10944,16 @@ const uid  = () => 'n' + Math.random().toString(36).slice(2,9);
 
 function allNodes(node, out=[]) { out.push(node); (node.children||[]).forEach(c=>allNodes(c,out)); return out; }
 function findNode(id, node=data) {
+    if (draftTask && draftTask.id === id) return draftTask;
     if(node.id===id) return node;
     for(const c of (node.children||[])) { const f=findNode(id,c); if(f) return f; }
     return null;
 }
 function findParent(id, node=data) {
+    if (draftTask && draftTask.id === id) {
+        const parentProj = findNode(draftTask.projectId || 'root');
+        return parentProj;
+    }
     for(const c of (node.children||[])) {
         if(c.id===id) return node;
         const f=findParent(id,c); if(f) return f;
@@ -12663,15 +12669,16 @@ function addSheetTaskRow() {
         title: 'New Task',
         status: 'todo',
         assignee: '',
-        system: '',
-        subsystem: '',
-        project: '',
+        system: systemNode ? systemNode.title : '',
+        subsystem: subsystemNode ? subsystemNode.title : '',
+        project: projectNode.title,
         tags: [],
         notes: '',
         createdAt: nowIso,
         updatedAt: nowIso,
         doneAt: null,
-        children: []
+        children: [],
+        projectId: projectNode.id // Link internally to remember parent ID for save later
     };
 
     // Initialize custom dynamic column properties
@@ -12679,23 +12686,11 @@ function addSheetTaskRow() {
         newTask[col.key] = '';
     });
 
-    projectNode.children.push(newTask);
-    
-    data.history.push({
-        timestamp: new Date().toISOString(),
-        projectId: projectNode.id,
-        taskId: newTask.id,
-        taskTitle: newTask.title,
-        action: 'status_change',
-        fromStatus: 'todo',
-        toStatus: 'todo',
-        assignee: 'User'
-    });
-
-    // Treat this newly appended task as an uncommitted draft first
+    // Keep draftTask strictly in local variables
+    draftTask = newTask;
     isNewDraft = true;
     
-    // Refresh GUI structure to show the new empty draft row locally
+    // Refresh GUI structure
     renderSheet();
     
     // Auto-open sidebar details panel for the newly created task
@@ -14418,8 +14413,11 @@ function addPivotTask(rowVal, colVal) {
 // --- PROPERTIES ---
 function selectNode(id) {
     if (selectedId !== id) {
-        // Switching tasks resolves any previous draft flag, unless we are selecting the newly created draft
-        if (!isNewDraft || id !== selectedId) {
+        // Discard temporary draft task if user switches selection to a saved task
+        if (isNewDraft && draftTask && id !== draftTask.id) {
+            draftTask = null;
+            isNewDraft = false;
+        } else if (!isNewDraft) {
             isNewDraft = false;
         }
     }
@@ -14789,33 +14787,50 @@ function deleteSelected() {
 }
 
 function saveNewTaskDraft() {
-    if (!selectedId || selectedId === 'root') return;
-    const n = findNode(selectedId);
-    if (n) {
+    if (!draftTask) return;
+    
+    // Find parent project node to attach draftTask into
+    const parentProj = findNode(draftTask.projectId || 'root');
+    if (parentProj) {
+        // Safe copy of draft object details
+        const savedTask = {...draftTask};
+        delete savedTask.projectId; // Clean internal property helper
+        
+        parentProj.children = parentProj.children || [];
+        parentProj.children.push(savedTask);
+        
+        // Append history transactions log event
+        data.history = data.history || [];
+        data.history.push({
+            timestamp: new Date().toISOString(),
+            projectId: parentProj.id,
+            taskId: savedTask.id,
+            taskTitle: savedTask.title,
+            action: 'status_change',
+            fromStatus: 'todo',
+            toStatus: savedTask.status || 'todo',
+            assignee: savedTask.assignee || 'User'
+        });
+        
+        const committedId = savedTask.id;
+        draftTask = null;
         isNewDraft = false;
-        // Save state changes locally and trigger remote Supabase autosync push
+        
+        // Save state changes locally and trigger Supabase push
         save();
         alert("✓ Task saved successfully!");
         
-        // Refresh properties panel actions buttons layout to standard Followup/Delete
-        selectNode(selectedId);
+        // Re-select committed task to refresh panel buttons view
+        selectNode(committedId);
     }
 }
 
 function cancelNewTaskDraft() {
-    if (!selectedId || selectedId === 'root') return;
-    const parent = findParent(selectedId);
-    if (parent) {
-        parent.children = parent.children.filter(c => c.id !== selectedId);
-        // Clear history element entry for this cancelled draft task to keep logs clean
-        if (data.history) {
-            data.history = data.history.filter(h => h.taskId !== selectedId);
-        }
-        isNewDraft = false;
-        selectedId = null;
-        document.getElementById('properties-panel').classList.remove('open');
-        redraw();
-    }
+    draftTask = null;
+    isNewDraft = false;
+    selectedId = null;
+    document.getElementById('properties-panel').classList.remove('open');
+    redraw();
 }
 
 // --- DATA BACKUP & RESTORE Across Devices ---
