@@ -10783,12 +10783,49 @@ let selectedId = null;
 let currentView = 'mindmap';
 let showMerged = localStorage.getItem('idealog_show_merged') === 'true';
 const collapsed = new Set();
-let isNewDraft = false; // Tracks if the currently selected node is a newly created, un-saved draft task
-let draftTask = null;   // Temporarily holds new task details before they are saved to the tree
-
 // --- AUTO-SYNC TOGGLE CONFIG STATE ---
 let isAutoSyncEnabled = localStorage.getItem('idealog_auto_sync') !== 'false';
 let syncPollingInterval = null;
+let syncTimeout = null;
+
+// --- DYNAMIC PERFORMANCE CACHES ---
+let nodeCache = new Map();
+let parentCache = new Map();
+let cachedObjectLists = {
+    assignees: new Set(),
+    systems: new Set(),
+    subsystems: new Set(),
+    projects: new Set()
+};
+
+function rebuildPerformanceCaches() {
+    nodeCache.clear();
+    parentCache.clear();
+    cachedObjectLists.assignees.clear();
+    cachedObjectLists.systems.clear();
+    cachedObjectLists.subsystems.clear();
+    cachedObjectLists.projects.clear();
+
+    // Cache nested nodes and parents
+    function traverse(node, parent = null) {
+        if (!node) return;
+        nodeCache.set(node.id, node);
+        if (parent) parentCache.set(node.id, parent);
+        if (node.children) {
+            node.children.forEach(c => traverse(c, node));
+        }
+    }
+    traverse(data);
+
+    // Cache autocomplete unique values list
+    const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    tasks.forEach(t => {
+        if (t.assignee) cachedObjectLists.assignees.add(t.assignee);
+        if (t.system) cachedObjectLists.systems.add(t.system);
+        if (t.subsystem) cachedObjectLists.subsystems.add(t.subsystem);
+        if (t.project) cachedObjectLists.projects.add(t.project);
+    });
+}
 
 function toggleAutoSyncState(enabled) {
     isAutoSyncEnabled = enabled;
@@ -10837,6 +10874,7 @@ function startSyncPolling() {
                     objectLists = remoteData.objectLists;
                     localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
                 }
+                rebuildPerformanceCaches();
                 redraw();
                 updateSupabaseStatusBadge('online', '● Cloud Online (Synced)');
             }
@@ -10901,19 +10939,7 @@ async function loadStartupData() {
     if (!objectLists.custom_zbal2zx) objectLists.custom_zbal2zx = [];
     if (!objectLists.custom_aar1e85) objectLists.custom_aar1e85 = [];
     
-    const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
-    
-
-    tasks.forEach(t => {
-        if (t.custom_zbal2zx && !objectLists.custom_zbal2zx.includes(t.custom_zbal2zx)) {
-            objectLists.custom_zbal2zx.push(t.custom_zbal2zx);
-        }
-        if (t.custom_aar1e85 && !objectLists.custom_aar1e85.includes(t.custom_aar1e85)) {
-            objectLists.custom_aar1e85.push(t.custom_aar1e85);
-        }
-    });
-    
-    localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+    rebuildPerformanceCaches();
     
     // Recalculate hierarchy parameters dynamically with newly validated sheetColumns
     pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
@@ -10992,6 +11018,7 @@ async function loadStartupData() {
                                     // Recalculate hierarchy parameters dynamically on remote pull override
                                     pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
                                     enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
+                                    rebuildPerformanceCaches();
                                     redraw();
                                 } else if (localTime > remoteTime) {
                                     console.log("Local state is newer than Supabase. Pushing local changes to Supabase...");
@@ -11022,27 +11049,30 @@ window.addEventListener('DOMContentLoaded', loadStartupData);
 const save = () => {
     data.updatedAt = new Date().toISOString();
     localStorage.setItem('idealog', JSON.stringify(data));
+    rebuildPerformanceCaches();
+    
     if (supabaseClient && isAutoSyncEnabled) {
-        pushStateToSupabase().catch(err => {
-            console.error("Delayed Supabase push failed:", err);
-            updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
-        });
+        updateSupabaseStatusBadge('syncing', '● Sync Pending (30s)...', '#f59e0b');
+        clearTimeout(syncTimeout);
+        syncTimeout = setTimeout(async () => {
+            try {
+                await pushStateToSupabase();
+                updateSupabaseStatusBadge('online', '● Cloud Online (Synced)', '#10b981');
+            } catch (err) {
+                console.error("Delayed Supabase push failed:", err);
+                updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
+            }
+        }, 30000); // Wait 30 seconds before executing sync
     }
 };
 const uid  = () => 'n' + Math.random().toString(36).slice(2,9);
 
 function allNodes(node, out=[]) { out.push(node); (node.children||[]).forEach(c=>allNodes(c,out)); return out; }
-function findNode(id, node=data) {
-    if(node.id===id) return node;
-    for(const c of (node.children||[])) { const f=findNode(id,c); if(f) return f; }
-    return null;
+function findNode(id) {
+    return nodeCache.get(id) || null;
 }
-function findParent(id, node=data) {
-    for(const c of (node.children||[])) {
-        if(c.id===id) return node;
-        const f=findParent(id,c); if(f) return f;
-    }
-    return null;
+function findParent(id) {
+    return parentCache.get(id) || null;
 }
 
 const sColor = s => ({todo:'#6366f1',inprogress:'#f59e0b',inprogress_bg:'#8b5cf6',done:'#10b981',obsolete:'#64748b'}[s]||'#6366f1');
@@ -12350,136 +12380,212 @@ function renderTaskSheet() {
         </div>
     `;
 
-    let tbodyHtml = '';
-    tasks.forEach(t => {
-        const parentProj = findParent(t.id);
-        const parentId = parentProj ? parentProj.id : '';
+    // Build fragment to prevent excessive layout shifts and paints
+    const fragment = document.createDocumentFragment();
+    
+    // Create and append toolbar
+    const toolbarContainer = document.createElement('div');
+    toolbarContainer.innerHTML = toolbarHtml;
+    fragment.appendChild(toolbarContainer.firstElementChild);
 
-        // Generate Project Select Options (Level 3 nodes)
-        let projOptions = '';
-        projects.forEach(p => {
-            projOptions += `<option value="${p.id}" ${p.id === parentId ? 'selected' : ''}>${p.title}</option>`;
-        });
+    // Create table structure programmatically
+    const table = document.createElement('table');
+    table.className = `excel-table ${freezeHeaders ? 'headers-frozen' : ''}`;
 
-        // Generate Status Select Options
-        const statuses = [
-            { key: 'todo', label: 'Todo' },
-            { key: 'inprogress', label: 'In Progress' },
-            { key: 'inprogress_bg', label: 'In Progress in BG' },
-            { key: 'done', label: 'Done' },
-            { key: 'obsolete', label: 'Obsolete' }
-        ];
-        let statusOptions = '';
-        statuses.forEach(s => {
-            statusOptions += `<option value="${s.key}" ${s.key === t.status ? 'selected' : ''}>${s.label}</option>`;
-        });
+    // Create Table Header (thead)
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
 
-        // Generate Assignee Select Options from ObjectList
-        let assigneeOptions = `<option value="">Unassigned</option>`;
-        objectLists.assignees.forEach(name => {
-            assigneeOptions += `<option value="${name}" ${name === t.assignee ? 'selected' : ''}>${name}</option>`;
-        });
-
-        // Render dynamic values cells based on sheetColumns array keys as dropdown selects
-        let dynamicCellsHtml = '';
-        sheetColumns.forEach(col => {
-            const val = t[col.key] || '';
-            const lowerLabel = col.label.toLowerCase();
-            const escapedVal = escapeHtml(val);
-            
-            if (lowerLabel === 'system') {
-                dynamicCellsHtml += `
-                    <td>
-                        <input class="excel-input" type="text" placeholder="System" value="${escapedVal}" oninput="showAutocomplete(this, 'systems', (newVal) => { updateTaskPropFromSheet('${t.id}', '${col.key}', newVal); renderSheet(); })" onchange="updateTaskPropFromSheet('${t.id}', '${col.key}', this.value)">
-                    </td>
-                `;
-            } else if (lowerLabel === 'subsystem') {
-                dynamicCellsHtml += `
-                    <td>
-                        <input class="excel-input" type="text" placeholder="Subsystem" value="${escapedVal}" oninput="showAutocomplete(this, 'subsystems', (newVal) => { updateTaskPropFromSheet('${t.id}', '${col.key}', newVal); renderSheet(); })" onchange="updateTaskPropFromSheet('${t.id}', '${col.key}', this.value)">
-                    </td>
-                `;
-            } else {
-                dynamicCellsHtml += `
-                    <td>
-                        <input class="excel-input" type="text" placeholder="${col.label}" value="${escapedVal}" onchange="updateTaskPropFromSheet('${t.id}', '${col.key}', this.value)">
-                    </td>
-                `;
-            }
-        });
-
-        // Calculate fade background tint based on modified age using highlightDurationDays input (10% max opacity)
-        let rowStyle = '';
-        if (t.updatedAt && highlightDurationDays > 0) {
-            const ageMs = Date.now() - new Date(t.updatedAt).getTime();
-            const durationMs = highlightDurationDays * 24 * 60 * 60 * 1000;
-            if (ageMs < durationMs) {
-                const opacity = (1 - (ageMs / durationMs)) * 0.10; // toned down starting opacity to 10%
-                rowStyle = `style="background: rgba(16, 185, 129, ${opacity}) !important;"`;
-            }
-        }
-
-        tbodyHtml += `
-            <tr data-task-id="${t.id}" ${rowStyle}>
-                <td>
-                    <input class="excel-input" type="text" placeholder="Project" value="${parentProj ? escapeHtml(parentProj.title) : ''}" oninput="showAutocomplete(this, 'projects', (val) => { moveTaskProjectByTitle('${t.id}', val); renderSheet(); })" onchange="moveTaskProjectByTitle('${t.id}', this.value)">
-                </td>
-                <td>
-                    <input class="excel-input" type="text" value="${escapeHtml(t.title)}" onchange="updateTaskTitleFromSheet('${t.id}', this.value)">
-                </td>
-                <td>
-                    <input class="excel-input" type="text" placeholder="Assignee" value="${escapeHtml(t.assignee || '')}" oninput="showAutocomplete(this, 'assignees', (val) => { updateTaskAssigneeFromSheet('${t.id}', val); renderSheet(); })" onchange="updateTaskAssigneeFromSheet('${t.id}', this.value)">
-                </td>
-                ${dynamicCellsHtml}
-                <td>
-                    <select class="excel-select" onchange="updateTaskStatusFromSheet('${t.id}', this.value)">
-                        ${statusOptions}
-                    </select>
-                </td>
-                <td style="text-align:center;">
-                    <button class="btn-gantt-action" style="color:#f87171;" onclick="deleteSheetTask('${t.id}')">Delete</button>
-                </td>
-            </tr>
-        `;
+    const staticHeaders = ['Project', 'Task Title', 'Assignee'];
+    staticHeaders.forEach(text => {
+        const th = document.createElement('th');
+        th.textContent = text;
+        headerRow.appendChild(th);
     });
 
-    // Create column headers
-    let thsHtml = '';
+    // Generate sheetColumns dynamic header cells
     sheetColumns.forEach((col, idx) => {
-        thsHtml += `
-            <th draggable="true" 
-                ondragstart="handleTaskColDragStart(event, ${idx})" 
-                ondragover="event.preventDefault()" 
-                ondrop="handleTaskColDrop(event, ${idx})"
-                style="cursor: grab;">
-                <div class="sheet-th-wrap">
-                    <input class="sheet-th-input" type="text" value="${col.label}" onchange="renameSheetColumn(${idx}, this.value)" style="cursor: text;">
-                    <button class="sheet-th-btn" onclick="deleteSheetColumn(${idx})">×</button>
-                </div>
-            </th>
-        `;
+        const th = document.createElement('th');
+        th.draggable = true;
+        th.style.cursor = 'grab';
+        th.ondragstart = (e) => handleTaskColDragStart(e, idx);
+        th.ondragover = (e) => e.preventDefault();
+        th.ondrop = (e) => handleTaskColDrop(e, idx);
+
+        const wrap = document.createElement('div');
+        wrap.className = 'sheet-th-wrap';
+
+        const input = document.createElement('input');
+        input.className = 'sheet-th-input';
+        input.type = 'text';
+        input.value = col.label;
+        input.style.cursor = 'text';
+        input.onchange = (e) => renameSheetColumn(idx, e.target.value);
+
+        const btn = document.createElement('button');
+        btn.className = 'sheet-th-btn';
+        btn.textContent = '×';
+        btn.onclick = () => deleteSheetColumn(idx);
+
+        wrap.appendChild(input);
+        wrap.appendChild(btn);
+        th.appendChild(wrap);
+        headerRow.appendChild(th);
     });
 
-    const colspanVal = 4 + sheetColumns.length;
+    const statusTh = document.createElement('th');
+    statusTh.textContent = 'Status';
+    headerRow.appendChild(statusTh);
 
-    area.innerHTML = `
-        ${toolbarHtml}
-        <table class="excel-table ${freezeHeaders ? 'headers-frozen' : ''}">
-            <thead>
-                <tr>
-                    <th>Project</th>
-                    <th>Task Title</th>
-                    <th>Assignee</th>
-                    ${thsHtml}
-                    <th>Status</th>
-                    <th style="width:100px;text-align:center;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${tbodyHtml || `<tr><td colspan="${colspanVal}" style="text-align:center;color:var(--text-muted);">No tasks found. Click Add Task Row to start.</td></tr>`}
-            </tbody>
-        </table>
-    `;
+    const actionsTh = document.createElement('th');
+    actionsTh.style.width = '100px';
+    actionsTh.style.textAlign = 'center';
+    actionsTh.textContent = 'Actions';
+    headerRow.appendChild(actionsTh);
+
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // Create Table Body (tbody)
+    const tbody = document.createElement('tbody');
+
+    if (tasks.length === 0) {
+        const colspanVal = 5 + sheetColumns.length;
+        const emptyRow = document.createElement('tr');
+        emptyRow.innerHTML = `<td colspan="${colspanVal}" style="text-align:center;color:var(--text-muted);">No tasks found. Click Add Task Row to start.</td></tr>`;
+        tbody.appendChild(emptyRow);
+    } else {
+        tasks.forEach(t => {
+            const parentProj = findParent(t.id);
+            const parentId = parentProj ? parentProj.id : '';
+
+            const row = document.createElement('tr');
+            row.setAttribute('data-task-id', t.id);
+
+            // Calculate highlight fade background tint
+            if (t.updatedAt && highlightDurationDays > 0) {
+                const ageMs = Date.now() - new Date(t.updatedAt).getTime();
+                const durationMs = highlightDurationDays * 24 * 60 * 60 * 1000;
+                if (ageMs < durationMs) {
+                    const opacity = (1 - (ageMs / durationMs)) * 0.10;
+                    row.style.cssText = `background: rgba(16, 185, 129, ${opacity}) !important;`;
+                }
+            }
+
+            // Cell 1: Project Auto-suggest Input
+            const tdProj = document.createElement('td');
+            const inProj = document.createElement('input');
+            inProj.className = 'excel-input';
+            inProj.type = 'text';
+            inProj.placeholder = 'Project';
+            inProj.value = parentProj ? parentProj.title : '';
+            inProj.oninput = function() {
+                showAutocomplete(this, 'projects', (val) => { moveTaskProjectByTitle(t.id, val); renderSheet(); });
+            };
+            inProj.onchange = function() {
+                moveTaskProjectByTitle(t.id, this.value);
+            };
+            tdProj.appendChild(inProj);
+            row.appendChild(tdProj);
+
+            // Cell 2: Task Title Input
+            const tdTitle = document.createElement('td');
+            const inTitle = document.createElement('input');
+            inTitle.className = 'excel-input';
+            inTitle.type = 'text';
+            inTitle.value = t.title || '';
+            inTitle.onchange = function() {
+                updateTaskTitleFromSheet(t.id, this.value);
+            };
+            tdTitle.appendChild(inTitle);
+            row.appendChild(tdTitle);
+
+            // Cell 3: Assignee Input
+            const tdAssignee = document.createElement('td');
+            const inAssignee = document.createElement('input');
+            inAssignee.className = 'excel-input';
+            inAssignee.type = 'text';
+            inAssignee.placeholder = 'Assignee';
+            inAssignee.value = t.assignee || '';
+            inAssignee.oninput = function() {
+                showAutocomplete(this, 'assignees', (val) => { updateTaskAssigneeFromSheet(t.id, val); renderSheet(); });
+            };
+            inAssignee.onchange = function() {
+                updateTaskAssigneeFromSheet(t.id, this.value);
+            };
+            tdAssignee.appendChild(inAssignee);
+            row.appendChild(tdAssignee);
+
+            // Cells 4+: Dynamic Columns
+            sheetColumns.forEach(col => {
+                const tdDyn = document.createElement('td');
+                const inDyn = document.createElement('input');
+                inDyn.className = 'excel-input';
+                inDyn.type = 'text';
+                inDyn.placeholder = col.label;
+                inDyn.value = t[col.key] || '';
+
+                const lowerLabel = col.label.toLowerCase();
+                if (lowerLabel === 'system') {
+                    inDyn.oninput = function() {
+                        showAutocomplete(this, 'systems', (newVal) => { updateTaskPropFromSheet(t.id, col.key, newVal); renderSheet(); });
+                    };
+                } else if (lowerLabel === 'subsystem') {
+                    inDyn.oninput = function() {
+                        showAutocomplete(this, 'subsystems', (newVal) => { updateTaskPropFromSheet(t.id, col.key, newVal); renderSheet(); });
+                    };
+                }
+                inDyn.onchange = function() {
+                    updateTaskPropFromSheet(t.id, col.key, this.value);
+                };
+
+                tdDyn.appendChild(inDyn);
+                row.appendChild(tdDyn);
+            });
+
+            // Cell Status Select Dropdown
+            const tdStatus = document.createElement('td');
+            const selectStatus = document.createElement('select');
+            selectStatus.className = 'excel-select';
+            selectStatus.onchange = function() {
+                updateTaskStatusFromSheet(t.id, this.value);
+            };
+
+            const statuses = [
+                { key: 'todo', label: 'Todo' },
+                { key: 'inprogress', label: 'In Progress' },
+                { key: 'inprogress_bg', label: 'In Progress in BG' },
+                { key: 'done', label: 'Done' },
+                { key: 'obsolete', label: 'Obsolete' }
+            ];
+            statuses.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.key;
+                opt.textContent = s.label;
+                if (s.key === t.status) opt.selected = true;
+                selectStatus.appendChild(opt);
+            });
+            tdStatus.appendChild(selectStatus);
+            row.appendChild(tdStatus);
+
+            // Cell Actions (Delete button)
+            const tdAction = document.createElement('td');
+            tdAction.style.textAlign = 'center';
+            const btnDel = document.createElement('button');
+            btnDel.className = 'btn-gantt-action';
+            btnDel.style.color = '#f87171';
+            btnDel.textContent = 'Delete';
+            btnDel.onclick = () => deleteSheetTask(t.id);
+            tdAction.appendChild(btnDel);
+            row.appendChild(tdAction);
+
+            tbody.appendChild(row);
+        });
+    }
+
+    table.appendChild(tbody);
+    fragment.appendChild(table);
+    area.appendChild(fragment);
 }
 
 function updateTaskTitleFromSheet(id, val) {
@@ -13629,7 +13735,16 @@ function showAutocomplete(inputEl, type, onSelect) {
     }
 
     const val = inputEl.value.trim().toLowerCase();
-    const list = objectLists[type] || [];
+    
+    // Map autocomplete names to our cached sets
+    let listSet = null;
+    if (type === 'assignees') listSet = cachedObjectLists.assignees;
+    else if (type === 'systems') listSet = cachedObjectLists.systems;
+    else if (type === 'subsystems') listSet = cachedObjectLists.subsystems;
+    else if (type === 'projects') listSet = cachedObjectLists.projects;
+    
+    // Fallback to legacy objectLists array if not cached
+    const list = listSet ? Array.from(listSet) : (objectLists[type] || []);
     
     // Suggest items matching typed keyword
     const matches = list.filter(item => item.toLowerCase().includes(val));
@@ -13671,6 +13786,13 @@ function showAutocomplete(inputEl, type, onSelect) {
             objectLists[type].push(originalVal);
             objectLists[type].sort((a,b) => a.localeCompare(b));
             saveObjectLists();
+            
+            // Sync new entry into our fast memory cache
+            if (type === 'assignees') cachedObjectLists.assignees.add(originalVal);
+            else if (type === 'systems') cachedObjectLists.systems.add(originalVal);
+            else if (type === 'subsystems') cachedObjectLists.subsystems.add(originalVal);
+            else if (type === 'projects') cachedObjectLists.projects.add(originalVal);
+            
             inputEl.value = originalVal;
             onSelect(originalVal);
             box.remove();
