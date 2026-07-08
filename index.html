@@ -10931,8 +10931,6 @@ async function loadStartupData() {
 window.addEventListener('DOMContentLoaded', loadStartupData);
 
 const save = () => {
-    // Skip saving updates to Local Storage or Supabase if this is an unsaved task draft
-    if (isNewDraft) return;
     localStorage.setItem('idealog', JSON.stringify(data));
     if (supabaseClient) {
         pushStateToSupabase().catch(err => {
@@ -14474,20 +14472,14 @@ function selectNode(id) {
     renderCommentsFeed(n);
     
     
-    // Dynamically show Save Changes and Cancel buttons if editing an unsaved draft task, otherwise standard buttons
+    // Always display the explicit "✓ Save Task" button in the properties panel.
+    // Deleting tasks is kept safe by keeping it on the spreadsheet grid itself.
     const actionsDiv = document.querySelector('#properties-panel .panel-actions');
     if (actionsDiv) {
-        if (isNewDraft) {
-            actionsDiv.innerHTML = `
-                <button class="btn-sm btn-secondary" onclick="saveNewTaskDraft()" style="background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.25);">✓ Save Task</button>
-                <button class="btn-sm btn-danger" onclick="cancelNewTaskDraft()">Cancel</button>
-            `;
-        } else {
-            actionsDiv.innerHTML = `
-                <button class="btn-sm btn-secondary" onclick="addFollowupTask()">Followup Task</button>
-                <button class="btn-sm btn-danger" onclick="deleteSelected()">Delete</button>
-            `;
-        }
+        actionsDiv.innerHTML = `
+            <button class="btn-sm btn-secondary" onclick="saveNewTaskDraft()" style="background: rgba(16,185,129,0.15); color: #34d399; border-color: rgba(16,185,129,0.25); height: 36px; font-weight: 600; font-size: 13px;">✓ Save Task</button>
+            <button class="btn-sm btn-secondary" onclick="addFollowupTask()" style="height: 36px; font-size: 12px;">Followup Task</button>
+        `;
     }
 
     setStatusPills(n.status);
@@ -14598,13 +14590,13 @@ function handleTagInput(e) {
         if(!val) return;
         const n=findNode(selectedId); if(!n) return;
         if(!n.tags) n.tags=[];
-        if(!n.tags.includes(val)){ n.tags.push(val); save(); renderTagPills(n.tags); }
+        if(!n.tags.includes(val)){ n.tags.push(val); savePropMemoryOnly(); renderTagPills(n.tags); }
         e.target.value='';
     }
 }
 function removeTag(tag) {
     const n=findNode(selectedId); if(!n) return;
-    n.tags=(n.tags||[]).filter(t=>t!==tag); save(); renderTagPills(n.tags);
+    n.tags=(n.tags||[]).filter(t=>t!==tag); savePropMemoryOnly(); renderTagPills(n.tags);
 }
 function updateTitle(val) {
     const n=findNode(selectedId); if(!n) return;
@@ -14613,7 +14605,7 @@ function updateTitle(val) {
     if (oldVal.trim() !== newVal.trim()) {
         n.title=val;
         n.updatedAt = new Date().toISOString();
-        save();
+        savePropMemoryOnly();
     }
     clearTimeout(titleTimer);
     if(currentView==='mindmap' && mmG){
@@ -14670,8 +14662,13 @@ function updateProp(prop,val) {
         }
     }
     
-    save();
+    savePropMemoryOnly();
     if(currentView!=='mindmap') redraw();
+}
+
+function savePropMemoryOnly() {
+    // Simply redrawing and keeping variables updated in variables in-memory.
+    // Real-time autosaves inside the sidebar panel elements are skipped until "Save Task" button is explicitly clicked.
 }
 function closePanel() {
     selectedId=null;
