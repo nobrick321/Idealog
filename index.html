@@ -12691,6 +12691,9 @@ function deleteSheetTask(taskId) {
     const parent = findParent(taskId);
     if (parent) {
         parent.children = parent.children.filter(c => c.id !== taskId);
+        if (data.history) {
+            data.history = data.history.filter(ev => ev.taskId !== taskId);
+        }
         save();
         renderSheet();
     }
@@ -14870,6 +14873,9 @@ function deleteSelected() {
     if(!selectedId||selectedId==='root') return;
     const parent=findParent(selectedId); if(!parent) return;
     parent.children=parent.children.filter(c=>c.id!==selectedId);
+    if (data.history) {
+        data.history = data.history.filter(ev => ev.taskId !== selectedId);
+    }
     isNewDraft = false;
     save(); selectedId=null;
     document.getElementById('properties-panel').classList.remove('open');
