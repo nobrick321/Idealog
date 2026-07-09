@@ -14932,7 +14932,18 @@ function addChildTo(parentId) {
     }
 
     // Default node variables mapping to level requirements
-    const node = { id: uid(), title: 'New Node', status: 'todo', assignee: '', tags: [], notes: '', children: [] };
+    const nowIso = new Date().toISOString();
+    const node = { 
+        id: uid(), 
+        title: 'New Node', 
+        status: 'todo', 
+        assignee: '', 
+        tags: [], 
+        notes: '', 
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        children: [] 
+    };
     
     // Auto-populate systems, subsystems, or projects path metadata fields on the new node if it is a level 4 task leaf
     if (depth === 3) {
@@ -14963,12 +14974,15 @@ function addFollowupTask() {
     if (!parent) return;
     
     // Create new node copying all attributes except ID, title, status, and comments
+    const nowIso = new Date().toISOString();
     const followupNode = {
         id: uid(),
         title: 'Followup of ' + current.title,
         status: 'todo',
         assignee: current.assignee || '',
         tags: current.tags ? [...current.tags] : [],
+        createdAt: nowIso,
+        updatedAt: nowIso,
         children: []
     };
     
