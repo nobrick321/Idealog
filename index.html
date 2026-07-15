@@ -1127,23 +1127,23 @@
                     </div>
                 </div>
                 <div class="prop-group">
-                     <div class="prop-label">Assignee</div>
-                     <input class="prop-input" id="prop-assignee" type="text" placeholder="@person" onchange="updateProp('assignee', this.value)" oninput="showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })" onfocus="showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })">
-                 </div>
+                      <div class="prop-label">Assignee</div>
+                      <input class="prop-input" id="prop-assignee" type="text" placeholder="@person" onchange="updateProp('assignee', this.value)" oninput="updateProp('assignee', this.value); showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })" onfocus="showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })">
+                  </div>
 
-                 <div class="prop-group">
-                     <div class="prop-label">Project</div>
-                     <input class="prop-input" id="prop-project" type="text" placeholder="Project Name" onchange="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }" oninput="showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })" onfocus="showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })">
-                 </div>
+                  <div class="prop-group">
+                      <div class="prop-label">Project</div>
+                      <input class="prop-input" id="prop-project" type="text" placeholder="Project Name" onchange="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }" oninput="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }; showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })" onfocus="showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })">
+                  </div>
 
-                 <div class="prop-group">
-                     <div class="prop-label">System</div>
-                     <input class="prop-input" id="prop-system" type="text" placeholder="e.g. Auth System" onchange="updateProp('system', this.value)" oninput="showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })" onfocus="showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })">
-                 </div>
-                 <div class="prop-group">
-                     <div class="prop-label">Subsystem</div>
-                     <input class="prop-input" id="prop-subsystem" type="text" placeholder="e.g. Session Handler" onchange="updateProp('subsystem', this.value)" oninput="showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })" onfocus="showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })">
-                 </div>
+                  <div class="prop-group">
+                      <div class="prop-label">System</div>
+                      <input class="prop-input" id="prop-system" type="text" placeholder="e.g. Auth System" onchange="updateProp('system', this.value)" oninput="updateProp('system', this.value); showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })" onfocus="showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })">
+                  </div>
+                  <div class="prop-group">
+                      <div class="prop-label">Subsystem</div>
+                      <input class="prop-input" id="prop-subsystem" type="text" placeholder="e.g. Session Handler" onchange="updateProp('subsystem', this.value)" oninput="updateProp('subsystem', this.value); showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })" onfocus="showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })">
+                  </div>
                 
                 <!-- Dynamic Custom Columns Container -->
                 <div id="dynamic-props-container"></div>
@@ -10787,6 +10787,7 @@ const collapsed = new Set();
 let isAutoSyncEnabled = localStorage.getItem('idealog_auto_sync') !== 'false';
 let syncPollingInterval = null;
 let syncTimeout = null;
+let titleTimer = null;
 
 // --- DYNAMIC PERFORMANCE CACHES ---
 let nodeCache = new Map();
@@ -14599,6 +14600,7 @@ function addPivotTask(rowVal, colVal) {
 
     const parentProj = findNode(projId);
     if (parentProj) {
+        const nowIso = new Date().toISOString();
         const task = {
             id: uid(),
             title: 'New Task',
@@ -14608,6 +14610,8 @@ function addPivotTask(rowVal, colVal) {
             subsystem: subsystem,
             tags: [],
             notes: '',
+            createdAt: nowIso,
+            updatedAt: nowIso,
             children: []
         };
         parentProj.children.push(task);
@@ -14667,6 +14671,7 @@ function selectNode(id) {
                     updateProp(col.key, this.value);
                 };
                 input.oninput = function() {
+                    updateProp(col.key, this.value);
                     showAutocomplete(this, col.key, (val) => { updateProp(col.key, val); this.value = val; });
                 };
                 input.onfocus = function() {
