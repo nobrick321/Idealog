@@ -10788,6 +10788,7 @@ let isAutoSyncEnabled = localStorage.getItem('idealog_auto_sync') !== 'false';
 let syncPollingInterval = null;
 let syncTimeout = null;
 let titleTimer = null;
+let isNewDraft = false;
 
 // --- DYNAMIC PERFORMANCE CACHES ---
 let nodeCache = new Map();
