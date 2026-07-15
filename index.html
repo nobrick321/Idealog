@@ -10847,6 +10847,12 @@ function startSyncPolling() {
     syncPollingInterval = setInterval(async () => {
         if (!isAutoSyncEnabled || !supabaseClient) return;
         
+        // Skip polling download check if we have a pending local save sync in progress
+        if (syncTimeout !== null) {
+            console.log("Polling check skipped: Local changes are currently queued for upload.");
+            return;
+        }
+        
         try {
             const { data: { user } } = await supabaseClient.auth.getUser();
             if (!user) return;
@@ -11062,6 +11068,8 @@ const save = () => {
             } catch (err) {
                 console.error("Delayed Supabase push failed:", err);
                 updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
+            } finally {
+                syncTimeout = null;
             }
         }, 30000); // Wait 30 seconds before executing sync
     }
