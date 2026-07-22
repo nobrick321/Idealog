@@ -14477,6 +14477,76 @@ function renderPivotTable() {
             activePivotHighlightValue = null;
             activePivotSelectedTaskId = rows[activePivotSelectedRowIdx].taskId;
         }
+        
+        // If properties panel is currently open on screen, automatically update it to focus the active highlighted row task
+        const panel = document.getElementById('properties-panel');
+        if (panel && panel.classList.contains('open')) {
+            const currentHighlightTaskId = rows[activePivotSelectedRowIdx].taskId;
+            if (currentHighlightTaskId && currentHighlightTaskId !== selectedId) {
+                // selectNode changes selectedId, updates details and does a redraw
+                selectedId = currentHighlightTaskId;
+                const n = findNode(currentHighlightTaskId);
+                if (n) {
+                    document.getElementById('prop-title').value = n.title;
+                    document.getElementById('prop-assignee').value = n.assignee || '';
+                    
+                    const parentProj = findParent(n.id);
+                    document.getElementById('prop-project').value = (parentProj && parentProj.id !== 'root') ? parentProj.title : (n.project || '');
+                    
+                    document.getElementById('prop-system').value = n.system || '';
+                    document.getElementById('prop-subsystem').value = n.subsystem || '';
+                    
+                    const dynContainer = document.getElementById('dynamic-props-container');
+                    if (dynContainer) {
+                        dynContainer.innerHTML = '';
+                        sheetColumns.forEach(col => {
+                            const lowerL = col.label.toLowerCase();
+                            if (lowerL !== 'system' && lowerL !== 'subsystem' && lowerL !== 'project' && lowerL !== 'assignee') {
+                                const propGrp = document.createElement('div');
+                                propGrp.className = 'prop-group';
+                                propGrp.style.marginBottom = '12px';
+                                
+                                const label = document.createElement('div');
+                                label.className = 'prop-label';
+                                label.textContent = col.label;
+                                
+                                const input = document.createElement('input');
+                                input.className = 'prop-input';
+                                input.type = 'text';
+                                input.placeholder = col.label;
+                                input.value = n[col.key] || '';
+                                input.setAttribute('autocomplete', 'off');
+                                
+                                input.onchange = function() {
+                                    updateProp(col.key, this.value);
+                                };
+                                input.oninput = function() {
+                                    showAutocomplete(this, col.key, (val) => { updateProp(col.key, val); this.value = val; });
+                                };
+                                input.onfocus = function() {
+                                    showAutocomplete(this, col.key, (val) => { updateProp(col.key, val); this.value = val; });
+                                };
+                                
+                                propGrp.appendChild(label);
+                                propGrp.appendChild(input);
+                                dynContainer.appendChild(propGrp);
+                            }
+                        });
+                    }
+                    renderCommentsFeed(n);
+                    const actionsDiv = document.querySelector('#properties-panel .panel-actions');
+                    if (actionsDiv) {
+                        actionsDiv.innerHTML = `
+                            <button class="btn-sm btn-secondary" onclick="addFollowupTask()" style="height: 36px; font-size: 12px;">Followup Task</button>
+                            <button class="btn-sm btn-danger" onclick="deleteSelected()" style="height: 36px; font-size: 12px;">Delete</button>
+                        `;
+                    }
+                    setStatusPills(n.status);
+                    renderTagPills(n.tags || []);
+                }
+            }
+        }
+        
         renderPivotTable();
     };
 
