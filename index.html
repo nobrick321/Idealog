@@ -1128,21 +1128,21 @@
                 </div>
                 <div class="prop-group">
                       <div class="prop-label">Assignee</div>
-                      <input class="prop-input" id="prop-assignee" type="text" placeholder="@person" onchange="updateProp('assignee', this.value)" oninput="updateProp('assignee', this.value); showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })" onfocus="showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })">
+                      <input class="prop-input" id="prop-assignee" type="text" placeholder="@person" autocomplete="off" onchange="updateProp('assignee', this.value)" oninput="updateProp('assignee', this.value); showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })" onfocus="showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })">
                   </div>
 
                   <div class="prop-group">
                       <div class="prop-label">Project</div>
-                      <input class="prop-input" id="prop-project" type="text" placeholder="Project Name" onchange="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }" oninput="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }; showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })" onfocus="showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })">
+                      <input class="prop-input" id="prop-project" type="text" placeholder="Project Name" autocomplete="off" onchange="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }" oninput="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }; showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })" onfocus="showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })">
                   </div>
 
                   <div class="prop-group">
                       <div class="prop-label">System</div>
-                      <input class="prop-input" id="prop-system" type="text" placeholder="e.g. Auth System" onchange="updateProp('system', this.value)" oninput="updateProp('system', this.value); showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })" onfocus="showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })">
+                      <input class="prop-input" id="prop-system" type="text" placeholder="e.g. Auth System" autocomplete="off" onchange="updateProp('system', this.value)" oninput="updateProp('system', this.value); showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })" onfocus="showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })">
                   </div>
                   <div class="prop-group">
                       <div class="prop-label">Subsystem</div>
-                      <input class="prop-input" id="prop-subsystem" type="text" placeholder="e.g. Session Handler" onchange="updateProp('subsystem', this.value)" oninput="updateProp('subsystem', this.value); showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })" onfocus="showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })">
+                      <input class="prop-input" id="prop-subsystem" type="text" placeholder="e.g. Session Handler" autocomplete="off" onchange="updateProp('subsystem', this.value)" oninput="updateProp('subsystem', this.value); showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })" onfocus="showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })">
                   </div>
                 
                 <!-- Dynamic Custom Columns Container -->
@@ -12489,6 +12489,7 @@ function renderTaskSheet() {
             inProj.type = 'text';
             inProj.placeholder = 'Project';
             inProj.value = parentProj ? parentProj.title : '';
+            inProj.setAttribute('autocomplete', 'off');
             inProj.oninput = function() {
                 showAutocomplete(this, 'projects', (val) => { moveTaskProjectByTitle(t.id, val); renderSheet(); });
             };
@@ -12517,6 +12518,7 @@ function renderTaskSheet() {
             inAssignee.type = 'text';
             inAssignee.placeholder = 'Assignee';
             inAssignee.value = t.assignee || '';
+            inAssignee.setAttribute('autocomplete', 'off');
             inAssignee.oninput = function() {
                 showAutocomplete(this, 'assignees', (val) => { updateTaskAssigneeFromSheet(t.id, val); renderSheet(); });
             };
@@ -12534,6 +12536,7 @@ function renderTaskSheet() {
                 inDyn.type = 'text';
                 inDyn.placeholder = col.label;
                 inDyn.value = t[col.key] || '';
+                inDyn.setAttribute('autocomplete', 'off');
 
                 const lowerLabel = col.label.toLowerCase();
                 if (lowerLabel === 'system') {
@@ -14675,6 +14678,7 @@ function selectNode(id) {
                 input.type = 'text';
                 input.placeholder = col.label;
                 input.value = n[col.key] || '';
+                input.setAttribute('autocomplete', 'off');
                 
                 input.onchange = function() {
                     updateProp(col.key, this.value);
