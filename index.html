@@ -1233,7 +1233,7 @@
             </div>
             <div class="prop-group">
                 <div class="prop-label" style="margin-bottom: 4px;">2. Select Destination Item</div>
-                <select id="bulk-merge-destination-select" style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 7px; font-size: 13px; outline: none;">
+                <select id="bulk-merge-destination-select" style="width: 100%; background: #131924; border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 7px; font-size: 13px; outline: none;">
                     <!-- Options generated dynamically -->
                 </select>
             </div>
@@ -13764,6 +13764,8 @@ function openBulkMergeModal(type) {
         const opt = document.createElement('option');
         opt.value = item;
         opt.textContent = item;
+        opt.style.background = '#131924';
+        opt.style.color = 'var(--text)';
         destSelect.appendChild(opt);
     });
     
