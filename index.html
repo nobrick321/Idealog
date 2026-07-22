@@ -1128,21 +1128,21 @@
                 </div>
                 <div class="prop-group">
                       <div class="prop-label">Assignee</div>
-                      <input class="prop-input" id="prop-assignee" type="text" placeholder="@person" autocomplete="off" onchange="updateProp('assignee', this.value)" oninput="updateProp('assignee', this.value); showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })" onfocus="showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })">
+                      <input class="prop-input" id="prop-assignee" type="text" placeholder="@person" autocomplete="off" onchange="updateProp('assignee', this.value)" oninput="showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })" onfocus="showAutocomplete(this, 'assignees', (val) => { updateProp('assignee', val); this.value = val; })">
                   </div>
 
                   <div class="prop-group">
                       <div class="prop-label">Project</div>
-                      <input class="prop-input" id="prop-project" type="text" placeholder="Project Name" autocomplete="off" onchange="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }" oninput="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }; showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })" onfocus="showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })">
+                      <input class="prop-input" id="prop-project" type="text" placeholder="Project Name" autocomplete="off" onchange="const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, this.value); document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; }" oninput="showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })" onfocus="showAutocomplete(this, 'projects', (val) => { const n = findNode(selectedId); if (n) { moveTaskProjectByTitle(n.id, val); this.value = val; document.getElementById('prop-system').value = n.system || ''; document.getElementById('prop-subsystem').value = n.subsystem || ''; } })">
                   </div>
 
                   <div class="prop-group">
                       <div class="prop-label">System</div>
-                      <input class="prop-input" id="prop-system" type="text" placeholder="e.g. Auth System" autocomplete="off" onchange="updateProp('system', this.value)" oninput="updateProp('system', this.value); showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })" onfocus="showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })">
+                      <input class="prop-input" id="prop-system" type="text" placeholder="e.g. Auth System" autocomplete="off" onchange="updateProp('system', this.value)" oninput="showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })" onfocus="showAutocomplete(this, 'systems', (val) => { updateProp('system', val); this.value = val; })">
                   </div>
                   <div class="prop-group">
                       <div class="prop-label">Subsystem</div>
-                      <input class="prop-input" id="prop-subsystem" type="text" placeholder="e.g. Session Handler" autocomplete="off" onchange="updateProp('subsystem', this.value)" oninput="updateProp('subsystem', this.value); showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })" onfocus="showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })">
+                      <input class="prop-input" id="prop-subsystem" type="text" placeholder="e.g. Session Handler" autocomplete="off" onchange="updateProp('subsystem', this.value)" oninput="showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })" onfocus="showAutocomplete(this, 'subsystems', (val) => { updateProp('subsystem', val); this.value = val; })">
                   </div>
                 
                 <!-- Dynamic Custom Columns Container -->
@@ -13814,18 +13814,47 @@ function showAutocomplete(inputEl, type, onSelect) {
         box.appendChild(addDiv);
     }
 
+    // Guard to restore previous saved value if input is blurred without choosing an option from the autocomplete list
+    if (!inputEl.dataset.hasBlurHandler) {
+        inputEl.dataset.hasBlurHandler = 'true';
+        inputEl.addEventListener('blur', (e) => {
+            // Delay slightly to let click/mousedown events on suggestion items register first
+            setTimeout(() => {
+                const n = findNode(selectedId) || (typeof t !== 'undefined' ? t : null);
+                if (n) {
+                    let savedVal = n[type] || '';
+                    if (savedVal === undefined || savedVal === '') {
+                        if (type === 'assignees') savedVal = n.assignee || '';
+                        else if (type === 'systems') savedVal = n.system || '';
+                        else if (type === 'subsystems') savedVal = n.subsystem || '';
+                        else if (type === 'projects') {
+                            const parentProj = findParent(n.id);
+                            savedVal = (parentProj && parentProj.id !== 'root') ? parentProj.title : (n.project || '');
+                        } else {
+                            // custom column mapping
+                            savedVal = n[type] || '';
+                        }
+                    }
+                    if (inputEl.value !== savedVal) {
+                        inputEl.value = savedVal;
+                    }
+                }
+                if (activeAutocompleteEl) {
+                    activeAutocompleteEl.remove();
+                    activeAutocompleteEl = null;
+                }
+            }, 200);
+        });
+    }
+
     // Attach keydown listener to inputEl to prevent Enter key auto-selecting/adding options
-    // and blur the input field instead to save current typed text without creation
+    // and blur the input field instead to restore original value without creation
     if (!inputEl.dataset.hasEnterHandler) {
         inputEl.dataset.hasEnterHandler = 'true';
         inputEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 inputEl.blur();
-                if (activeAutocompleteEl) {
-                    activeAutocompleteEl.remove();
-                    activeAutocompleteEl = null;
-                }
             }
         });
     }
@@ -14684,7 +14713,6 @@ function selectNode(id) {
                     updateProp(col.key, this.value);
                 };
                 input.oninput = function() {
-                    updateProp(col.key, this.value);
                     showAutocomplete(this, col.key, (val) => { updateProp(col.key, val); this.value = val; });
                 };
                 input.onfocus = function() {
