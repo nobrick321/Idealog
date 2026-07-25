@@ -13893,12 +13893,6 @@ function processListsImportedData() {
 let activeAutocompleteEl = null;
 
 function showAutocomplete(inputEl, type, onSelect) {
-    // Remove any existing suggestion box
-    if (activeAutocompleteEl) {
-        activeAutocompleteEl.remove();
-        activeAutocompleteEl = null;
-    }
-
     const val = inputEl.value.trim().toLowerCase();
     
     // Map autocomplete names to our cached sets
@@ -13911,8 +13905,25 @@ function showAutocomplete(inputEl, type, onSelect) {
     // Fallback to legacy objectLists array if not cached
     const list = listSet ? Array.from(listSet) : (objectLists[type] || []);
     
+    // Ensure the suggestion list contains unique case-insensitive values only
+    const uniqueList = [];
+    const seen = new Set();
+    list.forEach(item => {
+        const lower = item.toLowerCase();
+        if (!seen.has(lower)) {
+            seen.add(lower);
+            uniqueList.push(item);
+        }
+    });
+
     // Suggest items matching typed keyword
-    const matches = list.filter(item => item.toLowerCase().includes(val));
+    const matches = uniqueList.filter(item => item.toLowerCase().includes(val));
+
+    // Remove any existing suggestion box if we are recreating it
+    if (activeAutocompleteEl) {
+        activeAutocompleteEl.remove();
+        activeAutocompleteEl = null;
+    }
 
     const box = document.createElement('div');
     box.className = 'autocomplete-suggestions';
@@ -13938,7 +13949,7 @@ function showAutocomplete(inputEl, type, onSelect) {
     });
 
     // Option to quickly add new option if typed string doesn't match exactly
-    if (val && !list.map(l => l.toLowerCase()).includes(val)) {
+    if (val && !uniqueList.map(l => l.toLowerCase()).includes(val)) {
         const addDiv = document.createElement('div');
         addDiv.className = 'autocomplete-suggestion-item autocomplete-suggestion-add';
         addDiv.textContent = `+ Add "${inputEl.value}"`;
@@ -13948,15 +13959,18 @@ function showAutocomplete(inputEl, type, onSelect) {
             if (!objectLists[type]) {
                 objectLists[type] = [];
             }
-            objectLists[type].push(originalVal);
-            objectLists[type].sort((a,b) => a.localeCompare(b));
-            saveObjectLists();
-            
-            // Sync new entry into our fast memory cache
-            if (type === 'assignees') cachedObjectLists.assignees.add(originalVal);
-            else if (type === 'systems') cachedObjectLists.systems.add(originalVal);
-            else if (type === 'subsystems') cachedObjectLists.subsystems.add(originalVal);
-            else if (type === 'projects') cachedObjectLists.projects.add(originalVal);
+            // Check case-insensitive existence before adding
+            if (!objectLists[type].map(x => x.toLowerCase()).includes(originalVal.toLowerCase())) {
+                objectLists[type].push(originalVal);
+                objectLists[type].sort((a,b) => a.localeCompare(b));
+                saveObjectLists();
+                
+                // Sync new entry into our fast memory cache
+                if (type === 'assignees') cachedObjectLists.assignees.add(originalVal);
+                else if (type === 'systems') cachedObjectLists.systems.add(originalVal);
+                else if (type === 'subsystems') cachedObjectLists.subsystems.add(originalVal);
+                else if (type === 'projects') cachedObjectLists.projects.add(originalVal);
+            }
             
             inputEl.value = originalVal;
             onSelect(originalVal);
@@ -13995,7 +14009,7 @@ function showAutocomplete(inputEl, type, onSelect) {
                     activeAutocompleteEl.remove();
                     activeAutocompleteEl = null;
                 }
-            }, 200);
+            }, 250);
         });
     }
 
