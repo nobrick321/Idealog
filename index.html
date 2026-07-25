@@ -13980,38 +13980,9 @@ function showAutocomplete(inputEl, type, onSelect) {
         box.appendChild(addDiv);
     }
 
-    // Guard to restore previous saved value if input is blurred without choosing an option from the autocomplete list
-    if (!inputEl.dataset.hasBlurHandler) {
-        inputEl.dataset.hasBlurHandler = 'true';
-        inputEl.addEventListener('blur', (e) => {
-            // Delay slightly to let click/mousedown events on suggestion items register first
-            setTimeout(() => {
-                const n = findNode(selectedId) || (typeof t !== 'undefined' ? t : null);
-                if (n) {
-                    let savedVal = n[type] || '';
-                    if (savedVal === undefined || savedVal === '') {
-                        if (type === 'assignees') savedVal = n.assignee || '';
-                        else if (type === 'systems') savedVal = n.system || '';
-                        else if (type === 'subsystems') savedVal = n.subsystem || '';
-                        else if (type === 'projects') {
-                            const parentProj = findParent(n.id);
-                            savedVal = (parentProj && parentProj.id !== 'root') ? parentProj.title : (n.project || '');
-                        } else {
-                            // custom column mapping
-                            savedVal = n[type] || '';
-                        }
-                    }
-                    if (inputEl.value !== savedVal) {
-                        inputEl.value = savedVal;
-                    }
-                }
-                if (activeAutocompleteEl) {
-                    activeAutocompleteEl.remove();
-                    activeAutocompleteEl = null;
-                }
-            }, 250);
-        });
-    }
+    // Track inputs with active autocomplete
+    inputEl.dataset.isAutocompleteInput = 'true';
+    inputEl.dataset.autocompleteType = type;
 
     // Attach keydown listener to inputEl to prevent Enter key auto-selecting/adding options
     // and blur the input field instead to restore original value without creation
@@ -14033,7 +14004,34 @@ function showAutocomplete(inputEl, type, onSelect) {
 
 // Close suggestion box on blur & clear active pivot highlights if clicking outside table
 document.addEventListener('mousedown', (e) => {
-    if (activeAutocompleteEl && !activeAutocompleteEl.contains(e.target)) {
+    // Revert uncommitted values for any autocomplete-enabled input fields if clicking outside them
+    const activeInput = document.activeElement;
+    if (activeInput && activeInput.dataset && activeInput.dataset.isAutocompleteInput === 'true') {
+        // If clicking outside this active input box AND outside the suggestion box itself
+        if (activeInput !== e.target && (!activeAutocompleteEl || !activeAutocompleteEl.contains(e.target))) {
+            const type = activeInput.dataset.autocompleteType;
+            const n = findNode(selectedId);
+            if (n) {
+                let savedVal = n[type] || '';
+                if (savedVal === undefined || savedVal === '') {
+                    if (type === 'assignees') savedVal = n.assignee || '';
+                    else if (type === 'systems') savedVal = n.system || '';
+                    else if (type === 'subsystems') savedVal = n.subsystem || '';
+                    else if (type === 'projects') {
+                        const parentProj = findParent(n.id);
+                        savedVal = (parentProj && parentProj.id !== 'root') ? parentProj.title : (n.project || '');
+                    } else {
+                        savedVal = n[type] || '';
+                    }
+                }
+                if (activeInput.value !== savedVal) {
+                    activeInput.value = savedVal;
+                }
+            }
+        }
+    }
+
+    if (activeAutocompleteEl && !activeAutocompleteEl.contains(e.target) && e.target.tagName !== 'INPUT') {
         activeAutocompleteEl.remove();
         activeAutocompleteEl = null;
     }
