@@ -14033,7 +14033,7 @@ function showAutocomplete(inputEl, type, onSelect) {
 
 // Close suggestion box on blur & clear active pivot highlights if clicking outside table
 document.addEventListener('mousedown', (e) => {
-    if (activeAutocompleteEl && !activeAutocompleteEl.contains(e.target)) {
+    if (activeAutocompleteEl && !activeAutocompleteEl.contains(e.target) && e.target.tagName !== 'INPUT') {
         activeAutocompleteEl.remove();
         activeAutocompleteEl = null;
     }
