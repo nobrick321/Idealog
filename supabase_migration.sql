@@ -144,42 +144,51 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 1. Policies for tasks table
+DROP POLICY IF EXISTS "Viewers and above can read tasks" ON tasks;
 CREATE POLICY "Viewers and above can read tasks" ON tasks
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Basic and above can update status/notes/assignee" ON tasks;
 CREATE POLICY "Basic and above can update status/notes/assignee" ON tasks
     FOR UPDATE USING (
         public.get_current_user_role() IN ('admin', 'manager', 'basic')
     );
 
+DROP POLICY IF EXISTS "Admin and Manager can insert tasks" ON tasks;
 CREATE POLICY "Admin and Manager can insert tasks" ON tasks
     FOR INSERT WITH CHECK (
         public.get_current_user_role() IN ('admin', 'manager')
     );
 
+DROP POLICY IF EXISTS "Admin and Manager can delete tasks" ON tasks;
 CREATE POLICY "Admin and Manager can delete tasks" ON tasks
     FOR DELETE USING (
         public.get_current_user_role() IN ('admin', 'manager')
     );
 
 -- 2. Policies for object_lists table
+DROP POLICY IF EXISTS "Viewers and above can read object lists" ON object_lists;
 CREATE POLICY "Viewers and above can read object lists" ON object_lists
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admin and Manager can modify object lists" ON object_lists;
 CREATE POLICY "Admin and Manager can modify object lists" ON object_lists
     FOR ALL USING (
         public.get_current_user_role() IN ('admin', 'manager')
     );
 
 -- 3. Policies for task_comments table
+DROP POLICY IF EXISTS "Viewers and above can read comments" ON task_comments;
 CREATE POLICY "Viewers and above can read comments" ON task_comments
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Basic and above can post comments" ON task_comments;
 CREATE POLICY "Basic and above can post comments" ON task_comments
     FOR INSERT WITH CHECK (
         public.get_current_user_role() IN ('admin', 'manager', 'basic')
     );
 
+DROP POLICY IF EXISTS "Only author or admin can delete comments" ON task_comments;
 CREATE POLICY "Only author or admin can delete comments" ON task_comments
     FOR DELETE USING (
         public.get_current_user_role() = 'admin' 
@@ -187,21 +196,26 @@ CREATE POLICY "Only author or admin can delete comments" ON task_comments
     );
 
 -- 4. Policies for task_history_events table
+DROP POLICY IF EXISTS "Everyone can read history" ON task_history_events;
 CREATE POLICY "Everyone can read history" ON task_history_events
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Systems can insert history logs" ON task_history_events;
 CREATE POLICY "Systems can insert history logs" ON task_history_events
     FOR INSERT WITH CHECK (
         public.get_current_user_role() IN ('admin', 'manager', 'basic')
     );
 
 -- 5. Policies for user_profiles table
+DROP POLICY IF EXISTS "Profiles are readable by everyone" ON public.user_profiles;
 CREATE POLICY "Profiles are readable by everyone" ON public.user_profiles
     FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can edit their own profile details" ON public.user_profiles;
 CREATE POLICY "Users can edit their own profile details" ON public.user_profiles
     FOR UPDATE USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Only Admin can manage user roles" ON public.user_profiles;
 CREATE POLICY "Only Admin can manage user roles" ON public.user_profiles
     FOR ALL USING (
         public.get_current_user_role() = 'admin'
