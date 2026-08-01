@@ -12995,12 +12995,35 @@ function updateTaskStatusFromSheet(id, val) {
                 action: 'status_change',
                 fromStatus: fromStatus,
                 toStatus: toStatus,
-                assignee: n.assignee || 'User'
+                assignee: getActiveUserDisplayName()
             });
         }
         save();
         renderSheet();
     }
+}
+
+function getActiveUserDisplayName() {
+    if (!supabaseClient) return 'User';
+    let currentUserObj = null;
+    const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
+    if (session && session.user) {
+        currentUserObj = session.user;
+    } else {
+        currentUserObj = supabaseClient.auth.user ? supabaseClient.auth.user() : null;
+    }
+    if (currentUserObj) {
+        const mappedProfile = userProfilesCache.find(p => p.email === currentUserObj.email);
+        if (mappedProfile && mappedProfile.assignee_name) {
+            return mappedProfile.assignee_name;
+        }
+        if (mappedProfile && mappedProfile.display_name) {
+            return mappedProfile.display_name;
+        }
+        // Fallback: Use part of email before @
+        return currentUserObj.email.split('@')[0];
+    }
+    return 'User';
 }
 
 function deleteSheetTask(taskId) {
@@ -13088,7 +13111,6 @@ function addSheetTaskRow() {
     projectNode.children.push(newTask);
 
     // Write history log event
-    data.history = data.history || [];
     data.history.push({
         timestamp: nowIso,
         projectId: projectNode.id,
@@ -13097,7 +13119,7 @@ function addSheetTaskRow() {
         action: 'status_change',
         fromStatus: 'todo',
         toStatus: 'todo',
-        assignee: 'User'
+        assignee: getActiveUserDisplayName()
     });
 
     save();
@@ -15258,7 +15280,7 @@ function setStatus(s) {
                 action: 'status_change',
                 fromStatus: fromStatus,
                 toStatus: toStatus,
-                assignee: n.assignee || 'User'
+                assignee: getActiveUserDisplayName()
             });
         }
     }
@@ -15420,18 +15442,8 @@ function addChildTo(parentId) {
     // Default node variables mapping to level requirements
     const nowIso = new Date().toISOString();
     
-    // Resolve logged-in email to stamp as creator
-    let creatorEmail = 'System';
-    if (supabaseClient) {
-        const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
-        if (session && session.user) {
-            creatorEmail = session.user.email;
-        } else {
-            // Check auth state trigger fallback
-            const user = supabaseClient.auth.user ? supabaseClient.auth.user() : null;
-            if (user) creatorEmail = user.email;
-        }
-    }
+    // Resolve logged-in display name or email fallback to stamp as creator
+    const creatorEmail = getActiveUserDisplayName();
 
     const node = { 
         id: uid(), 
@@ -15477,16 +15489,8 @@ function addFollowupTask() {
     // Create new node copying all attributes except ID, title, status, and comments
     const nowIso = new Date().toISOString();
     
-    let creatorEmail = 'System';
-    if (supabaseClient) {
-        const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
-        if (session && session.user) {
-            creatorEmail = session.user.email;
-        } else {
-            const user = supabaseClient.auth.user ? supabaseClient.auth.user() : null;
-            if (user) creatorEmail = user.email;
-        }
-    }
+    // Resolve logged-in display name or email fallback to stamp as creator
+    const creatorEmail = getActiveUserDisplayName();
 
     const followupNode = {
         id: uid(),
