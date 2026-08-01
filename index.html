@@ -1106,7 +1106,7 @@
                     <button class="btn-secondary btn-sm" id="btn-toggle-controls" onclick="toggleActiveSheetControls()" style="max-width: 140px; height: 28px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 6px; padding: 0 10px; margin-bottom: 8px;">
                         🔧 Hide Controls
                     </button>
-                    <button class="btn-add" onclick="addSheetTaskRow()" style="height: 28px; font-size: 11px; padding: 0 12px; margin-bottom: 8px; margin-left: 12px;">+ Add Task Row</button>
+                    <button class="btn-add" id="btn-add-task-row-top" onclick="addSheetTaskRow()" style="height: 28px; font-size: 11px; padding: 0 12px; margin-bottom: 8px; margin-left: 12px;">+ Add Task Row</button>
                 </div>
             </div>
             <div class="sheet-content" id="sheet-content-area"></div>
@@ -12337,6 +12337,17 @@ function switchSheetTab(tab) {
 
 function renderSheet() {
     if (!data) return;
+    
+    // Toggle + Add Task Row visibility based on RBAC permissions levels (Only admin & manager can add tasks)
+    const addRowBtn = document.getElementById('btn-add-task-row-top');
+    if (addRowBtn) {
+        if (currentUserRole === 'admin' || currentUserRole === 'manager') {
+            addRowBtn.style.display = 'block';
+        } else {
+            addRowBtn.style.display = 'none';
+        }
+    }
+    
     if (currentSheetTab === 'tasks') {
         renderTaskSheet();
     } else if (currentSheetTab === 'pivot') {
@@ -12459,13 +12470,18 @@ function renderTaskSheet() {
     // Toolbar wrapper
     const savedUrl = localStorage.getItem('idealog_gspread_url') || '';
     const toolbarDisplay = isTaskSheetToolbarCollapsed ? 'display: none;' : 'display: flex;';
+    
+    // Check permission levels
+    const isWriteAllowed = currentUserRole === 'admin' || currentUserRole === 'manager';
+    const writeBtnStyle = isWriteAllowed ? '' : 'display: none !important;';
+
     const toolbarHtml = `
         <div class="sheet-toolbar" style="flex-wrap: wrap; gap: 8px; margin-bottom: 16px; ${toolbarDisplay}">
-            <button class="btn-secondary btn-sm" style="max-width:110px;height:32px;" onclick="addSheetColumn()">+ Add Column</button>
-            <button class="btn-secondary btn-sm" style="max-width:160px;height:32px;background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.2);" onclick="openImportModal()">📥 Import Paste Data</button>
+            <button class="btn-secondary btn-sm" style="max-width:110px;height:32px; ${writeBtnStyle}" onclick="addSheetColumn()">+ Add Column</button>
+            <button class="btn-secondary btn-sm" style="max-width:160px;height:32px;background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.2); ${writeBtnStyle}" onclick="openImportModal()">📥 Import Paste Data</button>
             <button class="btn-secondary btn-sm" style="max-width:150px;height:32px;background:rgba(16,185,129,0.1);color:#34d399;border-color:rgba(16,185,129,0.2);" onclick="exportTableTSV()">📤 Export TSV Data</button>
             <button class="btn-secondary btn-sm" style="max-width:150px;height:32px;background:rgba(139,92,246,0.1);color:#c084fc;border-color:rgba(139,92,246,0.2);" onclick="exportFullBackupJSON()">💾 Backup Full State</button>
-            <button class="btn-danger btn-sm" style="max-width:110px;height:32px;" onclick="deleteAllSheetTasks()">❌ Delete All</button>
+            <button class="btn-danger btn-sm" style="max-width:110px;height:32px; ${writeBtnStyle}" onclick="deleteAllSheetTasks()">❌ Delete All</button>
             
             <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 32px;">
                 <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Hide Done:</span>
@@ -12597,6 +12613,14 @@ function renderTaskSheet() {
                 row.title = `Locked by ${rowLock.userName} (${rowLock.userEmail})`;
             }
 
+            // Determine cell lock permissions depending on active user role
+            // viewer: everything read-only (locked)
+            // basic: all fields locked EXCEPT status dropdown
+            // admin/manager: fully editable (unless locked by another user)
+            const isViewer = currentUserRole === 'viewer';
+            const isBasic = currentUserRole === 'basic';
+            const isRestrictedRole = isViewer || isBasic;
+
             // Cell 1: Project Auto-suggest Input
             const tdProj = document.createElement('td');
             const inProj = document.createElement('input');
@@ -12605,16 +12629,16 @@ function renderTaskSheet() {
             inProj.placeholder = 'Project';
             inProj.value = parentProj ? parentProj.title : '';
             inProj.setAttribute('autocomplete', 'off');
-            if (isRowLocked) {
+            if (isRowLocked || isRestrictedRole) {
                 inProj.disabled = true;
                 inProj.style.opacity = '0.5';
             }
             inProj.oninput = function() {
-                if (isRowLocked) return;
+                if (isRowLocked || isRestrictedRole) return;
                 showAutocomplete(this, 'projects', (val) => { moveTaskProjectByTitle(t.id, val); renderSheet(); });
             };
             inProj.onchange = function() {
-                if (isRowLocked) return;
+                if (isRowLocked || isRestrictedRole) return;
                 moveTaskProjectByTitle(t.id, this.value);
             };
             tdProj.appendChild(inProj);
@@ -12626,13 +12650,13 @@ function renderTaskSheet() {
             inTitle.className = 'excel-input';
             inTitle.type = 'text';
             inTitle.value = (isRowLocked ? '🔒 ' : '') + (t.title || '');
-            if (isRowLocked) {
+            if (isRowLocked || isRestrictedRole) {
                 inTitle.disabled = true;
                 inTitle.style.opacity = '0.7';
                 inTitle.style.fontWeight = '500';
             }
             inTitle.onchange = function() {
-                if (isRowLocked) return;
+                if (isRowLocked || isRestrictedRole) return;
                 updateTaskTitleFromSheet(t.id, this.value);
             };
             tdTitle.appendChild(inTitle);
@@ -12646,16 +12670,16 @@ function renderTaskSheet() {
             inAssignee.placeholder = 'Assignee';
             inAssignee.value = t.assignee || '';
             inAssignee.setAttribute('autocomplete', 'off');
-            if (isRowLocked) {
+            if (isRowLocked || isRestrictedRole) {
                 inAssignee.disabled = true;
                 inAssignee.style.opacity = '0.5';
             }
             inAssignee.oninput = function() {
-                if (isRowLocked) return;
+                if (isRowLocked || isRestrictedRole) return;
                 showAutocomplete(this, 'assignees', (val) => { updateTaskAssigneeFromSheet(t.id, val); renderSheet(); });
             };
             inAssignee.onchange = function() {
-                if (isRowLocked) return;
+                if (isRowLocked || isRestrictedRole) return;
                 updateTaskAssigneeFromSheet(t.id, this.value);
             };
             tdAssignee.appendChild(inAssignee);
@@ -12670,7 +12694,7 @@ function renderTaskSheet() {
                 inDyn.placeholder = col.label;
                 inDyn.value = t[col.key] || '';
                 inDyn.setAttribute('autocomplete', 'off');
-                if (isRowLocked) {
+                if (isRowLocked || isRestrictedRole) {
                     inDyn.disabled = true;
                     inDyn.style.opacity = '0.5';
                 }
@@ -12678,17 +12702,17 @@ function renderTaskSheet() {
                 const lowerLabel = col.label.toLowerCase();
                 if (lowerLabel === 'system') {
                     inDyn.oninput = function() {
-                        if (isRowLocked) return;
+                        if (isRowLocked || isRestrictedRole) return;
                         showAutocomplete(this, 'systems', (newVal) => { updateTaskPropFromSheet(t.id, col.key, newVal); renderSheet(); });
                     };
                 } else if (lowerLabel === 'subsystem') {
                     inDyn.oninput = function() {
-                        if (isRowLocked) return;
+                        if (isRowLocked || isRestrictedRole) return;
                         showAutocomplete(this, 'subsystems', (newVal) => { updateTaskPropFromSheet(t.id, col.key, newVal); renderSheet(); });
                     };
                 }
                 inDyn.onchange = function() {
-                    if (isRowLocked) return;
+                    if (isRowLocked || isRestrictedRole) return;
                     updateTaskPropFromSheet(t.id, col.key, this.value);
                 };
 
@@ -12700,12 +12724,12 @@ function renderTaskSheet() {
             const tdStatus = document.createElement('td');
             const selectStatus = document.createElement('select');
             selectStatus.className = 'excel-select';
-            if (isRowLocked) {
+            if (isRowLocked || isViewer) {
                 selectStatus.disabled = true;
                 selectStatus.style.opacity = '0.5';
             }
             selectStatus.onchange = function() {
-                if (isRowLocked) return;
+                if (isRowLocked || isViewer) return;
                 updateTaskStatusFromSheet(t.id, this.value);
             };
 
@@ -12733,13 +12757,13 @@ function renderTaskSheet() {
             btnDel.className = 'btn-gantt-action';
             btnDel.style.color = '#f87171';
             btnDel.textContent = 'Delete';
-            if (isRowLocked) {
+            if (isRowLocked || isRestrictedRole) {
                 btnDel.disabled = true;
                 btnDel.style.opacity = '0.4';
                 btnDel.style.cursor = 'not-allowed';
             }
             btnDel.onclick = () => {
-                if (isRowLocked) return;
+                if (isRowLocked || isRestrictedRole) return;
                 deleteSheetTask(t.id);
             };
             tdAction.appendChild(btnDel);
@@ -16028,6 +16052,17 @@ function enforceObjectLockUI(taskId) {
     // Inputs inside panel
     const inputs = panel.querySelectorAll('input, textarea, select, button.status-pill');
     
+    // Determine RBAC permissions
+    const isViewer = currentUserRole === 'viewer';
+    const isBasic = currentUserRole === 'basic';
+    const isWriteAllowed = currentUserRole === 'admin' || currentUserRole === 'manager';
+    
+    // Hide panel bottom buttons (Delete / Followup Task) for restricted roles
+    const deleteBtn = panel.querySelector('.btn-danger');
+    const followupBtn = panel.querySelector('.panel-actions button.btn-secondary');
+    if (deleteBtn) deleteBtn.style.display = isWriteAllowed ? 'block' : 'none';
+    if (followupBtn) followupBtn.style.display = isWriteAllowed ? 'block' : 'none';
+
     if (isLocked) {
         lockIndicator.style.display = 'block';
         lockIndicator.innerHTML = `🔒 Locked by <strong style="color: #f87171;">${lock.userName}</strong> (${lock.userEmail}) <button onclick="overrideForceUnlock('${taskId}')" style="margin-left: 8px; font-size: 10px; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(248, 113, 113, 0.4); background: rgba(248, 113, 113, 0.1); color: #f87171; cursor: pointer; font-weight: bold;">Force Unlock</button>`;
@@ -16043,11 +16078,30 @@ function enforceObjectLockUI(taskId) {
     } else {
         lockIndicator.style.display = 'none';
         
-        // Re-enable input capabilities depending on RBAC permissions levels
-        const canEdit = currentUserRole !== 'viewer';
         inputs.forEach(input => {
-            if (input.className !== 'panel-close') {
-                input.disabled = !canEdit;
+            if (input.className === 'panel-close') return;
+            
+            // Check if it's the comments input or send button
+            const isCommentBox = input.id === 'comment-add-input' || input.innerHTML === 'Send' || input.getAttribute('onclick') === 'addNewComment()';
+            // Check if it's the status pill elements
+            const isStatusPill = input.classList.contains('status-pill');
+            
+            if (isViewer) {
+                // Viewer gets blocked from everything
+                input.disabled = true;
+                input.style.opacity = '0.5';
+            } else if (isBasic) {
+                // Basic user can edit comments and status, but not other properties (assignee, tags, title, custom cols)
+                if (isCommentBox || isStatusPill) {
+                    input.disabled = false;
+                    input.style.opacity = '';
+                } else {
+                    input.disabled = true;
+                    input.style.opacity = '0.5';
+                }
+            } else {
+                // Admin and Manager get full edit capabilities
+                input.disabled = false;
                 input.style.opacity = '';
             }
         });
