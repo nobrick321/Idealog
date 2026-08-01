@@ -11041,6 +11041,9 @@ async function loadStartupData() {
                         startSyncPolling();
                     }
                     
+                    // Initialize Supabase Realtime Lock Presence Channel Subscriptions
+                    setupSupabaseRealtimePresenceLocks(user);
+                    
                     // Delay query execution by 500ms to let Google OAuth routing settle cleanly
                     setTimeout(async () => {
                         try {
@@ -12569,6 +12572,14 @@ function renderTaskSheet() {
                 }
             }
 
+            // Check if this task row is focused/locked by another online user
+            const rowLock = currentLockInfo[t.id];
+            const isRowLocked = !!rowLock;
+            if (isRowLocked) {
+                row.style.background = 'rgba(239, 68, 68, 0.05)';
+                row.title = `Locked by ${rowLock.userName} (${rowLock.userEmail})`;
+            }
+
             // Cell 1: Project Auto-suggest Input
             const tdProj = document.createElement('td');
             const inProj = document.createElement('input');
@@ -12577,10 +12588,16 @@ function renderTaskSheet() {
             inProj.placeholder = 'Project';
             inProj.value = parentProj ? parentProj.title : '';
             inProj.setAttribute('autocomplete', 'off');
+            if (isRowLocked) {
+                inProj.disabled = true;
+                inProj.style.opacity = '0.5';
+            }
             inProj.oninput = function() {
+                if (isRowLocked) return;
                 showAutocomplete(this, 'projects', (val) => { moveTaskProjectByTitle(t.id, val); renderSheet(); });
             };
             inProj.onchange = function() {
+                if (isRowLocked) return;
                 moveTaskProjectByTitle(t.id, this.value);
             };
             tdProj.appendChild(inProj);
@@ -12591,8 +12608,14 @@ function renderTaskSheet() {
             const inTitle = document.createElement('input');
             inTitle.className = 'excel-input';
             inTitle.type = 'text';
-            inTitle.value = t.title || '';
+            inTitle.value = (isRowLocked ? '🔒 ' : '') + (t.title || '');
+            if (isRowLocked) {
+                inTitle.disabled = true;
+                inTitle.style.opacity = '0.7';
+                inTitle.style.fontWeight = '500';
+            }
             inTitle.onchange = function() {
+                if (isRowLocked) return;
                 updateTaskTitleFromSheet(t.id, this.value);
             };
             tdTitle.appendChild(inTitle);
@@ -12606,10 +12629,16 @@ function renderTaskSheet() {
             inAssignee.placeholder = 'Assignee';
             inAssignee.value = t.assignee || '';
             inAssignee.setAttribute('autocomplete', 'off');
+            if (isRowLocked) {
+                inAssignee.disabled = true;
+                inAssignee.style.opacity = '0.5';
+            }
             inAssignee.oninput = function() {
+                if (isRowLocked) return;
                 showAutocomplete(this, 'assignees', (val) => { updateTaskAssigneeFromSheet(t.id, val); renderSheet(); });
             };
             inAssignee.onchange = function() {
+                if (isRowLocked) return;
                 updateTaskAssigneeFromSheet(t.id, this.value);
             };
             tdAssignee.appendChild(inAssignee);
@@ -12624,18 +12653,25 @@ function renderTaskSheet() {
                 inDyn.placeholder = col.label;
                 inDyn.value = t[col.key] || '';
                 inDyn.setAttribute('autocomplete', 'off');
+                if (isRowLocked) {
+                    inDyn.disabled = true;
+                    inDyn.style.opacity = '0.5';
+                }
 
                 const lowerLabel = col.label.toLowerCase();
                 if (lowerLabel === 'system') {
                     inDyn.oninput = function() {
+                        if (isRowLocked) return;
                         showAutocomplete(this, 'systems', (newVal) => { updateTaskPropFromSheet(t.id, col.key, newVal); renderSheet(); });
                     };
                 } else if (lowerLabel === 'subsystem') {
                     inDyn.oninput = function() {
+                        if (isRowLocked) return;
                         showAutocomplete(this, 'subsystems', (newVal) => { updateTaskPropFromSheet(t.id, col.key, newVal); renderSheet(); });
                     };
                 }
                 inDyn.onchange = function() {
+                    if (isRowLocked) return;
                     updateTaskPropFromSheet(t.id, col.key, this.value);
                 };
 
@@ -12647,7 +12683,12 @@ function renderTaskSheet() {
             const tdStatus = document.createElement('td');
             const selectStatus = document.createElement('select');
             selectStatus.className = 'excel-select';
+            if (isRowLocked) {
+                selectStatus.disabled = true;
+                selectStatus.style.opacity = '0.5';
+            }
             selectStatus.onchange = function() {
+                if (isRowLocked) return;
                 updateTaskStatusFromSheet(t.id, this.value);
             };
 
@@ -12675,9 +12716,25 @@ function renderTaskSheet() {
             btnDel.className = 'btn-gantt-action';
             btnDel.style.color = '#f87171';
             btnDel.textContent = 'Delete';
-            btnDel.onclick = () => deleteSheetTask(t.id);
+            if (isRowLocked) {
+                btnDel.disabled = true;
+                btnDel.style.opacity = '0.4';
+                btnDel.style.cursor = 'not-allowed';
+            }
+            btnDel.onclick = () => {
+                if (isRowLocked) return;
+                deleteSheetTask(t.id);
+            };
             tdAction.appendChild(btnDel);
             row.appendChild(tdAction);
+
+            // Click table row to open properties panel and acquire edit lock
+            row.onclick = function(e) {
+                // Prevent trigger when clicking input text elements
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'BUTTON') {
+                    selectNode(t.id);
+                }
+            };
 
             tbody.appendChild(row);
         });
@@ -14965,6 +15022,11 @@ function addPivotTask(rowVal, colVal) {
 
 // --- PROPERTIES ---
 function selectNode(id) {
+    // Release previous task lock broadcast if selecting a new task node
+    if (selectedId && selectedId !== id) {
+        broadcastTaskBlur(selectedId);
+    }
+    
     selectedId=id;
     const n=findNode(id); if(!n) return;
     document.getElementById('prop-title').value=n.title;
@@ -15032,6 +15094,11 @@ function selectNode(id) {
     setStatusPills(n.status);
     renderTagPills(n.tags||[]);
     document.getElementById('properties-panel').classList.add('open');
+    
+    // Broadcast realtime focus lock lock out event
+    broadcastTaskFocus(id);
+    enforceObjectLockUI(id);
+    
     redraw();
 }
 
@@ -15227,6 +15294,9 @@ function savePropMemoryOnly() {
     // Simply keeping changes in local variables; no write to Local Storage or Supabase push.
 }
 function closePanel() {
+    if (selectedId) {
+        broadcastTaskBlur(selectedId);
+    }
     selectedId=null;
     document.getElementById('properties-panel').classList.remove('open');
     redraw();
@@ -15803,6 +15873,157 @@ async function toggleAdminLinkContainer() {
         adminLink.style.display = 'block';
     } else {
         adminLink.style.display = 'none';
+    }
+}
+
+// --- SUPABASE REALTIME PRESENCE & COLLABORATIVE OBJECT LOCKING ---
+let realtimeLockChannel = null;
+const LOCK_EXPIRY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minutes autolock release timeout
+
+function setupSupabaseRealtimePresenceLocks(user) {
+    if (!supabaseClient) return;
+    
+    // Subscribe to task_locks broadcast channel
+    realtimeLockChannel = supabaseClient.channel('task_locks', {
+        config: {
+            broadcast: { self: false }
+        }
+    });
+
+    realtimeLockChannel
+        .on('broadcast', { event: 'task_focus' }, (payload) => {
+            const { taskId, userEmail, userName, timestamp } = payload.payload;
+            console.log(`Task ${taskId} focused/locked by ${userName} (${userEmail})`);
+            currentLockInfo[taskId] = {
+                userEmail,
+                userName,
+                timestamp: timestamp || new Date().toISOString()
+            };
+            
+            // Clean up locks focused on our actively selected task if it got locked out
+            if (selectedId === taskId) {
+                enforceObjectLockUI(taskId);
+            }
+            redraw();
+        })
+        .on('broadcast', { event: 'task_blur' }, (payload) => {
+            const { taskId } = payload.payload;
+            console.log(`Task ${taskId} released/unlocked`);
+            delete currentLockInfo[taskId];
+            
+            if (selectedId === taskId) {
+                enforceObjectLockUI(taskId);
+            }
+            redraw();
+        })
+        .subscribe((status) => {
+            console.log("Realtime Lock Channel Subscription status:", status);
+        });
+
+    // Run clean up routine for expired locks periodically (once per minute)
+    setInterval(() => {
+        const now = Date.now();
+        let changed = false;
+        for (const taskId in currentLockInfo) {
+            const lock = currentLockInfo[taskId];
+            const lockTime = new Date(lock.timestamp).getTime();
+            if (now - lockTime > LOCK_EXPIRY_TIMEOUT_MS) {
+                console.log(`Lock on task ${taskId} by ${lock.userName} expired.`);
+                delete currentLockInfo[taskId];
+                changed = true;
+                if (selectedId === taskId) {
+                    enforceObjectLockUI(taskId);
+                }
+            }
+        }
+        if (changed) redraw();
+    }, 60000);
+}
+
+function broadcastTaskFocus(taskId) {
+    if (!supabaseClient || !realtimeLockChannel) return;
+    supabaseClient.auth.getUser().then(({ data: { user } }) => {
+        if (!user) return;
+        const userName = user.user_metadata?.name || split_part(user.email, '@', 1);
+        realtimeLockChannel.send({
+            type: 'broadcast',
+            event: 'task_focus',
+            payload: {
+                taskId,
+                userEmail: user.email,
+                userName: userName,
+                timestamp: new Date().toISOString()
+            }
+        });
+    });
+}
+
+function broadcastTaskBlur(taskId) {
+    if (!supabaseClient || !realtimeLockChannel) return;
+    realtimeLockChannel.send({
+        type: 'broadcast',
+        event: 'task_blur',
+        payload: { taskId }
+    });
+}
+
+function split_part(str, delimiter, partIndex) {
+    if (!str) return 'User';
+    const split = str.split(delimiter);
+    return split[partIndex - 1] || 'User';
+}
+
+function enforceObjectLockUI(taskId) {
+    const lock = currentLockInfo[taskId];
+    const isLocked = !!lock;
+    
+    const panel = document.getElementById('properties-panel');
+    const lockIndicator = document.getElementById('properties-lock-indicator') || createLockIndicator();
+    
+    // Inputs inside panel
+    const inputs = panel.querySelectorAll('input, textarea, select, button.status-pill');
+    
+    if (isLocked) {
+        lockIndicator.style.display = 'block';
+        lockIndicator.innerHTML = `🔒 Locked by <strong style="color: #f87171;">${lock.userName}</strong> (${lock.userEmail}) <button onclick="overrideForceUnlock('${taskId}')" style="margin-left: 8px; font-size: 10px; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(248, 113, 113, 0.4); background: rgba(248, 113, 113, 0.1); color: #f87171; cursor: pointer; font-weight: bold;">Force Unlock</button>`;
+        
+        inputs.forEach(input => {
+            if (input.className !== 'panel-close' && !input.closest('#properties-lock-indicator')) {
+                input.disabled = true;
+                if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') {
+                    input.style.opacity = '0.5';
+                }
+            }
+        });
+    } else {
+        lockIndicator.style.display = 'none';
+        
+        // Re-enable input capabilities depending on RBAC permissions levels
+        const canEdit = currentUserRole !== 'viewer';
+        inputs.forEach(input => {
+            if (input.className !== 'panel-close') {
+                input.disabled = !canEdit;
+                input.style.opacity = '';
+            }
+        });
+    }
+}
+
+function createLockIndicator() {
+    const panelBody = document.querySelector('#properties-panel .panel-body');
+    const indicator = document.createElement('div');
+    indicator.id = 'properties-lock-indicator';
+    indicator.style.cssText = 'background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 8px 12px; color: #f87171; font-size: 11.5px; margin-bottom: 12px; display: none; align-items: center; justify-content: space-between;';
+    panelBody.insertBefore(indicator, panelBody.firstChild);
+    return indicator;
+}
+
+function overrideForceUnlock(taskId) {
+    if (confirm("Force override active lock? This will unlock the task for edits.")) {
+        broadcastTaskBlur(taskId);
+        delete currentLockInfo[taskId];
+        enforceObjectLockUI(taskId);
+        redraw();
     }
 }
 
