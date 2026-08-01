@@ -13097,6 +13097,7 @@ function addSheetTaskRow() {
         notes: '',
         createdAt: nowIso,
         updatedAt: nowIso,
+        created_by: getActiveUserDisplayName(),
         doneAt: null,
         children: []
     };
@@ -15102,6 +15103,7 @@ function addPivotTask(rowVal, colVal) {
             notes: '',
             createdAt: nowIso,
             updatedAt: nowIso,
+            created_by: getActiveUserDisplayName(),
             children: []
         };
         parentProj.children.push(task);
@@ -15114,7 +15116,7 @@ function addPivotTask(rowVal, colVal) {
             action: 'status_change',
             fromStatus: 'todo',
             toStatus: status,
-            assignee: assignee || 'User'
+            assignee: getActiveUserDisplayName()
         });
 
         save();
