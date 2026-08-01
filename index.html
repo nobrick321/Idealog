@@ -1075,6 +1075,9 @@
                 ● Cloud Offline
             </div>
             
+            <button id="btn-header-admin-users" onclick="openUserRolesManagementModal()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: none; align-items: center; gap: 4px; border-radius: 8px; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2); color: #818cf8; cursor: pointer; transition: all 0.15s ease; margin-right: 6px;">
+                👥 Admin Users
+            </button>
             <button onclick="openSupabaseSettingsModal()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: #818cf8; cursor: pointer; transition: all 0.15s ease; margin-right: 6px;">
                 ⚙️ Cloud Config
             </button>
@@ -15937,11 +15940,14 @@ async function updateRemoteUserProfileRole(userId, newRole) {
 // Toggle admin link visibility during migration check
 async function toggleAdminLinkContainer() {
     const adminLink = document.getElementById('admin-users-link-container');
-    if (!adminLink) return;
+    const headerAdminBtn = document.getElementById('btn-header-admin-users');
+    
     if (currentUserRole === 'admin') {
-        adminLink.style.display = 'block';
+        if (adminLink) adminLink.style.display = 'block';
+        if (headerAdminBtn) headerAdminBtn.style.display = 'inline-flex';
     } else {
-        adminLink.style.display = 'none';
+        if (adminLink) adminLink.style.display = 'none';
+        if (headerAdminBtn) headerAdminBtn.style.display = 'none';
     }
 }
 
