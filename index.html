@@ -16266,7 +16266,7 @@ async function populateTaskHistoryDropdown() {
         creatorLabel.textContent = `Creator: ${taskNode.created_by || 'System'}`;
     }
     
-    // 2. Fetch history logs. First try to load from Supabase if connected
+    // 2. Fetch history logs from both database table and local memory, then deduplicate
     let historyEvents = [];
     if (supabaseClient) {
         try {
@@ -16286,16 +16286,34 @@ async function populateTaskHistoryDropdown() {
                 }));
             }
         } catch (dbEx) {
-            console.warn("Failed to load history events from Supabase. Falling back to local:", dbEx);
+            console.warn("Failed to load history events from Supabase:", dbEx);
         }
     }
     
-    // Fallback: Read from local state memory log array if empty or offline
-    if (historyEvents.length === 0 && data.history) {
-        historyEvents = data.history
+    // Add local state history records to verify immediate/offline logs
+    if (data.history) {
+        const localEvents = data.history
             .filter(ev => ev.taskId === selectedId)
-            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            .map(ev => ({
+                timestamp: ev.timestamp,
+                action: ev.action || 'status_change',
+                fromStatus: ev.fromStatus || '',
+                toStatus: ev.toStatus || '',
+                assignee: ev.assignee || 'User',
+                field: ev.field || 'status'
+            }));
+            
+        // Append local events, avoiding duplicates by matching timestamp
+        localEvents.forEach(le => {
+            const exists = historyEvents.some(re => re.timestamp === le.timestamp);
+            if (!exists) {
+                historyEvents.push(le);
+            }
+        });
     }
+    
+    // Sort combined history events newest first
+    historyEvents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     
     if (historyEvents.length === 0) {
         listContainer.innerHTML = `<div style="text-align: center; font-size: 11px; color: var(--text-muted); padding: 8px 0;">No edits recorded yet.</div>`;
