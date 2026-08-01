@@ -15880,6 +15880,41 @@ function openUserRolesManagementModal() {
             <span style="font-size: 10.5px; color: var(--text-muted);">${profile.email}</span>
         `;
         
+        const controlsContainer = document.createElement('div');
+        controlsContainer.style.display = 'flex';
+        controlsContainer.style.gap = '8px';
+        controlsContainer.style.alignItems = 'center';
+
+        // 1. Assignee Link Dropdown
+        const assigneeSelect = document.createElement('select');
+        assigneeSelect.style.background = '#131924';
+        assigneeSelect.style.border = '1px solid var(--border)';
+        assigneeSelect.style.borderRadius = '6px';
+        assigneeSelect.style.color = 'var(--text)';
+        assigneeSelect.style.padding = '4px 8px';
+        assigneeSelect.style.fontSize = '12px';
+        assigneeSelect.style.outline = 'none';
+
+        // Populate dynamic assignees from objectLists.assignees
+        const unassignedOpt = document.createElement('option');
+        unassignedOpt.value = '';
+        unassignedOpt.textContent = 'Unmapped Assignee';
+        assigneeSelect.appendChild(unassignedOpt);
+
+        const listAssignees = (objectLists && objectLists.assignees) ? objectLists.assignees : [];
+        listAssignees.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (profile.assignee_name === name) opt.selected = true;
+            assigneeSelect.appendChild(opt);
+        });
+
+        assigneeSelect.onchange = async (e) => {
+            await updateRemoteUserProfileAssignee(profile.id, e.target.value);
+        };
+
+        // 2. Role Permissions Dropdown
         const roleSelect = document.createElement('select');
         roleSelect.style.background = '#131924';
         roleSelect.style.border = '1px solid var(--border)';
@@ -15902,8 +15937,11 @@ function openUserRolesManagementModal() {
             await updateRemoteUserProfileRole(profile.id, e.target.value);
         };
         
+        controlsContainer.appendChild(assigneeSelect);
+        controlsContainer.appendChild(roleSelect);
+
         item.appendChild(userInfo);
-        item.appendChild(roleSelect);
+        item.appendChild(controlsContainer);
         container.appendChild(item);
     });
 }
@@ -15916,7 +15954,6 @@ function closeUserRolesManagementModal() {
 async function updateRemoteUserProfileRole(userId, newRole) {
     if (currentUserRole !== 'admin') {
         alert("Action denied. Only Administrators are permitted to modify user roles.");
-        // Re-render modal to revert select input value visually
         openUserRolesManagementModal();
         return;
     }
@@ -15932,7 +15969,6 @@ async function updateRemoteUserProfileRole(userId, newRole) {
             alert("Error updating role: " + error.message);
         } else {
             console.log("User role successfully updated in Supabase user_profiles.");
-            // Refresh local profiles cache list
             const { data: profiles } = await supabaseClient.from('user_profiles').select('*');
             if (profiles) {
                 userProfilesCache = profiles;
@@ -15940,6 +15976,34 @@ async function updateRemoteUserProfileRole(userId, newRole) {
         }
     } catch (e) {
         console.error("Failed to update role:", e);
+    }
+}
+
+async function updateRemoteUserProfileAssignee(userId, assigneeName) {
+    if (currentUserRole !== 'admin') {
+        alert("Action denied. Only Administrators are permitted to map user assignees.");
+        openUserRolesManagementModal();
+        return;
+    }
+    if (!supabaseClient) return;
+    try {
+        console.log(`Updating user ${userId} assignee mapping to: ${assigneeName}`);
+        const { error } = await supabaseClient
+            .from('user_profiles')
+            .update({ assignee_name: assigneeName })
+            .eq('id', userId);
+            
+        if (error) {
+            alert("Error updating assignee mapping: " + error.message);
+        } else {
+            console.log("User assignee mapping successfully updated in Supabase user_profiles.");
+            const { data: profiles } = await supabaseClient.from('user_profiles').select('*');
+            if (profiles) {
+                userProfilesCache = profiles;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to update user assignee mapping:", e);
     }
 }
 
