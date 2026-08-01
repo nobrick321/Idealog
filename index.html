@@ -14224,8 +14224,13 @@ function renderPivotTable() {
     // Resolve the logged-in user's assigned name mapping from userProfilesCache
     let loggedInAssigneeName = '';
     if (supabaseClient) {
-        const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null; // fallback check
-        const currentUserObj = session ? session.user : null;
+        let currentUserObj = null;
+        const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
+        if (session && session.user) {
+            currentUserObj = session.user;
+        } else {
+            currentUserObj = supabaseClient.auth.user ? supabaseClient.auth.user() : null;
+        }
         if (currentUserObj) {
             const mappedProfile = userProfilesCache.find(p => p.email === currentUserObj.email);
             if (mappedProfile && mappedProfile.assignee_name) {
@@ -14235,7 +14240,9 @@ function renderPivotTable() {
     }
     
     let tasks = rawTasks.filter(t => !shouldHideTask(t));
-    if (pivotOnlyAssignedToMe && loggedInAssigneeName) {
+    if (pivotOnlyAssignedToMe) {
+        // Filter tasks down to the active user's mapped assignee name
+        // (if not mapped or not logged in, treat assignee mapping as empty so it filters out tasks)
         tasks = tasks.filter(t => t.assignee === loggedInAssigneeName);
     }
     
