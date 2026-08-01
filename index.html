@@ -1270,6 +1270,11 @@
                 <input type="checkbox" id="sync-active-toggle" checked onchange="toggleAutoSyncState(this.checked)" style="accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; margin: 0;">
                 Enable Auto-Sync
             </label>
+            
+            <!-- Admin Manage Users Section Trigger Link -->
+            <div id="admin-users-link-container" style="display: none; font-size: 11.5px; margin-top: 5px;">
+                <a href="#" onclick="event.preventDefault(); openUserRolesManagementModal();" style="color: var(--accent); text-decoration: underline;">👥 Manage Org Roles & Permissions (Admin)</a>
+            </div>
         </div>
         <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; align-items: center;">
             <div style="display: flex; gap: 6px;">
@@ -1280,6 +1285,27 @@
         </div>
     </div>
 </div>
+
+<!-- User Roles Management Modal (Admin view) -->
+<div class="modal-overlay" id="user-roles-mgmt-modal">
+    <div class="modal-box" style="width: 580px;">
+        <div class="modal-header">
+            <h3>👥 User Roles & Permissions Control</h3>
+            <button class="panel-close" onclick="closeUserRolesManagementModal()">×</button>
+        </div>
+        <div class="modal-body" style="padding: 15px; display: flex; flex-direction: column; gap: 12px;">
+            <p style="font-size: 11.5px; color: var(--text-dim); line-height: 1.4;">
+                Review registered organization users and allocate access permission scopes. Only authenticated accounts are fetched from Supabase auth.
+            </p>
+            <div id="users-roles-list-container" style="background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border); border-radius: 10px; max-height: 250px; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px;">
+                <!-- Users with select dropdowns populated dynamically -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-sm btn-secondary" onclick="closeUserRolesManagementModal()" style="max-width: 80px;">Close</button>
+        </div>
+</div>
+
 <script>
 const DEFAULT = {
     "id": "root",
@@ -10821,6 +10847,11 @@ let syncTimeout = null;
 let titleTimer = null;
 let isNewDraft = false;
 
+// --- USER ROLES & ACCESS CONTROL ---
+let currentUserRole = 'viewer'; // Default role is read-only viewer
+let userProfilesCache = []; // Cache list of registered profiles
+let currentLockInfo = {}; // Realtime lock mapping: { taskId: { userName, userEmail } }
+
 // --- DYNAMIC PERFORMANCE CACHES ---
 let nodeCache = new Map();
 let parentCache = new Map();
@@ -11013,6 +11044,31 @@ async function loadStartupData() {
                     // Delay query execution by 500ms to let Google OAuth routing settle cleanly
                     setTimeout(async () => {
                         try {
+                            // Resolve the user's role from user_profiles table
+                            try {
+                                const { data: profile, error: profError } = await supabaseClient
+                                    .from('user_profiles')
+                                    .select('role')
+                                    .eq('id', user.id)
+                                    .single();
+                                
+                                if (profile && !profError) {
+                                    currentUserRole = profile.role;
+                                    console.log("Logged-in user role fetched:", currentUserRole);
+                                } else {
+                                    // Fallback: Default workspace owner is admin
+                                    currentUserRole = (user.email === 'itstherick@gmail.com') ? 'admin' : 'viewer';
+                                    console.log("No profile row found. Evaluated default role:", currentUserRole);
+                                }
+                            } catch (profEx) {
+                                console.warn("Failed to load user role, defaulting to viewer:", profEx);
+                                currentUserRole = (user.email === 'itstherick@gmail.com') ? 'admin' : 'viewer';
+                            }
+
+                            // Trigger Data Migration / Seeding checklist
+                            await verifyAndMigrateDataSchema();
+                            await toggleAdminLinkContainer();
+
                             console.log("Fetching row 'db_state' from table 'idealog_sync' after route settle delay...");
                             const { data: dbRowsArray, error } = await supabaseClient
                                 .from('idealog_sync')
@@ -15489,6 +15545,267 @@ async function pushStateToSupabase() {
     if (error) throw error;
     console.log("State pushed to Supabase cloud successfully.");
 }
+
+// Dynamic Data Schema Migration Script
+async function verifyAndMigrateDataSchema() {
+    if (!supabaseClient) return;
+    try {
+        console.log("Beginning database verification checklist...");
+        
+        // 1. Fetch current users list to populate userProfilesCache
+        const { data: profiles } = await supabaseClient
+            .from('user_profiles')
+            .select('*');
+        if (profiles) {
+            userProfilesCache = profiles;
+            console.log("User profiles loaded:", userProfilesCache.length);
+        }
+
+        // Check if database normalization seeding has been done already
+        const { count, error: countErr } = await supabaseClient
+            .from('tasks')
+            .select('*', { count: 'exact', head: true });
+        
+        if (count > 0 && !countErr) {
+            console.log("Normalized tables are already populated. Skipping database seeding.");
+            return;
+        }
+
+        console.log("Normalized tables are empty. Initiating structural migration from monolithic schema...");
+
+        // Load the monolithic backup from local storage
+        const localDbRaw = localStorage.getItem('idealog');
+        if (!localDbRaw) {
+            console.log("No local storage data found to seed. Migration skipped.");
+            return;
+        }
+        
+        const localDataObj = JSON.parse(localDbRaw);
+        
+        // Traverse data tree nodes to flatten task records
+        const flatNodesList = [];
+        function traverseAndFlatten(node, parentId = null) {
+            if (!node) return;
+            flatNodesList.push({
+                id: node.id,
+                parent_id: parentId,
+                title: node.title || 'Untitled',
+                status: node.status || 'todo',
+                assignee: node.assignee || '',
+                notes: node.notes || '',
+                tags: node.tags || [],
+                depth: getDepth(node.id),
+                created_by: 'System Migration'
+            });
+            if (node.children && Array.isArray(node.children)) {
+                node.children.forEach(child => traverseAndFlatten(child, node.id));
+            }
+        }
+        traverseAndFlatten(localDataObj, null);
+        console.log(`Discovered ${flatNodesList.length} tree nodes to migrate.`);
+
+        // Insert nodes in sequential depth order to satisfy foreign key REFERENCES constraints
+        flatNodesList.sort((a, b) => a.depth - b.depth);
+
+        // Batch upload nodes to the normalized tasks table
+        for (const taskItem of flatNodesList) {
+            const { error: insErr } = await supabaseClient
+                .from('tasks')
+                .upsert({
+                    id: taskItem.id,
+                    parent_id: taskItem.parent_id,
+                    title: taskItem.title,
+                    status: taskItem.status,
+                    assignee: taskItem.assignee,
+                    notes: taskItem.notes,
+                    tags: taskItem.tags,
+                    depth: taskItem.depth,
+                    created_by: taskItem.created_by
+                });
+            if (insErr) {
+                console.warn(`Failed to migrate task ${taskItem.id} (${taskItem.title}):`, insErr);
+            }
+        }
+
+        // Migrate Object Lists lookup lists
+        const categoriesList = ['assignees', 'systems', 'subsystems', 'projects'];
+        for (const cat of categoriesList) {
+            const vals = objectLists[cat] || [];
+            for (const valueItem of vals) {
+                if (valueItem && valueItem.trim()) {
+                    await supabaseClient
+                        .from('object_lists')
+                        .upsert({
+                            category: cat,
+                            value: valueItem.trim()
+                        }, { onConflict: 'category,value' });
+                }
+            }
+        }
+
+        // Migrate Task comments history
+        const commentsList = [];
+        function extractComments(node) {
+            if (!node) return;
+            if (node.comments && Array.isArray(node.comments)) {
+                node.comments.forEach((c, idx) => {
+                    commentsList.push({
+                        id: c.id || `c-${node.id}-${idx}`,
+                        task_id: node.id,
+                        author: c.author || 'User',
+                        content: c.content || '',
+                        timestamp: c.timestamp || new Date().toISOString()
+                    });
+                });
+            }
+            if (node.children && Array.isArray(node.children)) {
+                node.children.forEach(extractComments);
+            }
+        }
+        extractComments(localDataObj);
+        
+        if (commentsList.length > 0) {
+            console.log(`Migrating ${commentsList.length} task comments...`);
+            for (const comment of commentsList) {
+                await supabaseClient.from('task_comments').upsert(comment);
+            }
+        }
+
+        // Migrate Legacy History Logs
+        const historyEvents = localDataObj.history || [];
+        if (historyEvents.length > 0) {
+            console.log(`Migrating ${historyEvents.length} timeline events...`);
+            const chunks = [];
+            for (const ev of historyEvents) {
+                chunks.push({
+                    task_id: ev.taskId,
+                    timestamp: ev.timestamp || new Date().toISOString(),
+                    author: ev.assignee || 'User',
+                    field: ev.action || 'status_change',
+                    old_value: ev.fromStatus || '',
+                    new_value: ev.toStatus || ''
+                });
+            }
+            // Batch insert history logs (filter out invalid reference entries)
+            for (const chunk of chunks) {
+                const nodeExists = flatNodesList.some(n => n.id === chunk.task_id);
+                if (nodeExists) {
+                    await supabaseClient.from('task_history_events').insert(chunk);
+                }
+            }
+        }
+
+        console.log("Database schema structural migration finalized successfully!");
+    } catch (migEx) {
+        console.error("Migration parser execution exception:", migEx);
+    }
+}
+
+// User Roles Management UI Controller Logic
+function openUserRolesManagementModal() {
+    const modal = document.getElementById('user-roles-mgmt-modal');
+    if (!modal) return;
+    
+    modal.style.display = 'flex';
+    
+    // Populate user profiles list
+    const container = document.getElementById('users-roles-list-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (userProfilesCache.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 10px;">No registered users loaded from Supabase database.</div>`;
+        return;
+    }
+    
+    userProfilesCache.forEach(profile => {
+        const item = document.createElement('div');
+        item.style.display = 'flex';
+        item.style.justify = 'space-between';
+        item.style.alignItems = 'center';
+        item.style.background = 'rgba(255, 255, 255, 0.02)';
+        item.style.border = '1px solid var(--border)';
+        item.style.borderRadius = '8px';
+        item.style.padding = '8px 12px';
+        
+        const userInfo = document.createElement('div');
+        userInfo.style.display = 'flex';
+        userInfo.style.flexDirection = 'column';
+        userInfo.style.gap = '2px';
+        userInfo.innerHTML = `
+            <strong style="font-size: 12.5px; color: var(--text);">${profile.display_name || 'Anonymous User'}</strong>
+            <span style="font-size: 10.5px; color: var(--text-muted);">${profile.email}</span>
+        `;
+        
+        const roleSelect = document.createElement('select');
+        roleSelect.style.background = '#131924';
+        roleSelect.style.border = '1px solid var(--border)';
+        roleSelect.style.borderRadius = '6px';
+        roleSelect.style.color = 'var(--text)';
+        roleSelect.style.padding = '4px 8px';
+        roleSelect.style.fontSize = '12px';
+        roleSelect.style.outline = 'none';
+        
+        const roles = ['admin', 'manager', 'basic', 'viewer'];
+        roles.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r;
+            opt.textContent = r.charAt(0).toUpperCase() + r.slice(1);
+            if (profile.role === r) opt.selected = true;
+            roleSelect.appendChild(opt);
+        });
+        
+        roleSelect.onchange = async (e) => {
+            await updateRemoteUserProfileRole(profile.id, e.target.value);
+        };
+        
+        item.appendChild(userInfo);
+        item.appendChild(roleSelect);
+        container.appendChild(item);
+    });
+}
+
+function closeUserRolesManagementModal() {
+    const modal = document.getElementById('user-roles-mgmt-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function updateRemoteUserProfileRole(userId, newRole) {
+    if (!supabaseClient) return;
+    try {
+        console.log(`Updating user ${userId} role to: ${newRole}`);
+        const { error } = await supabaseClient
+            .from('user_profiles')
+            .update({ role: newRole })
+            .eq('id', userId);
+            
+        if (error) {
+            alert("Error updating role (Only Admins are authorized): " + error.message);
+        } else {
+            console.log("User role successfully updated in Supabase user_profiles.");
+            // Refresh local profiles cache list
+            const { data: profiles } = await supabaseClient.from('user_profiles').select('*');
+            if (profiles) {
+                userProfilesCache = profiles;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to update role:", e);
+    }
+}
+
+// Toggle admin link visibility during migration check
+async function toggleAdminLinkContainer() {
+    const adminLink = document.getElementById('admin-users-link-container');
+    if (!adminLink) return;
+    if (currentUserRole === 'admin') {
+        adminLink.style.display = 'block';
+    } else {
+        adminLink.style.display = 'none';
+    }
+}
+
 function switchView(view) {
     currentView=view;
     document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
