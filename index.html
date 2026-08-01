@@ -12199,11 +12199,18 @@ function setHighlightDurationDays(val) {
 
 // News timeline filter range in days (default to 7 days)
 let pivotNewsDays = parseFloat(localStorage.getItem('idealog_pivot_news_days') || '7.0');
+let pivotOnlyAssignedToMe = localStorage.getItem('idealog_pivot_assigned_only') === 'true';
 
 function setPivotNewsDays(val) {
     const num = parseFloat(val);
     pivotNewsDays = isNaN(num) ? 7.0 : num;
     localStorage.setItem('idealog_pivot_news_days', pivotNewsDays);
+    renderPivotTable();
+}
+
+function setPivotOnlyAssignedToMe(checked) {
+    pivotOnlyAssignedToMe = checked;
+    localStorage.setItem('idealog_pivot_assigned_only', checked);
     renderPivotTable();
 }
 
@@ -14213,7 +14220,25 @@ function renderPivotTable() {
     area.innerHTML = '';
 
     const rawTasks = allNodes(data).filter(n => getDepth(n.id) === 4);
-    const tasks = rawTasks.filter(t => !shouldHideTask(t));
+    
+    // Resolve the logged-in user's assigned name mapping from userProfilesCache
+    let loggedInAssigneeName = '';
+    if (supabaseClient) {
+        const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null; // fallback check
+        const currentUserObj = session ? session.user : null;
+        if (currentUserObj) {
+            const mappedProfile = userProfilesCache.find(p => p.email === currentUserObj.email);
+            if (mappedProfile && mappedProfile.assignee_name) {
+                loggedInAssigneeName = mappedProfile.assignee_name;
+            }
+        }
+    }
+    
+    let tasks = rawTasks.filter(t => !shouldHideTask(t));
+    if (pivotOnlyAssignedToMe && loggedInAssigneeName) {
+        tasks = tasks.filter(t => t.assignee === loggedInAssigneeName);
+    }
+    
     const projects = getProjectsList();
 
     function getTaskDimVal(task, dim) {
@@ -14328,6 +14353,10 @@ function renderPivotTable() {
                     <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Highlight (Days):</span>
                     <input type="number" min="0" step="0.1" value="${highlightDurationDays}" onchange="setHighlightDurationDays(this.value)" style="width: 50px; background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; text-align: center;">
                 </div>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
+                    <input type="checkbox" ${pivotOnlyAssignedToMe ? 'checked' : ''} onchange="setPivotOnlyAssignedToMe(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
+                    Only Assigned to Me
+                </label>
                 <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
                     <input type="checkbox" ${pivotZebraStripes ? 'checked' : ''} onchange="setPivotZebraStripes(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
                     Zebra Stripes
