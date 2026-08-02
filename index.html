@@ -11689,17 +11689,13 @@ function renderGitBoard() {
 
     // 5. Render Commit terminal logs on the right side panel
     commits.forEach(c => {
-        const dateStr = c.timestamp.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        const timeStr = c.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateStr = c.timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-        let changesHtml = '';
-        c.events.forEach(ev => {
-            let classColor = 'gb-diff-todo';
-            let prefix = '*';
-            if (ev.toStatus === 'done') { classColor = 'gb-diff-add'; prefix = '+'; }
-            else if (ev.toStatus === 'inprogress') { classColor = 'gb-diff-mod'; prefix = '~'; }
-            
-            changesHtml += `<div class="${classColor}">${prefix} [${sLabel(ev.toStatus)}] ${ev.taskTitle}</div>`;
-        });
+        // Join changes descriptions into a clean, comma-separated single line
+        const descList = c.events.map(ev => {
+            return `[${sLabel(ev.toStatus)}] ${ev.taskTitle}`;
+        }).join('; ');
 
         const logCard = document.createElement('div');
         logCard.className = 'gb-log-commit';
@@ -11710,10 +11706,16 @@ function renderGitBoard() {
             }
         };
         logCard.innerHTML = `
-            <div class="gb-log-header">commit ${c.id}</div>
-            <div class="gb-log-author">Author: ${c.author}</div>
-            <div class="gb-log-date">Date:   ${dateStr}</div>
-            <div class="gb-log-changes">${changesHtml}</div>
+            <div style="display: flex; align-items: center; width: 100%; justify-content: space-between; font-size: 11px;">
+                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; padding-right: 12px;">
+                    <span class="gb-log-header" style="margin-bottom: 0; flex-shrink: 0;">${c.id}</span>
+                    <strong style="color: var(--text); flex-shrink: 0;">${c.author}</strong>
+                    <span style="color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${descList}</span>
+                </div>
+                <div style="color: var(--text-muted); font-size: 10px; flex-shrink: 0; text-align: right;">
+                    ${dateStr} &middot; ${timeStr}
+                </div>
+            </div>
         `;
         logEl.appendChild(logCard);
     });
@@ -16366,10 +16368,18 @@ function switchView(view) {
     currentView=view;
     document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('btn-'+view).classList.add('active');
-    ['gitboard','spreadsheet'].forEach(v => {
-        const el = document.getElementById(v+'-view');
-        if (el) el.style.display = v===view?'flex':'none';
-    });
+    
+    // Manage wrapper display types correctly
+    const gitView = document.getElementById('gitboard-view');
+    const sheetView = document.getElementById('spreadsheet-view');
+    
+    if (view === 'gitboard') {
+        if (gitView) gitView.style.display = 'flex';
+        if (sheetView) sheetView.style.display = 'none';
+    } else {
+        if (gitView) gitView.style.display = 'none';
+        if (sheetView) sheetView.style.display = 'flex';
+    }
     redraw();
 }
 function redraw() {
