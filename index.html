@@ -414,10 +414,11 @@
             height: 100%;
             width: 100%;
             overflow-y: auto; /* Entire view container scrolls to lock panels together */
+            box-sizing: border-box;
         }
         #gb-graph-container {
             width: 250px;
-            height: auto;
+            height: fit-content;
             position: relative;
             border-right: 1px solid var(--border);
             flex-shrink: 0;
@@ -428,7 +429,7 @@
         }
         #gb-log-container {
             flex: 1;
-            height: auto;
+            height: fit-content;
             background: transparent;
             padding: 20px 20px 20px 0;
             font-family: 'Inter', sans-serif;
@@ -437,9 +438,9 @@
             overflow: hidden; /* Lock scroll to parent container */
         }
         .gb-log-commit {
-            height: 65px; /* Matches exact ROW_H pixel height of commit node graph */
+            height: 32px; /* Matches exact ROW_H pixel height of commit node graph */
             margin-bottom: 0;
-            padding: 10px 15px;
+            padding: 2px 15px;
             border-bottom: 1px solid rgba(255,255,255,0.03);
             display: flex;
             flex-direction: column;
@@ -11590,10 +11591,10 @@ function renderGitBoard() {
     }
 
     // Dimensions
-    const ROW_H = 65;
-    const MAIN_X = 140;
-    const SPLIT_X = 220;
-    const svgH = Math.max(100, commits.length * ROW_H + 120);
+    const ROW_H = 32;
+    const MAIN_X = 60;
+    const SPLIT_X = 110;
+    const svgH = Math.max(100, commits.length * ROW_H + 40);
 
     const svg = d3.select('#gb-graph-container').append('svg')
         .attr('width', '100%').attr('height', svgH);
@@ -11601,8 +11602,8 @@ function renderGitBoard() {
 
     // Grid layout guide line (Main Branch spine)
     g.append('line')
-        .attr('x1', MAIN_X).attr('y1', 40)
-        .attr('x2', MAIN_X).attr('y2', svgH - 40)
+        .attr('x1', MAIN_X).attr('y1', 20)
+        .attr('x2', MAIN_X).attr('y2', svgH - 20)
         .attr('stroke', 'rgba(255, 255, 255, 0.08)')
         .attr('stroke-width', 2);
 
@@ -11610,12 +11611,12 @@ function renderGitBoard() {
     commits.forEach((c, index) => {
         const rIndex = commits.length - 1 - index; // Chronological order index
         const lane = assignedLanes.get(c.id);
-        const y = 60 + index * ROW_H;
+        const y = 30 + index * ROW_H;
         const x = lane === 1 ? SPLIT_X : MAIN_X;
 
         // If this commit splits (lane === 1), draw Bezier split curve from previous main commit
         if (lane === 1 && index < commits.length - 1) {
-            const prevY = 60 + (index + 1) * ROW_H;
+            const prevY = 30 + (index + 1) * ROW_H;
             g.append('path')
                 .attr('d', `M${MAIN_X},${prevY} C${MAIN_X},${(prevY+y)/2} ${SPLIT_X},${(prevY+y)/2} ${SPLIT_X},${y}`)
                 .attr('fill', 'none')
@@ -11626,7 +11627,7 @@ function renderGitBoard() {
 
         // If this commit merges back, draw Bezier merge curve to the next main commit
         if (lane === 1 && index > 0) {
-            const nextY = 60 + (index - 1) * ROW_H;
+            const nextY = 30 + (index - 1) * ROW_H;
             g.append('path')
                 .attr('d', `M${SPLIT_X},${y} C${SPLIT_X},${(y+nextY)/2} ${MAIN_X},${(y+nextY)/2} ${MAIN_X},${nextY}`)
                 .attr('fill', 'none')
@@ -11640,23 +11641,23 @@ function renderGitBoard() {
     // 4. Render Commit Nodes and Labels
     commits.forEach((c, index) => {
         const lane = assignedLanes.get(c.id);
-        const y = 60 + index * ROW_H;
+        const y = 30 + index * ROW_H;
         const x = lane === 1 ? SPLIT_X : MAIN_X;
         const color = lane === 1 ? 'var(--inprogress)' : 'var(--accent)';
         const isSel = c.events.some(ev => ev.taskId === selectedId);
 
-        // Date timestamp text label on left side
+        // Date timestamp text label on left side (compact)
         const timeStr = c.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         g.append('text')
-            .attr('x', MAIN_X - 45).attr('y', y).attr('dy', '0.33em').attr('text-anchor', 'end')
-            .attr('font-family', 'Inter, sans-serif').attr('font-size', '10px').attr('font-weight', '500')
+            .attr('x', MAIN_X - 18).attr('y', y).attr('dy', '0.33em').attr('text-anchor', 'end')
+            .attr('font-family', 'Inter, sans-serif').attr('font-size', '9px').attr('font-weight', '500')
             .attr('fill', 'var(--text-muted)')
             .text(timeStr);
 
         // Commit outer ring
         g.append('circle')
             .attr('cx', x).attr('cy', y)
-            .attr('r', isSel ? 10 : 7)
+            .attr('r', isSel ? 7 : 5)
             .attr('fill', color)
             .attr('fill-opacity', 0.15)
             .style('pointer-events', 'none');
@@ -11664,10 +11665,10 @@ function renderGitBoard() {
         // Commit core dot
         g.append('circle')
             .attr('cx', x).attr('cy', y)
-            .attr('r', isSel ? 5.5 : 4)
+            .attr('r', isSel ? 4.5 : 3)
             .attr('fill', color)
             .attr('stroke', '#fff')
-            .attr('stroke-width', isSel ? 2 : 1)
+            .attr('stroke-width', isSel ? 1.5 : 1)
             .style('cursor', 'pointer')
             .on('click', () => {
                 if (c.events[0]?.taskId) {
