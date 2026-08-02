@@ -14333,7 +14333,7 @@ function renderPivotTable() {
             currentUserObj = supabaseClient.auth.user ? supabaseClient.auth.user() : null;
         }
         if (currentUserObj) {
-            const mappedProfile = userProfilesCache.find(p => p.email === currentUserObj.email);
+            const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === currentUserObj.email.toLowerCase());
             if (mappedProfile && mappedProfile.assignee_name) {
                 loggedInAssigneeName = mappedProfile.assignee_name;
             }
@@ -16198,7 +16198,7 @@ async function populateTaskHistoryDropdown() {
                 action: ev.action || 'status_change',
                 fromStatus: ev.fromStatus || '',
                 toStatus: ev.toStatus || '',
-                assignee: ev.assignee || 'User',
+                assignee: ev.assignee || getActiveUserDisplayName(),
                 field: ev.field || 'status'
             }));
             
