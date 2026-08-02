@@ -10919,6 +10919,11 @@ let selectedId = null;
 let currentView = 'mindmap';
 let showMerged = localStorage.getItem('idealog_show_merged') === 'true';
 const collapsed = new Set();
+
+// --- UNDO/REDO TRANSACTION QUEUES ---
+let undoStack = [];
+let redoStack = [];
+
 // --- AUTO-SYNC TOGGLE CONFIG STATE ---
 let isAutoSyncEnabled = localStorage.getItem('idealog_auto_sync') !== 'false';
 let syncPollingInterval = null;
@@ -11223,7 +11228,19 @@ async function loadStartupData() {
 }
 window.addEventListener('DOMContentLoaded', loadStartupData);
 
-const save = () => {
+function pushToUndoStack() {
+    // Keep max 50 states in memory limit
+    if (undoStack.length >= 50) {
+        undoStack.shift();
+    }
+    undoStack.push(JSON.stringify(data));
+}
+
+const save = (isUndoRedoAction = false) => {
+    if (!isUndoRedoAction) {
+        pushToUndoStack();
+        redoStack = []; // Clear redo stack on fresh changes
+    }
     data.updatedAt = new Date().toISOString();
     localStorage.setItem('idealog', JSON.stringify(data));
     rebuildPerformanceCaches();
@@ -11246,6 +11263,34 @@ const save = () => {
         }, 30000); // Wait 30 seconds before executing sync
     }
 };
+
+function undo() {
+    if (undoStack.length === 0) {
+        showUndoToast("Nothing to undo", false);
+        return;
+    }
+    const prevState = undoStack.pop();
+    redoStack.push(JSON.stringify(data));
+    
+    data = JSON.parse(prevState);
+    save(true);
+    redraw();
+    showUndoToast("Undone last action", true);
+}
+
+function redo() {
+    if (redoStack.length === 0) {
+        showUndoToast("Nothing to redo", false);
+        return;
+    }
+    const nextState = redoStack.pop();
+    undoStack.push(JSON.stringify(data));
+    
+    data = JSON.parse(nextState);
+    save(true);
+    redraw();
+    showUndoToast("Redone action", false);
+}
 const uid  = () => 'n' + Math.random().toString(36).slice(2,9);
 
 function allNodes(node, out=[]) { out.push(node); (node.children||[]).forEach(c=>allNodes(c,out)); return out; }
@@ -16463,6 +16508,56 @@ function showTip(e,n) {
     t.classList.add('visible');
 }
 function hideTip() { document.getElementById('tooltip').classList.remove('visible'); }
+
+// --- UNDO/REDO TOAST & HOTKEYS ---
+function showUndoToast(message, isUndoAction = false) {
+    let toast = document.getElementById('undo-redo-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'undo-redo-toast';
+        toast.style.cssText = 'position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(8, 12, 20, 0.95); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 16px; color: var(--text); font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4); z-index: 99999; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; opacity: 0; pointer-events: auto;';
+        document.body.appendChild(toast);
+    }
+    
+    // Build internal alert markup with action buttons
+    toast.innerHTML = `
+        <span>${message}</span>
+        ${isUndoAction ? `<button onclick="redo()" style="background: var(--accent); border: none; outline: none; color: white; border-radius: 4px; padding: 3px 8px; font-size: 10px; font-weight: bold; cursor: pointer; transition: transform 0.1s;">Redo</button>` : ''}
+    `;
+    
+    // Slide up animation transition
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+    toast.style.opacity = '1';
+    
+    clearTimeout(toast.dismissTimeout);
+    toast.dismissTimeout = setTimeout(() => {
+        toast.style.transform = 'translateX(-50%) translateY(100px)';
+        toast.style.opacity = '0';
+    }, 4500);
+}
+
+// Global hotkeys hook
+window.addEventListener('keydown', (e) => {
+    // Ignore trigger inputs if active inside properties panel fields, comments, or modal dialogues
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+        return;
+    }
+    
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        if (e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                redo();
+            } else {
+                undo();
+            }
+        } else if (e.key.toLowerCase() === 'y') {
+            e.preventDefault();
+            redo();
+        }
+    }
+});
 
 // --- INIT ---
 updateSidebarDrawerVisibility();
