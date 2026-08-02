@@ -408,19 +408,20 @@
         /* ── Git Board ── */
         #gitboard-view {
             flex: 1;
-            display: none;
+            display: flex; /* Flex layout side by side */
             position: relative;
             background: var(--bg);
             height: 100%;
             width: 100%;
-            overflow-y: auto; /* Scroll the whole Gitboard view container, not individual panels */
+            overflow-y: auto; /* Entire view container scrolls to lock panels together */
         }
         #gb-graph-container {
-            width: 320px;
+            width: 250px;
             height: auto;
             position: relative;
             border-right: 1px solid var(--border);
             flex-shrink: 0;
+            overflow: hidden; /* Prevent independent graph scrolling */
         }
         #gb-graph-container svg {
             display: block;
@@ -433,6 +434,7 @@
             font-family: 'Inter', sans-serif;
             font-size: 12px;
             color: #94a3b8;
+            overflow: hidden; /* Lock scroll to parent container */
         }
         .gb-log-commit {
             height: 65px; /* Matches exact ROW_H pixel height of commit node graph */
@@ -11597,10 +11599,6 @@ function renderGitBoard() {
         .attr('width', '100%').attr('height', svgH);
     const g = svg.append('g');
 
-    // Drag-zoom support
-    svg.call(d3.zoom().scaleExtent([0.2, 4]).on('zoom', e => g.attr('transform', e.transform)))
-       .on('dblclick.zoom', null);
-
     // Grid layout guide line (Main Branch spine)
     g.append('line')
         .attr('x1', MAIN_X).attr('y1', 40)
@@ -11648,9 +11646,9 @@ function renderGitBoard() {
         const isSel = c.events.some(ev => ev.taskId === selectedId);
 
         // Date timestamp text label on left side
-        const timeStr = c.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + c.timestamp.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const timeStr = c.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         g.append('text')
-            .attr('x', MAIN_X - 30).attr('y', y).attr('dy', '0.33em').attr('text-anchor', 'end')
+            .attr('x', MAIN_X - 45).attr('y', y).attr('dy', '0.33em').attr('text-anchor', 'end')
             .attr('font-family', 'Inter, sans-serif').attr('font-size', '10px').attr('font-weight', '500')
             .attr('fill', 'var(--text-muted)')
             .text(timeStr);
