@@ -11517,6 +11517,19 @@ function renderGitBoard() {
     btn.addEventListener('mouseenter', function() {
         btn.style.background = 'var(--surface-hover)';
         btn.style.borderColor = 'var(--border-bright)';
+        btn.style.color = 'var(--text)';
+    });
+    btn.addEventListener('mouseleave', function() {
+        btn.style.background = 'rgba(255,255,255,0.03)';
+        btn.style.borderColor = 'var(--border)';
+        btn.style.color = 'var(--text-dim)';
+    });
+    btn.addEventListener('click', function() {
+        showMerged = !showMerged;
+        localStorage.setItem('idealog_show_merged', showMerged);
+        renderGitBoard();
+    });
+
     // 1. Group events into discrete Commits based on user action boundaries
     // Sort events by timestamp ascending to process chronologically
     const sortedEvents = [...data.history].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
