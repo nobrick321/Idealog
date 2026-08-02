@@ -16161,8 +16161,7 @@ async function populateTaskHistoryDropdown() {
     // 1. Resolve Task Creator Metadata
     const taskNode = findNode(selectedId);
     if (taskNode) {
-        const creatorName = (taskNode.created_by === 'User' || !taskNode.created_by) ? getActiveUserDisplayName() : taskNode.created_by;
-        creatorLabel.textContent = `Creator: ${creatorName}`;
+        creatorLabel.textContent = `Creator: ${taskNode.created_by || 'User'}`;
     }
     
     // 2. Fetch history logs from both database table and local memory, then deduplicate
@@ -16198,7 +16197,7 @@ async function populateTaskHistoryDropdown() {
                 action: ev.action || 'status_change',
                 fromStatus: ev.fromStatus || '',
                 toStatus: ev.toStatus || '',
-                assignee: ev.assignee || getActiveUserDisplayName(),
+                assignee: ev.assignee || 'User',
                 field: ev.field || 'status'
             }));
             
@@ -16224,7 +16223,7 @@ async function populateTaskHistoryDropdown() {
         item.style.cssText = 'display: flex; flex-direction: column; gap: 3px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 11px;';
         
         const timestamp = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(ev.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
-        const actor = ev.assignee === 'User' ? getActiveUserDisplayName() : (ev.assignee || 'User');
+        const actor = ev.assignee || 'User';
         
         let changeDesc = '';
         if (ev.action === 'status_change') {
