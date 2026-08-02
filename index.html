@@ -413,29 +413,40 @@
             background: var(--bg);
             height: 100%;
             width: 100%;
-            overflow-y: auto; /* Entire view container scrolls to lock panels together */
+            overflow: hidden; /* Individual columns scroll locally, keeping alignment locked via JS scroll sync */
             box-sizing: border-box;
         }
         #gb-graph-container {
-            width: 250px;
-            height: fit-content;
+            width: 120px;
+            height: 100%;
             position: relative;
             border-right: 1px solid var(--border);
             flex-shrink: 0;
-            overflow: hidden; /* Prevent independent graph scrolling */
+            overflow-y: scroll; /* Allow synchronized scrolling */
+            scrollbar-width: none; /* Hide scrollbars for unified look */
+        }
+        #gb-graph-container::-webkit-scrollbar {
+            display: none;
         }
         #gb-graph-container svg {
             display: block;
         }
         #gb-log-container {
-            flex: 1;
-            height: fit-content;
+            width: 320px;
+            height: 100%;
             background: transparent;
-            padding: 20px 20px 20px 0;
-            font-family: 'Inter', sans-serif;
-            font-size: 12px;
-            color: #94a3b8;
-            overflow: hidden; /* Lock scroll to parent container */
+            border-right: 1px solid var(--border);
+            flex-shrink: 0;
+            overflow-y: scroll; /* Primary scroll master */
+        }
+        #gb-changes-container {
+            flex: 1;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.01);
+            overflow-y: auto;
+            padding: 16px;
+            box-sizing: border-box;
+            border-right: 1px solid var(--border);
         }
         .gb-log-commit {
             height: 32px; /* Matches exact ROW_H pixel height of commit node graph */
@@ -447,6 +458,10 @@
             justify-content: center;
             box-sizing: border-box;
             transition: background 0.15s ease;
+        }
+        .gb-log-commit.active {
+            background: rgba(99, 102, 241, 0.08) !important;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.2);
         }
         .gb-log-commit:hover {
             background: rgba(255,255,255,0.02);
@@ -1164,6 +1179,7 @@
         <div id="gitboard-view" style="display: none; width: 100%; height: 100%;">
             <div id="gb-graph-container"></div>
             <div id="gb-log-container"></div>
+            <div id="gb-changes-container"></div>
         </div>
         <div id="spreadsheet-view" style="display: none; width: 100%; height: 100%; flex-direction: column;">
             <div class="sheet-tabs" style="justify-content: space-between; align-items: center; padding-right: 16px;">
@@ -11577,17 +11593,7 @@ function renderGitBoard() {
     
     for (let i = 0; i < chronoCommits.length; i++) {
         const c = chronoCommits[i];
-        let lane = 0;
-        
-        // Check if there is an adjacent commit within 30 seconds from a different author
-        if (i > 0) {
-            const prev = chronoCommits[i - 1];
-            const timeDiff = Math.abs(c.timestamp.getTime() - prev.timestamp.getTime());
-            if (timeDiff <= 30000 && c.author !== prev.author && assignedLanes.get(prev.id) === 0) {
-                lane = 1; // Split into side lane
-            }
-        }
-        assignedLanes.set(c.id, lane);
+        assignedLanes.set(c.id, 0); // Always main branch for local edits
     }
 
     // Dimensions
@@ -11688,12 +11694,84 @@ function renderGitBoard() {
             .on('mouseout', hideTip);
     });
 
-    // 5. Render Commit terminal logs on the right side panel
-    commits.forEach(c => {
+    // 5. Render Commit log rows on Panel 2
+    let activeCommitId = null;
+
+    // Synchronize scrolling between graph container and log container
+    logEl.onscroll = () => {
+        graphEl.scrollTop = logEl.scrollTop;
+    };
+    graphEl.onscroll = () => {
+        logEl.scrollTop = graphEl.scrollTop;
+    };
+
+    function selectCommit(c, cardEl) {
+        // Toggle active card styling
+        document.querySelectorAll('.gb-log-commit').forEach(el => el.classList.remove('active'));
+        if (cardEl) cardEl.classList.add('active');
+        activeCommitId = c.id;
+
+        // Render changed tasks in Panel 3
+        const changesEl = document.getElementById('gb-changes-container');
+        if (!changesEl) return;
+        changesEl.innerHTML = `
+            <div style="margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+                <div style="font-size: 11px; font-weight: bold; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Commit Details</div>
+                <div style="font-size: 13px; font-weight: bold; color: var(--text); margin-bottom: 2px;">${c.id}</div>
+                <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;">Author: <strong>${c.author}</strong></div>
+                <div style="font-size: 10px; color: var(--text-muted);">${c.timestamp.toLocaleString()}</div>
+            </div>
+            <div id="gb-changes-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        `;
+
+        const listEl = document.getElementById('gb-changes-list');
+        c.events.forEach(ev => {
+            let classColor = 'gb-diff-todo';
+            let prefix = '●';
+            let actionText = 'Modified';
+            if (ev.toStatus === 'done') { classColor = 'gb-diff-add'; prefix = '+'; actionText = 'Completed'; }
+            else if (ev.toStatus === 'inprogress') { classColor = 'gb-diff-mod'; prefix = '▶'; actionText = 'Started'; }
+
+            const item = document.createElement('div');
+            item.style.cssText = 'padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: all 0.15s ease;';
+            item.onmouseenter = () => {
+                item.style.background = 'var(--surface-hover)';
+                item.style.borderColor = 'var(--border-bright)';
+            };
+            item.onmouseleave = () => {
+                item.style.background = 'rgba(255,255,255,0.02)';
+                item.style.borderColor = 'var(--border)';
+            };
+            item.onclick = () => {
+                if (ev.taskId) {
+                    selectNode(ev.taskId);
+                }
+            };
+            item.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                    <strong style="font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;">${ev.taskTitle}</strong>
+                    <span class="${classColor}" style="font-size: 10px; font-weight: bold; text-transform: uppercase;">${prefix} ${actionText}</span>
+                </div>
+                <div style="font-size: 10px; color: var(--text-muted);">
+                    Status: <span style="color: var(--text-dim);">${sLabel(ev.toStatus)}</span>
+                </div>
+            `;
+            listEl.appendChild(item);
+        });
+
+        // Open task properties if changes are present
+        if (c.events[0]?.taskId) {
+            const sidebar = document.getElementById('properties-panel');
+            if (sidebar && !sidebar.classList.contains('open')) {
+                selectNode(c.events[0].taskId);
+            }
+        }
+    }
+
+    commits.forEach((c, idx) => {
         const timeStr = c.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const dateStr = c.timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-        // Join changes descriptions into a clean, comma-separated single line
         const descList = c.events.map(ev => {
             return `[${sLabel(ev.toStatus)}] ${ev.taskTitle}`;
         }).join('; ');
@@ -11702,9 +11780,7 @@ function renderGitBoard() {
         logCard.className = 'gb-log-commit';
         logCard.style.cursor = 'pointer';
         logCard.onclick = () => {
-            if (c.events[0]?.taskId) {
-                selectNode(c.events[0].taskId);
-            }
+            selectCommit(c, logCard);
         };
         logCard.innerHTML = `
             <div style="display: flex; align-items: center; width: 100%; justify-content: space-between; font-size: 11px;">
@@ -11719,6 +11795,11 @@ function renderGitBoard() {
             </div>
         `;
         logEl.appendChild(logCard);
+
+        // Auto-select first commit on startup
+        if (idx === 0) {
+            selectCommit(c, logCard);
+        }
     });
 }
 
