@@ -30,7 +30,48 @@
 
         html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; }
 
-        #app { display: flex; flex-direction: column; height: 100vh; }
+        #app { display: none; flex-direction: column; height: 100vh; }
+
+        /* Authentication Screen Styles */
+        #auth-container {
+            display: none;
+            position: fixed; inset: 0; z-index: 9999;
+            background: var(--bg);
+            flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        #auth-container::before {
+            content: '';
+            position: absolute; inset: 0; pointer-events: none;
+            background:
+                radial-gradient(ellipse at 30% 30%, rgba(99,102,241,0.12) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 70%, rgba(139,92,246,0.08) 0%, transparent 60%);
+        }
+        .auth-card {
+            position: relative;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-bright);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border-radius: 16px; padding: 40px;
+            width: 100%; max-width: 420px; text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            display: flex; flex-direction: column; align-items: center; gap: 24px;
+        }
+        .auth-logo {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 48px; height: 48px;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border-radius: 12px; font-size: 24px;
+            box-shadow: 0 0 20px rgba(99,102,241,0.5);
+        }
+        .auth-title {
+            font-size: 24px; font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .auth-subtitle {
+            font-size: 13.5px; color: var(--text-dim); line-height: 1.5;
+        }
 
         body::before {
             content: '';
@@ -1061,6 +1102,24 @@
 </style>
 </head>
 <body>
+<div id="auth-container">
+    <div class="auth-card">
+        <div class="auth-logo">&#10022;</div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <h1 class="auth-title">Welcome to Idealog</h1>
+            <p class="auth-subtitle">A mind map project manager. Sign in to view and collaborate on your tasks.</p>
+        </div>
+        <button id="btn-auth-signin" onclick="signInWithGoogle()" class="btn-sm" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 220px; height: 38px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; font-size: 12.5px; cursor: pointer; transition: all 0.15s ease;">
+            <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px;">
+                <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.23 2.673 1.24 6.55l4.026 3.215z"/>
+                <path fill="#4285F4" d="M23.64 12.273c0-.818-.073-1.609-.208-2.373H12v4.582h6.527C18.245 15.655 17.02 17 15.26 18.173v3.018h9.082c5.309-4.882 8.355-12.073 8.355-14.882z"/>
+                <path fill="#FBBC05" d="M5.266 14.235 1.24 17.45A12.002 12.002 0 0 1 0 12c0-1.927.455-3.755 1.24-5.45l4.026 3.215a7.042 7.042 0 0 0-.25 2.235c0 .818.09 1.6.25 2.235z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.973-1.073 7.964-2.918l-3.082-3.018c-.855.573-1.955.918-3.136.918-3.136 0-5.782-2.118-6.732-4.964L1.24 17.45C3.23 21.327 7.27 24 12 24z"/>
+            </svg>
+            Sign in with Google
+        </button>
+    </div>
+</div>
 <div id="app">
     <header id="header">
         <div class="logo"><div class="logo-icon">&#10022;</div>Idealog</div>
@@ -11174,8 +11233,10 @@ const save = () => {
         clearTimeout(syncTimeout);
         syncTimeout = setTimeout(async () => {
             try {
-                await pushStateToSupabase();
-                updateSupabaseStatusBadge('online', '● Cloud Online (Synced)', '#10b981');
+                const success = await pushStateToSupabase();
+                if (success) {
+                    updateSupabaseStatusBadge('online', '● Cloud Online (Synced)', '#10b981');
+                }
             } catch (err) {
                 console.error("Delayed Supabase push failed:", err);
                 updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
@@ -15674,6 +15735,17 @@ async function signOutGoogle() {
 }
 
 function updateGoogleAuthUIState(user) {
+    const appEl = document.getElementById('app');
+    const authContainer = document.getElementById('auth-container');
+    
+    if (user) {
+        if (appEl) appEl.style.display = 'flex';
+        if (authContainer) authContainer.style.display = 'none';
+    } else {
+        if (appEl) appEl.style.display = 'none';
+        if (authContainer) authContainer.style.display = 'flex';
+    }
+
     const statusLabel = document.getElementById('google-auth-status');
     const authBtn = document.getElementById('btn-google-signin');
     if (!statusLabel || !authBtn) return;
@@ -15705,14 +15777,14 @@ function updateGoogleAuthUIState(user) {
 
 // Push local state into Supabase cloud table row
 async function pushStateToSupabase() {
-    if (!supabaseClient) return;
+    if (!supabaseClient) return false;
     
     // Verify user session is authenticated before pushing database sync payloads
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         console.warn("Attempted to sync with Supabase while not logged in.");
         updateSupabaseStatusBadge('offline', '● Cloud Offline (Sign In)', '#94a3b8');
-        return;
+        return false;
     }
     
     const dbPayload = {
@@ -15728,6 +15800,7 @@ async function pushStateToSupabase() {
         
     if (error) throw error;
     console.log("State pushed to Supabase cloud successfully.");
+    return true;
 }
 
 // Dynamic Data Schema Migration Script
