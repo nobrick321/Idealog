@@ -16161,8 +16161,8 @@ async function populateTaskHistoryDropdown() {
     // 1. Resolve Task Creator Metadata
     const taskNode = findNode(selectedId);
     if (taskNode) {
-        // Fallback checks
-        creatorLabel.textContent = `Creator: ${taskNode.created_by || 'System'}`;
+        const creatorName = (taskNode.created_by === 'User' || !taskNode.created_by) ? getActiveUserDisplayName() : taskNode.created_by;
+        creatorLabel.textContent = `Creator: ${creatorName}`;
     }
     
     // 2. Fetch history logs from both database table and local memory, then deduplicate
