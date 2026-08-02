@@ -11171,12 +11171,12 @@ async function loadStartupData() {
                                     console.log("Logged-in user role fetched:", currentUserRole);
                                 } else {
                                     // Fallback: Default workspace owner is admin
-                                    currentUserRole = (user.email === 'ritesh@morphle.in') ? 'admin' : 'viewer';
+                                    currentUserRole = (user.email && user.email.toLowerCase() === 'ritesh@morphle.in') ? 'admin' : 'viewer';
                                     console.log("No profile row found. Evaluated default role:", currentUserRole);
                                 }
                             } catch (profEx) {
                                 console.warn("Failed to load user role, defaulting to viewer:", profEx);
-                                currentUserRole = (user.email === 'ritesh@morphle.in') ? 'admin' : 'viewer';
+                                currentUserRole = (user.email && user.email.toLowerCase() === 'ritesh@morphle.in') ? 'admin' : 'viewer';
                             }
 
                             // Trigger Data Migration / Seeding checklist
