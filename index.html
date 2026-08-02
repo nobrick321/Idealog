@@ -13076,22 +13076,30 @@ function updateTaskStatusFromSheet(id, val) {
 function getActiveUserDisplayName() {
     if (!supabaseClient) return 'User';
     let currentUserObj = null;
-    const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
-    if (session && session.user) {
-        currentUserObj = session.user;
+    
+    // Check v2 getUser first (cached in session wrapper), then session(), then user() fallback
+    const sessionObj = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
+    if (sessionObj && sessionObj.user) {
+        currentUserObj = sessionObj.user;
     } else {
-        currentUserObj = supabaseClient.auth.user ? supabaseClient.auth.user() : null;
+        currentUserObj = supabaseClient.auth.currentUser || (supabaseClient.auth.user ? supabaseClient.auth.user() : null);
     }
+    
     if (currentUserObj) {
-        const mappedProfile = userProfilesCache.find(p => p.email === currentUserObj.email);
-        if (mappedProfile && mappedProfile.assignee_name) {
-            return mappedProfile.assignee_name;
+        const userEmail = currentUserObj.email;
+        if (userEmail) {
+            // Case-insensitive profile cache matching
+            const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === userEmail.toLowerCase());
+            if (mappedProfile && mappedProfile.assignee_name) {
+                return mappedProfile.assignee_name;
+            }
+            if (mappedProfile && mappedProfile.display_name) {
+                return mappedProfile.display_name;
+            }
+            // Fallback: Use capitalized email segment
+            const localPart = userEmail.split('@')[0];
+            return localPart.charAt(0).toUpperCase() + localPart.slice(1);
         }
-        if (mappedProfile && mappedProfile.display_name) {
-            return mappedProfile.display_name;
-        }
-        // Fallback: Use part of email before @
-        return currentUserObj.email.split('@')[0];
     }
     return 'User';
 }
@@ -14895,200 +14903,7 @@ function renderPivotTable() {
         </th>
     </tr>`;
 
-    // --- Pivot Table News Section Generator (Mimics activePivotHierarchy columns dynamically) ---
-    const nowTime = Date.now();
-    const rangeMs = pivotNewsDays * 24 * 60 * 60 * 1000;
-    
-    // Gather all leaf tasks matching active pivot table filters (excluding hidden tasks)
-    const activeTasks = tasks;
-    const newsItems = [];
-    
-    activeTasks.forEach(t => {
-        const createdMs = t.createdAt ? new Date(t.createdAt).getTime() : 0;
-        const updatedMs = t.updatedAt ? new Date(t.updatedAt).getTime() : 0;
-        const doneMs = t.doneAt ? new Date(t.doneAt).getTime() : 0;
-        
-        // Match status done completions
-        const hasDoneEvent = t.status === 'done' && doneMs && (nowTime - doneMs <= rangeMs);
-        if (hasDoneEvent) {
-            newsItems.push({
-                time: doneMs,
-                type: 'done',
-                task: t,
-                details: 'Task marked completed'
-            });
-        }
-        
-        // Match creations (only if the task hasn't also been completed in this same news window)
-        if (createdMs && (nowTime - createdMs <= rangeMs) && !hasDoneEvent) {
-            newsItems.push({
-                time: createdMs,
-                type: 'created',
-                task: t,
-                details: 'Task initialized in database'
-            });
-        }
-        
-        // Match other updates/modifications (avoid duplicating creation events)
-        if (updatedMs && (nowTime - updatedMs <= rangeMs) && Math.abs(updatedMs - createdMs) > 2000 && Math.abs(updatedMs - doneMs) > 2000) {
-            newsItems.push({
-                time: updatedMs,
-                type: 'updated',
-                task: t,
-                details: 'Task properties/notes updated'
-            });
-        }
-    });
-
-    // Also parse history timeline entries for status movements
-    if (data.history) {
-        data.history.forEach(h => {
-            const histMs = h.timestamp ? new Date(h.timestamp).getTime() : 0;
-            if (histMs && (nowTime - histMs <= rangeMs)) {
-                // Avoid status change duplicates of 'done' which are already logged above
-                if (h.toStatus === 'done') return;
-                
-                // Lookup current properties of the task if still present
-                const matchedTask = findNode(h.taskId);
-                
-                // Create a temporary mock task matching historical title/properties if the original is gone,
-                // or extend matchedTask to preserve dimension lookups via getTaskDimVal
-                const mockTask = matchedTask ? { ...matchedTask } : { id: h.taskId, title: h.taskTitle, status: h.toStatus };
-                if (!mockTask.assignee && h.assignee) {
-                    mockTask.assignee = h.assignee;
-                }
-                
-                newsItems.push({
-                    time: histMs,
-                    type: 'status',
-                    task: mockTask,
-                    details: `Status Shift: ${sLabel(h.fromStatus)} ➔ ${sLabel(h.toStatus)}`
-                });
-            }
-        });
-    }
-
-    // Deduplicate news items by task ID, keeping only the most recent event per task to avoid spam
-    const seenTaskIds = new Set();
-    const uniqueNewsItems = [];
-    // Sort temporarily by time descending so we grab the newest event first
-    newsItems.sort((a, b) => b.time - a.time);
-    newsItems.forEach(item => {
-        if (!seenTaskIds.has(item.task.id)) {
-            seenTaskIds.add(item.task.id);
-            uniqueNewsItems.push(item);
-        }
-    });
-    
-    // Replace array with the deduplicated list
-    newsItems.length = 0;
-    newsItems.push(...uniqueNewsItems);
-
-    // Sort news newest first (maintain ordering)
-    newsItems.sort((a, b) => b.time - a.time);
-
-    // Format relative timestamp
-    const getRelativeTimeString = (ms) => {
-        const diffSecs = Math.floor((nowTime - ms) / 1000);
-        if (diffSecs < 60) return 'Just now';
-        const diffMins = Math.floor(diffSecs / 60);
-        if (diffMins < 60) return `${diffMins}m ago`;
-        const diffHours = Math.floor(diffMins / 60);
-        if (diffHours < 24) return `${diffHours}h ago`;
-        const diffDays = Math.floor(diffHours / 24);
-        return `${diffDays}d ago`;
-    };
-
-    // Render table headers dynamically matching activePivotHierarchy columns
-    let newsTheadHtml = '<tr>';
-    activePivotHierarchy.forEach(h => {
-        newsTheadHtml += `<th style="width: 1%; white-space: nowrap;">${hierarchyLabels[h]}</th>`;
-    });
-    newsTheadHtml += `
-        <th style="width: auto;">Task Title</th>
-        <th style="text-align:right; width: 5%; white-space: nowrap;">Occurred</th>
-    </tr>`;
-
-    // Build the news items table body rows with dynamic cell-spanning groupings
-    let newsTbodyHtml = '';
-    if (newsItems.length === 0) {
-        newsTbodyHtml = `<tr><td colspan="${activePivotHierarchy.length + 2}" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
-    } else {
-        // Track unique spanned values per category level index matching activePivotHierarchy
-        const lastDimValues = Array(activePivotHierarchy.length).fill(null);
-        
-        newsItems.forEach(item => {
-            // Build cells for active hierarchy dimensions
-            let dimensionCellsHtml = '';
-            let isParentDifferent = false;
-            
-            activePivotHierarchy.forEach((dim, idx) => {
-                const rawVal = getTaskDimVal(item.task, dim);
-                const displayVal = rawVal === 'Unassigned' ? '' : sLabel(rawVal);
-                
-                // Grouping spanning check matching main pivot logic:
-                // If any parent category changes, all child categories reset spanning
-                if (isParentDifferent || rawVal !== lastDimValues[idx]) {
-                    const weight = idx === 0 ? '600' : idx === 1 ? '550' : '500';
-                    const color = dim === 'status' ? sColor(item.task.status) : (idx >= 3 ? 'var(--text-muted)' : 'var(--text)');
-                    
-                    dimensionCellsHtml += `<td class="pivot-dim-cell" style="font-weight:${weight}; vertical-align:top; border-bottom: none; color: ${color}; white-space: nowrap;">${displayVal}</td>`;
-                    lastDimValues[idx] = rawVal;
-                    isParentDifferent = true; // Force reset of child columns spanning
-                } else {
-                    dimensionCellsHtml += `<td style="border-top:none; border-bottom:none;"></td>`;
-                }
-            });
-            
-            newsTbodyHtml += `
-                <tr>
-                    ${dimensionCellsHtml}
-                    <td style="font-weight:500;">
-                        <span style="cursor: pointer; text-decoration: underline rgba(255,255,255,0.1);" onclick="event.stopPropagation(); selectNode('${item.task.id}');">${item.task.title}</span>
-                    </td>
-                    <td style="text-align:right; color:var(--text-muted); white-space:nowrap; width:1%;">${getRelativeTimeString(item.time)}</td>
-                </tr>
-            `;
-        });
-    }
-
-    let newsHtml = `
-        <div class="pivot-news-section" style="margin-top: 28px; padding: 18px; background: rgba(8,12,20,0.65); border: 1px solid var(--border); border-radius: 12px; backdrop-filter: blur(20px);">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing:0.05em;">📡 Happenings Ledger (Pivot News)</span>
-                    <span style="font-size: 11px; color: var(--text-muted);">(${newsItems.length} transactions in view)</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                    <div style="display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px;">
-                        <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; margin-right: 4px;">Highlight Shift:</span>
-                        <button onclick="window.shiftPivotHighlight('left')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">◀</button>
-                        <button onclick="window.shiftPivotHighlight('up')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">▲</button>
-                        <button onclick="window.shiftPivotHighlight('down')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">▼</button>
-                        <button onclick="window.shiftPivotHighlight('right')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">▶</button>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase;">Timeline:</span>
-                        <select onchange="setPivotNewsDays(this.value)" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; color: var(--text); font-size: 11px; cursor: pointer; outline: none;">
-                            <option value="1" ${pivotNewsDays === 1 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 24 Hours</option>
-                            <option value="3" ${pivotNewsDays === 3 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 3 Days</option>
-                            <option value="7" ${pivotNewsDays === 7 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 7 Days</option>
-                            <option value="14" ${pivotNewsDays === 14 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 14 Days</option>
-                            <option value="30" ${pivotNewsDays === 30 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 30 Days</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            
-            <table class="excel-table news-excel-table" style="table-layout: auto;">
-                <thead>
-                    ${newsTheadHtml}
-                </thead>
-                <tbody>
-                    ${newsTbodyHtml}
-                </tbody>
-            </table>
-        </div>
+}
     `;
 
     area.innerHTML = `
@@ -15101,7 +14916,6 @@ function renderPivotTable() {
                 ${tbodyHtml || `<tr><td colspan="${activePivotHierarchy.length + 1}" style="text-align:center;color:var(--text-muted);">No tasks found.</td></tr>`}
             </tbody>
         </table>
-        ${newsHtml}
     `;
 }
 
