@@ -16224,7 +16224,7 @@ async function populateTaskHistoryDropdown() {
         item.style.cssText = 'display: flex; flex-direction: column; gap: 3px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 11px;';
         
         const timestamp = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(ev.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
-        const actor = ev.assignee || 'User';
+        const actor = ev.assignee === 'User' ? getActiveUserDisplayName() : (ev.assignee || 'User');
         
         let changeDesc = '';
         if (ev.action === 'status_change') {
