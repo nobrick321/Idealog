@@ -413,47 +413,55 @@
             background: var(--bg);
             height: 100%;
             width: 100%;
+            overflow-y: auto; /* Scroll the whole Gitboard view container, not individual panels */
         }
         #gb-graph-container {
-            flex: 1;
-            height: 100%;
-            overflow: auto;
+            width: 320px;
+            height: auto;
             position: relative;
+            border-right: 1px solid var(--border);
+            flex-shrink: 0;
         }
         #gb-graph-container svg {
             display: block;
         }
         #gb-log-container {
-            width: 420px;
-            border-left: 1px solid var(--border);
-            height: 100%;
-            overflow-y: auto;
-            background: rgba(5,8,15,0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            padding: 20px;
-            font-family: 'Courier New', Courier, monospace;
+            flex: 1;
+            height: auto;
+            background: transparent;
+            padding: 20px 20px 20px 0;
+            font-family: 'Inter', sans-serif;
             font-size: 12px;
-            line-height: 1.6;
             color: #94a3b8;
         }
         .gb-log-commit {
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px dashed rgba(255,255,255,0.06);
+            height: 65px; /* Matches exact ROW_H pixel height of commit node graph */
+            margin-bottom: 0;
+            padding: 10px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            box-sizing: border-box;
+            transition: background 0.15s ease;
         }
-        .gb-log-commit:last-child {
-            border-bottom: none;
+        .gb-log-commit:hover {
+            background: rgba(255,255,255,0.02);
         }
         .gb-log-header {
             color: #f59e0b; /* Amber hash/branch info */
             font-weight: bold;
+            font-size: 11px;
+            margin-bottom: 2px;
         }
         .gb-log-author {
             color: #64748b;
+            font-size: 10px;
         }
         .gb-log-date {
             color: #64748b;
+            font-size: 10px;
+            margin-left: 8px;
         }
         .gb-log-changes {
             margin-top: 8px;
