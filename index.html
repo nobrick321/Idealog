@@ -15215,6 +15215,16 @@ function updateTitle(val) {
     if (oldVal.trim() !== newVal.trim()) {
         n.title=val;
         n.updatedAt = new Date().toISOString();
+        
+        // Propagate the updated title throughout history logs
+        if (data.history) {
+            data.history.forEach(ev => {
+                if (ev.taskId === n.id) {
+                    ev.taskTitle = val;
+                }
+            });
+        }
+        
         if (isNewDraft) savePropMemoryOnly(); else save();
     }
     clearTimeout(titleTimer);
