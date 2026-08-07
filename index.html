@@ -11062,7 +11062,7 @@ function startSyncPolling() {
         } catch (e) {
             console.warn("Polling fetch failed:", e);
         }
-    }, 30000); // Poll every 30 seconds
+    }, 2000); // Poll every 2 seconds
 }
 
 function stopSyncPolling() {
@@ -11278,7 +11278,7 @@ const save = (isUndoRedoAction = false) => {
     rebuildPerformanceCaches();
     
     if (supabaseClient && isAutoSyncEnabled) {
-        updateSupabaseStatusBadge('syncing', '● Sync Pending (30s)...', '#f59e0b');
+        updateSupabaseStatusBadge('syncing', '● Sync Pending (2s)...', '#f59e0b');
         clearTimeout(syncTimeout);
         syncTimeout = setTimeout(async () => {
             try {
@@ -11292,7 +11292,7 @@ const save = (isUndoRedoAction = false) => {
             } finally {
                 syncTimeout = null;
             }
-        }, 30000); // Wait 30 seconds before executing sync
+        }, 2000); // Wait 2 seconds before executing sync
     }
 };
 
