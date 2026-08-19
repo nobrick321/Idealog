@@ -14919,11 +14919,11 @@ function renderPivotTable() {
                 ondragstart="handlePivotDragStart(event, ${idx})" 
                 ondragover="event.preventDefault()" 
                 ondrop="handlePivotDrop(event, ${idx})"
-                style="width: 1%; white-space: nowrap; cursor: grab;">
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                style="width: 1%; white-space: nowrap; cursor: grab; padding: 4px 6px;">
+                <div style="display: inline-flex; align-items: center; gap: 6px;">
                     <span>${hierarchyLabels[h]}</span>
                     <button class="view-btn" onclick="event.stopPropagation(); togglePivotColumnFilterDropdown(event, '${h}')" 
-                        style="background: transparent; border: none; padding: 2px 4px; color: ${filterColor}; font-size: 10px; cursor: pointer; border-radius: 4px;" 
+                        style="background: transparent; border: none; padding: 0 2px; line-height: 1; color: ${filterColor}; font-size: 9px; cursor: pointer; border-radius: 4px; display: inline-block; vertical-align: middle;" 
                         title="Filter Column">▼</button>
                 </div>
             </th>`;
