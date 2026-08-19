@@ -10995,10 +10995,10 @@ function rebuildPerformanceCaches() {
     // Cache autocomplete unique values list
     const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
     tasks.forEach(t => {
-        if (t.assignee) cachedObjectLists.assignees.add(t.assignee);
-        if (t.system) cachedObjectLists.systems.add(t.system);
-        if (t.subsystem) cachedObjectLists.subsystems.add(t.subsystem);
-        if (t.project) cachedObjectLists.projects.add(t.project);
+        if (t.assignee) cachedObjectLists.assignees.add(t.assignee.trim());
+        if (t.system) cachedObjectLists.systems.add(t.system.trim());
+        if (t.subsystem) cachedObjectLists.subsystems.add(t.subsystem.trim());
+        if (t.project) cachedObjectLists.projects.add(t.project.trim());
     });
 }
 
@@ -14226,6 +14226,16 @@ function showAutocomplete(inputEl, type, onSelect) {
         addDiv.onmousedown = (e) => {
             e.preventDefault();
             const originalVal = inputEl.value.trim();
+            if (!originalVal) return;
+            
+            // Render user-facing list category name
+            const listCategoryName = type === 'assignees' ? 'Assignees' : (type === 'systems' ? 'Systems' : (type === 'subsystems' ? 'Subsystems' : (type === 'projects' ? 'Projects' : type)));
+            
+            // Require user confirmation before adding a new item to list definitions
+            if (!confirm(`Are you sure you want to add "${originalVal}" as a new option to the ${listCategoryName} list?`)) {
+                return;
+            }
+            
             if (!objectLists[type]) {
                 objectLists[type] = [];
             }
@@ -14357,10 +14367,10 @@ function renderPivotTable() {
     function getTaskDimVal(task, dim) {
         if (dim === 'project') {
             const parent = findParent(task.id);
-            return parent ? parent.title : 'Unassigned';
+            return parent ? parent.title.trim() : 'Unassigned';
         }
         if (dim === 'assignee') {
-            return task.assignee || 'Unassigned';
+            return task.assignee ? task.assignee.trim() : 'Unassigned';
         }
         if (dim === 'status') {
             return task.status || 'todo';
@@ -14381,7 +14391,7 @@ function renderPivotTable() {
                 else if (lowerL === 'subsystem') val = task.subsystem;
             }
         }
-        return val || 'Unassigned';
+        return val ? val.toString().trim() : 'Unassigned';
     }
 
     let rowVals = [];
@@ -15261,13 +15271,14 @@ function updateProp(prop,val) {
         }
     }
     
-    n[prop]=val;
+    const sanitizedVal = typeof val === 'string' ? val.trim() : val;
+    n[prop] = sanitizedVal;
     
     // Mirror the property update onto the matching dynamic custom column key
     if (prop === 'system' || prop === 'subsystem') {
         const matchingCol = sheetColumns.find(c => c.label.toLowerCase() === prop);
         if (matchingCol) {
-            n[matchingCol.key] = val;
+            n[matchingCol.key] = sanitizedVal;
         }
     } else {
         // If updating via custom_xxxx key directly, mirror to task.system/subsystem
@@ -15275,9 +15286,9 @@ function updateProp(prop,val) {
         if (colDef) {
             const lowerL = colDef.label.toLowerCase();
             if (lowerL === 'system') {
-                n.system = val;
+                n.system = sanitizedVal;
             } else if (lowerL === 'subsystem') {
-                n.subsystem = val;
+                n.subsystem = sanitizedVal;
             }
         }
     }
