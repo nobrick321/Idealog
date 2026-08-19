@@ -30,7 +30,48 @@
 
         html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; }
 
-        #app { display: flex; flex-direction: column; height: 100vh; }
+        #app { display: none; flex-direction: column; height: 100vh; }
+
+        /* Authentication Screen Styles */
+        #auth-container {
+            display: none;
+            position: fixed; inset: 0; z-index: 9999;
+            background: var(--bg);
+            flex-direction: column; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        #auth-container::before {
+            content: '';
+            position: absolute; inset: 0; pointer-events: none;
+            background:
+                radial-gradient(ellipse at 30% 30%, rgba(99,102,241,0.12) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 70%, rgba(139,92,246,0.08) 0%, transparent 60%);
+        }
+        .auth-card {
+            position: relative;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-bright);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            border-radius: 16px; padding: 40px;
+            width: 100%; max-width: 420px; text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            display: flex; flex-direction: column; align-items: center; gap: 24px;
+        }
+        .auth-logo {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 48px; height: 48px;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border-radius: 12px; font-size: 24px;
+            box-shadow: 0 0 20px rgba(99,102,241,0.5);
+        }
+        .auth-title {
+            font-size: 24px; font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #cbd5e1 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .auth-subtitle {
+            font-size: 13.5px; color: var(--text-dim); line-height: 1.5;
+        }
 
         body::before {
             content: '';
@@ -367,52 +408,78 @@
         /* ── Git Board ── */
         #gitboard-view {
             flex: 1;
-            display: none;
+            display: flex; /* Flex layout side by side */
             position: relative;
             background: var(--bg);
             height: 100%;
             width: 100%;
+            overflow: hidden; /* Individual columns scroll locally, keeping alignment locked via JS scroll sync */
+            box-sizing: border-box;
         }
         #gb-graph-container {
-            flex: 1;
+            width: 120px;
             height: 100%;
-            overflow: auto;
             position: relative;
+            border-right: 1px solid var(--border);
+            flex-shrink: 0;
+            overflow-y: scroll; /* Allow synchronized scrolling */
+            scrollbar-width: none; /* Hide scrollbars for unified look */
+        }
+        #gb-graph-container::-webkit-scrollbar {
+            display: none;
         }
         #gb-graph-container svg {
             display: block;
         }
         #gb-log-container {
-            width: 420px;
-            border-left: 1px solid var(--border);
+            width: 320px;
             height: 100%;
+            background: transparent;
+            border-right: 1px solid var(--border);
+            flex-shrink: 0;
+            overflow-y: scroll; /* Primary scroll master */
+        }
+        #gb-changes-container {
+            flex: 1;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.01);
             overflow-y: auto;
-            background: rgba(5,8,15,0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            padding: 20px;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 12px;
-            line-height: 1.6;
-            color: #94a3b8;
+            padding: 16px;
+            box-sizing: border-box;
+            border-right: 1px solid var(--border);
         }
         .gb-log-commit {
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 1px dashed rgba(255,255,255,0.06);
+            height: 32px; /* Matches exact ROW_H pixel height of commit node graph */
+            margin-bottom: 0;
+            padding: 2px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            box-sizing: border-box;
+            transition: background 0.15s ease;
         }
-        .gb-log-commit:last-child {
-            border-bottom: none;
+        .gb-log-commit.active {
+            background: rgba(99, 102, 241, 0.08) !important;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+        }
+        .gb-log-commit:hover {
+            background: rgba(255,255,255,0.02);
         }
         .gb-log-header {
             color: #f59e0b; /* Amber hash/branch info */
             font-weight: bold;
+            font-size: 11px;
+            margin-bottom: 2px;
         }
         .gb-log-author {
             color: #64748b;
+            font-size: 10px;
         }
         .gb-log-date {
             color: #64748b;
+            font-size: 10px;
+            margin-left: 8px;
         }
         .gb-log-changes {
             margin-top: 8px;
@@ -1061,6 +1128,24 @@
 </style>
 </head>
 <body>
+<div id="auth-container">
+    <div class="auth-card">
+        <div class="auth-logo">&#10022;</div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <h1 class="auth-title">Welcome to Idealog</h1>
+            <p class="auth-subtitle">A mind map project manager. Sign in to view and collaborate on your tasks.</p>
+        </div>
+        <button id="btn-auth-signin" onclick="signInWithGoogle()" class="btn-sm" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 220px; height: 38px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; font-size: 12.5px; cursor: pointer; transition: all 0.15s ease;">
+            <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px;">
+                <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.23 2.673 1.24 6.55l4.026 3.215z"/>
+                <path fill="#4285F4" d="M23.64 12.273c0-.818-.073-1.609-.208-2.373H12v4.582h6.527C18.245 15.655 17.02 17 15.26 18.173v3.018h9.082c5.309-4.882 8.355-12.073 8.355-14.882z"/>
+                <path fill="#FBBC05" d="M5.266 14.235 1.24 17.45A12.002 12.002 0 0 1 0 12c0-1.927.455-3.755 1.24-5.45l4.026 3.215a7.042 7.042 0 0 0-.25 2.235c0 .818.09 1.6.25 2.235z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.973-1.073 7.964-2.918l-3.082-3.018c-.855.573-1.955.918-3.136.918-3.136 0-5.782-2.118-6.732-4.964L1.24 17.45C3.23 21.327 7.27 24 12 24z"/>
+            </svg>
+            Sign in with Google
+        </button>
+    </div>
+</div>
 <div id="app">
     <header id="header">
         <div class="logo"><div class="logo-icon">&#10022;</div>Idealog</div>
@@ -1075,6 +1160,9 @@
                 ● Cloud Offline
             </div>
             
+            <button id="btn-header-admin-users" onclick="openUserRolesManagementModal()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: none; align-items: center; gap: 4px; border-radius: 8px; background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2); color: #818cf8; cursor: pointer; transition: all 0.15s ease; margin-right: 6px;">
+                👥 Admin Users
+            </button>
             <button onclick="openSupabaseSettingsModal()" class="view-btn" style="padding: 6px 12px; height: 30px; font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; border-radius: 8px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: #818cf8; cursor: pointer; transition: all 0.15s ease; margin-right: 6px;">
                 ⚙️ Cloud Config
             </button>
@@ -1091,6 +1179,7 @@
         <div id="gitboard-view" style="display: none; width: 100%; height: 100%;">
             <div id="gb-graph-container"></div>
             <div id="gb-log-container"></div>
+            <div id="gb-changes-container"></div>
         </div>
         <div id="spreadsheet-view" style="display: none; width: 100%; height: 100%; flex-direction: column;">
             <div class="sheet-tabs" style="justify-content: space-between; align-items: center; padding-right: 16px;">
@@ -1106,15 +1195,32 @@
                     <button class="btn-secondary btn-sm" id="btn-toggle-controls" onclick="toggleActiveSheetControls()" style="max-width: 140px; height: 28px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 6px; padding: 0 10px; margin-bottom: 8px;">
                         🔧 Hide Controls
                     </button>
-                    <button class="btn-add" onclick="addSheetTaskRow()" style="height: 28px; font-size: 11px; padding: 0 12px; margin-bottom: 8px; margin-left: 12px;">+ Add Task Row</button>
+                    <button class="btn-add" id="btn-add-task-row-top" onclick="addSheetTaskRow()" style="height: 28px; font-size: 11px; padding: 0 12px; margin-bottom: 8px; margin-left: 12px;">+ Add Task Row</button>
                 </div>
             </div>
             <div class="sheet-content" id="sheet-content-area"></div>
         </div>
         <aside id="properties-panel">
-            <div class="panel-header">
+            <div class="panel-header" style="position: relative;">
                 <input class="panel-title-input" id="prop-title" type="text" placeholder="Node title…" oninput="updateTitle(this.value)">
+                
+                <!-- Compact history drop-down button (clock icon) -->
+                <button class="view-btn" id="btn-task-history-clock" onclick="toggleTaskHistoryDropdown(event)" style="padding: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); cursor: pointer; transition: all 0.15s ease; margin-right: 4px;" title="Task Version History">
+                    🕒
+                </button>
+                
                 <button class="panel-close" onclick="closePanel()">×</button>
+                
+                <!-- Compact Version History Dropdown Panel -->
+                <div id="task-history-dropdown-panel" style="position: absolute; top: 50px; right: 10px; width: 260px; max-height: 280px; overflow-y: auto; background: #0c121e; border: 1px solid var(--border-bright); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 120; display: none; padding: 12px; flex-direction: column; gap: 8px;">
+                    <div style="font-size: 11px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                        <span>Version History</span>
+                        <span id="task-creator-label" style="font-weight: normal; text-transform: none; color: var(--accent);">Creator: System</span>
+                    </div>
+                    <div id="task-history-events-list" style="display: flex; flex-direction: column; gap: 8px;">
+                        <!-- Populate history event timelines dynamically -->
+                    </div>
+                </div>
             </div>
             <div class="panel-body">
                 <div class="prop-group">
@@ -1270,6 +1376,11 @@
                 <input type="checkbox" id="sync-active-toggle" checked onchange="toggleAutoSyncState(this.checked)" style="accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; margin: 0;">
                 Enable Auto-Sync
             </label>
+            
+            <!-- Admin Manage Users Section Trigger Link -->
+            <div id="admin-users-link-container" style="display: none; font-size: 11.5px; margin-top: 5px;">
+                <a href="#" onclick="event.preventDefault(); openUserRolesManagementModal();" style="color: var(--accent); text-decoration: underline;">👥 Manage Org Roles & Permissions (Admin)</a>
+            </div>
         </div>
         <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; align-items: center;">
             <div style="display: flex; gap: 6px;">
@@ -1280,6 +1391,27 @@
         </div>
     </div>
 </div>
+
+<!-- User Roles Management Modal (Admin view) -->
+<div class="modal-overlay" id="user-roles-mgmt-modal">
+    <div class="modal-box" style="width: 580px;">
+        <div class="modal-header">
+            <h3>👥 User Roles & Permissions Control</h3>
+            <button class="panel-close" onclick="closeUserRolesManagementModal()">×</button>
+        </div>
+        <div class="modal-body" style="padding: 15px; display: flex; flex-direction: column; gap: 12px;">
+            <p style="font-size: 11.5px; color: var(--text-dim); line-height: 1.4;">
+                Review registered organization users and allocate access permission scopes. Only authenticated accounts are fetched from Supabase auth.
+            </p>
+            <div id="users-roles-list-container" style="background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border); border-radius: 10px; max-height: 250px; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px;">
+                <!-- Users with select dropdowns populated dynamically -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-sm btn-secondary" onclick="closeUserRolesManagementModal()" style="max-width: 80px;">Close</button>
+        </div>
+</div>
+
 <script>
 const DEFAULT = {
     "id": "root",
@@ -10814,12 +10946,22 @@ let selectedId = null;
 let currentView = 'mindmap';
 let showMerged = localStorage.getItem('idealog_show_merged') === 'true';
 const collapsed = new Set();
+
+// --- UNDO/REDO TRANSACTION QUEUES ---
+let undoStack = [];
+let redoStack = [];
+
 // --- AUTO-SYNC TOGGLE CONFIG STATE ---
 let isAutoSyncEnabled = localStorage.getItem('idealog_auto_sync') !== 'false';
 let syncPollingInterval = null;
 let syncTimeout = null;
 let titleTimer = null;
 let isNewDraft = false;
+
+// --- USER ROLES & ACCESS CONTROL ---
+let currentUserRole = 'viewer'; // Default role is read-only viewer
+let userProfilesCache = []; // Cache list of registered profiles
+let currentLockInfo = {}; // Realtime lock mapping: { taskId: { userName, userEmail } }
 
 // --- DYNAMIC PERFORMANCE CACHES ---
 let nodeCache = new Map();
@@ -10920,7 +11062,7 @@ function startSyncPolling() {
         } catch (e) {
             console.warn("Polling fetch failed:", e);
         }
-    }, 30000); // Poll every 30 seconds
+    }, 2000); // Poll every 2 seconds
 }
 
 function stopSyncPolling() {
@@ -11010,9 +11152,42 @@ async function loadStartupData() {
                         startSyncPolling();
                     }
                     
+                    // Initialize Supabase Realtime Lock Presence Channel Subscriptions
+                    setupSupabaseRealtimePresenceLocks(user);
+                    
                     // Delay query execution by 500ms to let Google OAuth routing settle cleanly
                     setTimeout(async () => {
                         try {
+                            // Resolve the user's role from user_profiles table
+                            try {
+                                const { data: profile, error: profError } = await supabaseClient
+                                    .from('user_profiles')
+                                    .select('role')
+                                    .eq('id', user.id)
+                                    .single();
+                                
+                                if (profile && !profError) {
+                                    currentUserRole = profile.role;
+                                    console.log("Logged-in user role fetched:", currentUserRole);
+                                } else {
+                                    // Fallback: Default workspace owner is admin
+                                    currentUserRole = (user.email && user.email.toLowerCase() === 'ritesh@morphle.in') ? 'admin' : 'viewer';
+                                    console.log("No profile row found. Evaluated default role:", currentUserRole);
+                                }
+                            } catch (profEx) {
+                                console.warn("Failed to load user role, defaulting to viewer:", profEx);
+                                currentUserRole = (user.email && user.email.toLowerCase() === 'ritesh@morphle.in') ? 'admin' : 'viewer';
+                            }
+
+                            // Trigger Data Migration / Seeding checklist
+                            await verifyAndMigrateDataSchema();
+                            await toggleAdminLinkContainer();
+                            
+                            // Re-render spreadsheet controls to reflect the resolved user role
+                            if (typeof renderSheet === 'function') {
+                                renderSheet();
+                            }
+
                             console.log("Fetching row 'db_state' from table 'idealog_sync' after route settle delay...");
                             const { data: dbRowsArray, error } = await supabaseClient
                                 .from('idealog_sync')
@@ -11085,27 +11260,69 @@ async function loadStartupData() {
 }
 window.addEventListener('DOMContentLoaded', loadStartupData);
 
-const save = () => {
+function pushToUndoStack() {
+    // Keep max 50 states in memory limit
+    if (undoStack.length >= 50) {
+        undoStack.shift();
+    }
+    undoStack.push(JSON.stringify(data));
+}
+
+const save = (isUndoRedoAction = false) => {
+    if (!isUndoRedoAction) {
+        pushToUndoStack();
+        redoStack = []; // Clear redo stack on fresh changes
+    }
     data.updatedAt = new Date().toISOString();
     localStorage.setItem('idealog', JSON.stringify(data));
     rebuildPerformanceCaches();
     
     if (supabaseClient && isAutoSyncEnabled) {
-        updateSupabaseStatusBadge('syncing', '● Sync Pending (30s)...', '#f59e0b');
+        updateSupabaseStatusBadge('syncing', '● Sync Pending (2s)...', '#f59e0b');
         clearTimeout(syncTimeout);
         syncTimeout = setTimeout(async () => {
             try {
-                await pushStateToSupabase();
-                updateSupabaseStatusBadge('online', '● Cloud Online (Synced)', '#10b981');
+                const success = await pushStateToSupabase();
+                if (success) {
+                    updateSupabaseStatusBadge('online', '● Cloud Online (Synced)', '#10b981');
+                }
             } catch (err) {
                 console.error("Delayed Supabase push failed:", err);
                 updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
             } finally {
                 syncTimeout = null;
             }
-        }, 30000); // Wait 30 seconds before executing sync
+        }, 2000); // Wait 2 seconds before executing sync
     }
 };
+
+function undo() {
+    if (undoStack.length === 0) {
+        showUndoToast("Nothing to undo", false);
+        return;
+    }
+    const prevState = undoStack.pop();
+    redoStack.push(JSON.stringify(data));
+    
+    data = JSON.parse(prevState);
+    save(true);
+    redraw();
+    showUndoToast("Undone last action", true);
+}
+
+function redo() {
+    if (redoStack.length === 0) {
+        showUndoToast("Nothing to redo", false);
+        return;
+    }
+    const nextState = redoStack.pop();
+    undoStack.push(JSON.stringify(data));
+    
+    data = JSON.parse(nextState);
+    save(true);
+    redraw();
+    showUndoToast("Redone action", false);
+}
 const uid  = () => 'n' + Math.random().toString(36).slice(2,9);
 
 function allNodes(node, out=[]) { out.push(node); (node.children||[]).forEach(c=>allNodes(c,out)); return out; }
@@ -11345,230 +11562,113 @@ function renderGitBoard() {
         renderGitBoard();
     });
 
-    let W = graphEl.clientWidth, H = graphEl.clientHeight;
-    if (!W || !H) {
-        // Fallback to parents or static dimensions to avoid infinite loops, but still let it render.
-        W = W || 800;
-        H = H || 600;
-    }
+    // 1. Group events into discrete Commits based on user action boundaries
+    // Sort events by timestamp ascending to process chronologically
+    const sortedEvents = [...data.history].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const commits = [];
+    let currentCommit = null;
 
-    // 1. Find all project nodes (nodes with children, including root)
-    const projects = [];
-    function getProjects(node, depth = 0) {
-        projects.push({ node, depth });
-        (node.children || []).forEach(c => {
-            if (c.children && c.children.length > 0) {
-                getProjects(c, depth + 1);
-            }
-        });
-    }
-    getProjects(data);
-
-    // Map projects to lanes
-    const projectLanes = {};
-    projects.forEach((p, index) => {
-        projectLanes[p.node.id] = index;
-    });
-
-    // 2. Gather unique dates from history
-    let uniqueDates = Array.from(new Set(data.history.map(e => e.timestamp.split('T')[0])));
-    if (uniqueDates.length === 0) {
-        uniqueDates = [new Date().toISOString().split('T')[0]];
-    }
-    uniqueDates.sort((a, b) => new Date(b) - new Date(a)); // Newest first
-
-    // 3. Compute spans for each project branch
-    const projectMap = {};
-    projects.forEach(p => {
-        projectMap[p.node.id] = {
-            id: p.node.id,
-            title: p.node.title,
-            node: p.node,
-            lane: projectLanes[p.node.id],
-            parent: findParent(p.node.id),
-            events: [],
-            firstRow: -1,
-            lastRow: -1,
-            isDone: false
-        };
-    });
-
-    function isProjectDone(projNode) {
-        const tasks = allNodes(projNode).filter(n => getDepth(n.id) === 4);
-        if (tasks.length === 0) return false;
-        return tasks.every(t => t.status === 'done');
-    }
-
-    // Populate events
-    data.history.forEach(ev => {
-        const pInfo = projectMap[ev.projectId];
-        if (pInfo) {
-            pInfo.events.push(ev);
-        }
-    });
-
-    // Bubble events to parents
-    projects.forEach(p => {
-        const pInfo = projectMap[p.node.id];
-        const descendants = allNodes(p.node).filter(n => n.id !== p.node.id && n.children && n.children.length > 0);
-        descendants.forEach(desc => {
-            const descInfo = projectMap[desc.id];
-            if (descInfo) {
-                pInfo.events.push(...descInfo.events);
-            }
-        });
-    });
-
-    // Map events to row indices
-    uniqueDates.forEach((date, r) => {
-        projects.forEach(p => {
-            const pInfo = projectMap[p.node.id];
-            const hasEventOnDate = pInfo.events.some(ev => ev.timestamp.split('T')[0] === date);
-            if (hasEventOnDate) {
-                if (pInfo.firstRow === -1) pInfo.firstRow = r;
-                pInfo.lastRow = r;
-            }
-        });
-    });
-
-    projects.forEach(p => {
-        const pInfo = projectMap[p.node.id];
-        if (pInfo.firstRow === -1) {
-            pInfo.firstRow = 0;
-            pInfo.lastRow = 0;
-        }
-        pInfo.isDone = isProjectDone(p.node);
-    });
-
-    // Group history to commits
-    const commitsMap = {};
-    data.history.forEach(ev => {
-        const date = ev.timestamp.split('T')[0];
-        const key = `${ev.projectId}_${date}`;
-        if (!commitsMap[key]) {
-            commitsMap[key] = {
-                projectId: ev.projectId,
-                date: date,
+    sortedEvents.forEach(ev => {
+        const evTime = new Date(ev.timestamp).getTime();
+        // Group edits by the same author within 30 seconds into one commit
+        if (currentCommit && 
+            currentCommit.author === ev.assignee && 
+            Math.abs(evTime - currentCommit.timestamp.getTime()) <= 30000) {
+            currentCommit.events.push(ev);
+        } else {
+            currentCommit = {
+                id: 'commit_' + Math.abs(evTime).toString(16).slice(-7),
                 timestamp: new Date(ev.timestamp),
-                events: []
+                author: ev.assignee || 'User',
+                events: [ev]
             };
+            commits.push(currentCommit);
         }
-        commitsMap[key].events.push(ev);
     });
-    const commitsList = Object.values(commitsMap).sort((a, b) => b.timestamp - a.timestamp);
+
+    // Sort commits newest first for vertical rendering
+    commits.sort((a, b) => b.timestamp - a.timestamp);
+
+    // 2. Identify parallel splits (commits within 30 seconds of each other by different users)
+    const commitPositions = []; // Array mapping index in commits to { xIndex: 0 or 1, yIndex }
+    
+    // Process chronologically to establish lanes
+    const chronoCommits = [...commits].reverse();
+    const assignedLanes = new Map(); // commitId -> laneIndex (0 = main, 1 = parallel split)
+    
+    for (let i = 0; i < chronoCommits.length; i++) {
+        const c = chronoCommits[i];
+        assignedLanes.set(c.id, 0); // Always main branch for local edits
+    }
 
     // Dimensions
-    const ROW_H = 46;
-    const LANE_W = 34;
-    const L_PAD = 90; // Padding to display date strings nicely on left
-    const TOP_PAD = 100;
-    const svgH = uniqueDates.length * ROW_H + TOP_PAD + 40;
-    const GRAPH_W = projects.length * LANE_W + 30;
-    const svgW = L_PAD + GRAPH_W;
-
-    const xOf = (lane) => L_PAD + lane * LANE_W + LANE_W/2;
-    const yOf = (row) => TOP_PAD + row * ROW_H + ROW_H/2;
+    const ROW_H = 32;
+    const MAIN_X = 60;
+    const SPLIT_X = 110;
+    const svgH = Math.max(100, commits.length * ROW_H + 40);
 
     const svg = d3.select('#gb-graph-container').append('svg')
         .attr('width', '100%').attr('height', svgH);
     const g = svg.append('g');
 
-    // Drag-zoom support
-    svg.call(d3.zoom().scaleExtent([0.2, 4]).on('zoom', e => g.attr('transform', e.transform)))
-       .on('dblclick.zoom', null);
+    // Grid layout guide line (Main Branch spine)
+    g.append('line')
+        .attr('x1', MAIN_X).attr('y1', 20)
+        .attr('x2', MAIN_X).attr('y2', svgH - 20)
+        .attr('stroke', 'rgba(255, 255, 255, 0.08)')
+        .attr('stroke-width', 2);
 
-    // 4. Horizontal Grid Lines and Date Labels
-    uniqueDates.forEach((date, r) => {
-        const y = yOf(r);
-        // Grid line
-        g.append('line')
-            .attr('x1', L_PAD - 20).attr('x2', svgW)
-            .attr('y1', y).attr('y2', y)
-            .attr('stroke', 'rgba(255,255,255,0.03)').attr('stroke-width', 1);
+    // 3. Draw connecting branch links (Bezier splits and merges)
+    commits.forEach((c, index) => {
+        const rIndex = commits.length - 1 - index; // Chronological order index
+        const lane = assignedLanes.get(c.id);
+        const y = 30 + index * ROW_H;
+        const x = lane === 1 ? SPLIT_X : MAIN_X;
 
-        // Date text label
-        g.append('text')
-            .attr('x', 15).attr('y', y).attr('dy', '0.33em')
-            .attr('font-family', 'Inter, sans-serif')
-            .attr('font-size', '11px')
-            .attr('font-weight', '500')
-            .attr('fill', 'var(--text-muted)')
-            .text(fmtDate(date));
-    });
-
-    // 5. Draw Branching Curves & Merge Curves
-    projects.forEach(p => {
-        const pInfo = projectMap[p.node.id];
-        if (!pInfo.parent) return; // Skip root project
-        const parentInfo = projectMap[pInfo.parent.id];
-        if (!parentInfo) return;
-
-        const color = sColor(p.node.status);
-        const px = xOf(parentInfo.lane);
-        const x = xOf(pInfo.lane);
-        const isDone = pInfo.isDone;
-
-        // Branch curve at lastRow (branch point)
-        const branchY = yOf(pInfo.lastRow);
-        // Draw Bezier from parent lane to project lane
-        g.append('path')
-            .attr('d', `M${px},${branchY + ROW_H/2} C${(px+x)/2},${branchY + ROW_H/2} ${(px+x)/2},${branchY} ${x},${branchY}`)
-            .attr('fill', 'none')
-            .attr('stroke', color)
-            .attr('stroke-width', 1.8)
-            .attr('stroke-opacity', 0.55);
-
-        // Merge curve at firstRow (completion point) back to parent lane
-        if (isDone && showMerged) {
-            const mergeY = yOf(pInfo.firstRow);
+        // If this commit splits (lane === 1), draw Bezier split curve from previous main commit
+        if (lane === 1 && index < commits.length - 1) {
+            const prevY = 30 + (index + 1) * ROW_H;
             g.append('path')
-                .attr('d', `M${x},${mergeY} C${(px+x)/2},${mergeY} ${(px+x)/2},${mergeY - ROW_H/2} ${px},${mergeY - ROW_H/2}`)
+                .attr('d', `M${MAIN_X},${prevY} C${MAIN_X},${(prevY+y)/2} ${SPLIT_X},${(prevY+y)/2} ${SPLIT_X},${y}`)
                 .attr('fill', 'none')
-                .attr('stroke', color)
-                .attr('stroke-width', 1.8)
-                .attr('stroke-opacity', 0.35);
+                .attr('stroke', 'var(--inprogress)')
+                .attr('stroke-width', 2)
+                .attr('stroke-opacity', 0.8);
+        }
 
-            // Merge dot
-            g.append('circle')
-                .attr('cx', px).attr('cy', mergeY - ROW_H/2)
-                .attr('r', 3)
-                .attr('fill', color)
-                .attr('fill-opacity', 0.6)
-                .style('pointer-events', 'none');
+        // If this commit merges back, draw Bezier merge curve to the next main commit
+        if (lane === 1 && index > 0) {
+            const nextY = 30 + (index - 1) * ROW_H;
+            g.append('path')
+                .attr('d', `M${SPLIT_X},${y} C${SPLIT_X},${(y+nextY)/2} ${MAIN_X},${(y+nextY)/2} ${MAIN_X},${nextY}`)
+                .attr('fill', 'none')
+                .attr('stroke', 'var(--done)')
+                .attr('stroke-width', 2)
+                .attr('stroke-opacity', 0.8)
+                .attr('stroke-dasharray', '2,2');
         }
     });
 
-    // 6. Draw vertical branch lines
-    projects.forEach(p => {
-        const pInfo = projectMap[p.node.id];
-        const x = xOf(pInfo.lane);
-        const color = sColor(p.node.status);
-        const isRoot = p.node.id === 'root';
-        const startY = yOf(pInfo.lastRow);
-        const endY = yOf(pInfo.isDone && showMerged ? pInfo.firstRow : 0);
+    // 4. Render Commit Nodes and Labels
+    commits.forEach((c, index) => {
+        const lane = assignedLanes.get(c.id);
+        const y = 30 + index * ROW_H;
+        const x = lane === 1 ? SPLIT_X : MAIN_X;
+        const color = lane === 1 ? 'var(--inprogress)' : 'var(--accent)';
+        const isSel = c.events.some(ev => ev.taskId === selectedId);
 
-        g.append('line')
-            .attr('x1', x).attr('y1', startY)
-            .attr('x2', x).attr('y2', endY)
-            .attr('stroke', color)
-            .attr('stroke-width', isRoot ? 2.6 : 1.8)
-            .attr('stroke-opacity', pInfo.isDone ? 0.35 : 0.8)
-            .attr('stroke-dasharray', p.node.status === 'todo' ? '3,3' : 'none');
-    });
-
-    // 7. Draw Commit Nodes (Circles)
-    commitsList.forEach(c => {
-        const pInfo = projectMap[c.projectId];
-        if (!pInfo) return;
-        const x = xOf(pInfo.lane);
-        const y = yOf(uniqueDates.indexOf(c.date));
-        const color = sColor(pInfo.node.status);
-        const isSel = c.projectId === selectedId;
+        // Date timestamp text label on left side (compact)
+        const timeStr = c.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        g.append('text')
+            .attr('x', MAIN_X - 18).attr('y', y).attr('dy', '0.33em').attr('text-anchor', 'end')
+            .attr('font-family', 'Inter, sans-serif').attr('font-size', '9px').attr('font-weight', '500')
+            .attr('fill', 'var(--text-muted)')
+            .text(timeStr);
 
         // Commit outer ring
         g.append('circle')
             .attr('cx', x).attr('cy', y)
-            .attr('r', isSel ? 10 : 7)
+            .attr('r', isSel ? 7 : 5)
             .attr('fill', color)
             .attr('fill-opacity', 0.15)
             .style('pointer-events', 'none');
@@ -11576,81 +11676,135 @@ function renderGitBoard() {
         // Commit core dot
         g.append('circle')
             .attr('cx', x).attr('cy', y)
-            .attr('r', isSel ? 5.5 : 4)
+            .attr('r', isSel ? 4.5 : 3)
             .attr('fill', color)
             .attr('stroke', '#fff')
-            .attr('stroke-width', isSel ? 2 : 1)
+            .attr('stroke-width', isSel ? 1.5 : 1)
             .style('cursor', 'pointer')
-            .on('click', () => selectNode(c.projectId))
+            .on('click', () => {
+                if (c.events[0]?.taskId) {
+                    selectNode(c.events[0].taskId);
+                }
+            })
             .on('mouseover', e => {
-                const t=document.getElementById('tooltip');
+                const t = document.getElementById('tooltip');
                 let listHtml = '';
                 c.events.forEach(ev => {
                     listHtml += `&middot; ${ev.taskTitle} (${sLabel(ev.toStatus)})<br>`;
                 });
-                t.innerHTML=`<strong>${pInfo.title}</strong><br>${listHtml}`;
-                t.style.left=(e.pageX+14)+'px'; t.style.top=(e.pageY-8)+'px';
+                t.innerHTML = `<strong>Commit ${c.id}</strong><br>Author: ${c.author}<br>${listHtml}`;
+                t.style.left = (e.pageX + 14) + 'px'; t.style.top = (e.pageY - 8) + 'px';
                 t.classList.add('visible');
             })
             .on('mouseout', hideTip);
     });
 
-    // 8. Draw Lane Header Labels
-    projects.forEach(p => {
-        const pInfo = projectMap[p.node.id];
-        const x = xOf(pInfo.lane);
-        const color = sColor(p.node.status);
+    // 5. Render Commit log rows on Panel 2
+    let activeCommitId = null;
 
-        const textGroup = g.append('g')
-            .attr('transform', `translate(${x}, 65) rotate(-30)`)
-            .style('cursor', 'pointer')
-            .on('click', () => selectNode(p.node.id));
-
-        textGroup.append('text')
-            .attr('text-anchor', 'start')
-            .attr('font-family', 'Inter, sans-serif')
-            .attr('font-size', '10px')
-            .attr('font-weight', '700')
-            .attr('fill', color)
-            .text(trunc(pInfo.title, 14));
-    });
-
-    // 9. Render terminal Git Log on the right side
-    const hashCode = str => {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            hash = str.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        return hash;
+    // Synchronize scrolling between graph container and log container
+    logEl.onscroll = () => {
+        graphEl.scrollTop = logEl.scrollTop;
+    };
+    graphEl.onscroll = () => {
+        logEl.scrollTop = graphEl.scrollTop;
     };
 
-    commitsList.forEach(c => {
-        const pInfo = projectMap[c.projectId];
-        if (!pInfo) return;
-        const hashVal = Math.abs(hashCode(c.projectId + c.date)).toString(16).slice(0, 7);
-        const dateStr = new Date(c.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    function selectCommit(c, cardEl) {
+        // Toggle active card styling
+        document.querySelectorAll('.gb-log-commit').forEach(el => el.classList.remove('active'));
+        if (cardEl) cardEl.classList.add('active');
+        activeCommitId = c.id;
 
-        let changesHtml = '';
+        // Render changed tasks in Panel 3
+        const changesEl = document.getElementById('gb-changes-container');
+        if (!changesEl) return;
+        changesEl.innerHTML = `
+            <div style="margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+                <div style="font-size: 11px; font-weight: bold; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Commit Details</div>
+                <div style="font-size: 13px; font-weight: bold; color: var(--text); margin-bottom: 2px;">${c.id}</div>
+                <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;">Author: <strong>${c.author}</strong></div>
+                <div style="font-size: 10px; color: var(--text-muted);">${c.timestamp.toLocaleString()}</div>
+            </div>
+            <div id="gb-changes-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        `;
+
+        const listEl = document.getElementById('gb-changes-list');
         c.events.forEach(ev => {
             let classColor = 'gb-diff-todo';
-            let prefix = '*';
-            if (ev.toStatus === 'done') { classColor = 'gb-diff-add'; prefix = '+'; }
-            else if (ev.toStatus === 'inprogress') { classColor = 'gb-diff-mod'; prefix = '~'; }
-            
-            changesHtml += `<div class="${classColor}">${prefix} [${sLabel(ev.toStatus)}] ${ev.taskTitle} <span class="gb-log-author">(@${ev.assignee || 'User'})</span></div>`;
+            let prefix = '●';
+            let actionText = 'Modified';
+            if (ev.toStatus === 'done') { classColor = 'gb-diff-add'; prefix = '+'; actionText = 'Completed'; }
+            else if (ev.toStatus === 'inprogress') { classColor = 'gb-diff-mod'; prefix = '▶'; actionText = 'Started'; }
+
+            const item = document.createElement('div');
+            item.style.cssText = 'padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: all 0.15s ease;';
+            item.onmouseenter = () => {
+                item.style.background = 'var(--surface-hover)';
+                item.style.borderColor = 'var(--border-bright)';
+            };
+            item.onmouseleave = () => {
+                item.style.background = 'rgba(255,255,255,0.02)';
+                item.style.borderColor = 'var(--border)';
+            };
+            item.onclick = () => {
+                if (ev.taskId) {
+                    selectNode(ev.taskId);
+                }
+            };
+            item.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                    <strong style="font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;">${ev.taskTitle}</strong>
+                    <span class="${classColor}" style="font-size: 10px; font-weight: bold; text-transform: uppercase;">${prefix} ${actionText}</span>
+                </div>
+                <div style="font-size: 10px; color: var(--text-muted);">
+                    Status: <span style="color: var(--text-dim);">${sLabel(ev.toStatus)}</span>
+                </div>
+            `;
+            listEl.appendChild(item);
         });
+
+        // Open task properties if changes are present
+        if (c.events[0]?.taskId) {
+            const sidebar = document.getElementById('properties-panel');
+            if (sidebar && !sidebar.classList.contains('open')) {
+                selectNode(c.events[0].taskId);
+            }
+        }
+    }
+
+    commits.forEach((c, idx) => {
+        const timeStr = c.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateStr = c.timestamp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+        const descList = c.events.map(ev => {
+            return `[${sLabel(ev.toStatus)}] ${ev.taskTitle}`;
+        }).join('; ');
 
         const logCard = document.createElement('div');
         logCard.className = 'gb-log-commit';
         logCard.style.cursor = 'pointer';
-        logCard.onclick = () => selectNode(c.projectId);
+        logCard.onclick = () => {
+            selectCommit(c, logCard);
+        };
         logCard.innerHTML = `
-            <div class="gb-log-header">commit ${hashVal} (branch: ${pInfo.title})</div>
-            <div class="gb-log-author">Author: ${c.events[0]?.assignee || 'User'}</div>
-            <div class="gb-log-date">Date:   ${dateStr}</div>
-            <div class="gb-log-changes">${changesHtml}</div>
+            <div style="display: flex; align-items: center; width: 100%; justify-content: space-between; font-size: 11px;">
+                <div style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; padding-right: 12px;">
+                    <span class="gb-log-header" style="margin-bottom: 0; flex-shrink: 0;">${c.id}</span>
+                    <strong style="color: var(--text); flex-shrink: 0;">${c.author}</strong>
+                    <span style="color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${descList}</span>
+                </div>
+                <div style="color: var(--text-muted); font-size: 10px; flex-shrink: 0; text-align: right;">
+                    ${dateStr} &middot; ${timeStr}
+                </div>
+            </div>
         `;
         logEl.appendChild(logCard);
+
+        // Auto-select first commit on startup
+        if (idx === 0) {
+            selectCommit(c, logCard);
+        }
     });
 }
 
@@ -12120,11 +12274,18 @@ function setHighlightDurationDays(val) {
 
 // News timeline filter range in days (default to 7 days)
 let pivotNewsDays = parseFloat(localStorage.getItem('idealog_pivot_news_days') || '7.0');
+let pivotOnlyAssignedToMe = localStorage.getItem('idealog_pivot_assigned_only') === 'true';
 
 function setPivotNewsDays(val) {
     const num = parseFloat(val);
     pivotNewsDays = isNaN(num) ? 7.0 : num;
     localStorage.setItem('idealog_pivot_news_days', pivotNewsDays);
+    renderPivotTable();
+}
+
+function setPivotOnlyAssignedToMe(checked) {
+    pivotOnlyAssignedToMe = checked;
+    localStorage.setItem('idealog_pivot_assigned_only', checked);
     renderPivotTable();
 }
 
@@ -12261,6 +12422,17 @@ function switchSheetTab(tab) {
 
 function renderSheet() {
     if (!data) return;
+    
+    // Toggle + Add Task Row visibility based on RBAC permissions levels (Only admin & manager can add tasks)
+    const addRowBtn = document.getElementById('btn-add-task-row-top');
+    if (addRowBtn) {
+        if (currentUserRole === 'admin' || currentUserRole === 'manager') {
+            addRowBtn.style.display = 'block';
+        } else {
+            addRowBtn.style.display = 'none';
+        }
+    }
+    
     if (currentSheetTab === 'tasks') {
         renderTaskSheet();
     } else if (currentSheetTab === 'pivot') {
@@ -12383,13 +12555,18 @@ function renderTaskSheet() {
     // Toolbar wrapper
     const savedUrl = localStorage.getItem('idealog_gspread_url') || '';
     const toolbarDisplay = isTaskSheetToolbarCollapsed ? 'display: none;' : 'display: flex;';
+    
+    // Check permission levels
+    const isWriteAllowed = currentUserRole === 'admin' || currentUserRole === 'manager';
+    const writeBtnStyle = isWriteAllowed ? '' : 'display: none !important;';
+
     const toolbarHtml = `
         <div class="sheet-toolbar" style="flex-wrap: wrap; gap: 8px; margin-bottom: 16px; ${toolbarDisplay}">
-            <button class="btn-secondary btn-sm" style="max-width:110px;height:32px;" onclick="addSheetColumn()">+ Add Column</button>
-            <button class="btn-secondary btn-sm" style="max-width:160px;height:32px;background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.2);" onclick="openImportModal()">📥 Import Paste Data</button>
+            <button class="btn-secondary btn-sm" style="max-width:110px;height:32px; ${writeBtnStyle}" onclick="addSheetColumn()">+ Add Column</button>
+            <button class="btn-secondary btn-sm" style="max-width:160px;height:32px;background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.2); ${writeBtnStyle}" onclick="openImportModal()">📥 Import Paste Data</button>
             <button class="btn-secondary btn-sm" style="max-width:150px;height:32px;background:rgba(16,185,129,0.1);color:#34d399;border-color:rgba(16,185,129,0.2);" onclick="exportTableTSV()">📤 Export TSV Data</button>
             <button class="btn-secondary btn-sm" style="max-width:150px;height:32px;background:rgba(139,92,246,0.1);color:#c084fc;border-color:rgba(139,92,246,0.2);" onclick="exportFullBackupJSON()">💾 Backup Full State</button>
-            <button class="btn-danger btn-sm" style="max-width:110px;height:32px;" onclick="deleteAllSheetTasks()">❌ Delete All</button>
+            <button class="btn-danger btn-sm" style="max-width:110px;height:32px; ${writeBtnStyle}" onclick="deleteAllSheetTasks()">❌ Delete All</button>
             
             <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 32px;">
                 <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Hide Done:</span>
@@ -12513,6 +12690,22 @@ function renderTaskSheet() {
                 }
             }
 
+            // Check if this task row is focused/locked by another online user
+            const rowLock = currentLockInfo[t.id];
+            const isRowLocked = !!rowLock;
+            if (isRowLocked) {
+                row.style.background = 'rgba(239, 68, 68, 0.05)';
+                row.title = `Locked by ${rowLock.userName} (${rowLock.userEmail})`;
+            }
+
+            // Determine cell lock permissions depending on active user role
+            // viewer: everything read-only (locked)
+            // basic: all fields locked EXCEPT status dropdown
+            // admin/manager: fully editable (unless locked by another user)
+            const isViewer = currentUserRole === 'viewer';
+            const isBasic = currentUserRole === 'basic';
+            const isRestrictedRole = isViewer || isBasic;
+
             // Cell 1: Project Auto-suggest Input
             const tdProj = document.createElement('td');
             const inProj = document.createElement('input');
@@ -12521,10 +12714,16 @@ function renderTaskSheet() {
             inProj.placeholder = 'Project';
             inProj.value = parentProj ? parentProj.title : '';
             inProj.setAttribute('autocomplete', 'off');
+            if (isRowLocked || isRestrictedRole) {
+                inProj.disabled = true;
+                inProj.style.opacity = '0.5';
+            }
             inProj.oninput = function() {
+                if (isRowLocked || isRestrictedRole) return;
                 showAutocomplete(this, 'projects', (val) => { moveTaskProjectByTitle(t.id, val); renderSheet(); });
             };
             inProj.onchange = function() {
+                if (isRowLocked || isRestrictedRole) return;
                 moveTaskProjectByTitle(t.id, this.value);
             };
             tdProj.appendChild(inProj);
@@ -12535,8 +12734,14 @@ function renderTaskSheet() {
             const inTitle = document.createElement('input');
             inTitle.className = 'excel-input';
             inTitle.type = 'text';
-            inTitle.value = t.title || '';
+            inTitle.value = (isRowLocked ? '🔒 ' : '') + (t.title || '');
+            if (isRowLocked || isRestrictedRole) {
+                inTitle.disabled = true;
+                inTitle.style.opacity = '0.7';
+                inTitle.style.fontWeight = '500';
+            }
             inTitle.onchange = function() {
+                if (isRowLocked || isRestrictedRole) return;
                 updateTaskTitleFromSheet(t.id, this.value);
             };
             tdTitle.appendChild(inTitle);
@@ -12550,10 +12755,16 @@ function renderTaskSheet() {
             inAssignee.placeholder = 'Assignee';
             inAssignee.value = t.assignee || '';
             inAssignee.setAttribute('autocomplete', 'off');
+            if (isRowLocked || isRestrictedRole) {
+                inAssignee.disabled = true;
+                inAssignee.style.opacity = '0.5';
+            }
             inAssignee.oninput = function() {
+                if (isRowLocked || isRestrictedRole) return;
                 showAutocomplete(this, 'assignees', (val) => { updateTaskAssigneeFromSheet(t.id, val); renderSheet(); });
             };
             inAssignee.onchange = function() {
+                if (isRowLocked || isRestrictedRole) return;
                 updateTaskAssigneeFromSheet(t.id, this.value);
             };
             tdAssignee.appendChild(inAssignee);
@@ -12568,18 +12779,25 @@ function renderTaskSheet() {
                 inDyn.placeholder = col.label;
                 inDyn.value = t[col.key] || '';
                 inDyn.setAttribute('autocomplete', 'off');
+                if (isRowLocked || isRestrictedRole) {
+                    inDyn.disabled = true;
+                    inDyn.style.opacity = '0.5';
+                }
 
                 const lowerLabel = col.label.toLowerCase();
                 if (lowerLabel === 'system') {
                     inDyn.oninput = function() {
+                        if (isRowLocked || isRestrictedRole) return;
                         showAutocomplete(this, 'systems', (newVal) => { updateTaskPropFromSheet(t.id, col.key, newVal); renderSheet(); });
                     };
                 } else if (lowerLabel === 'subsystem') {
                     inDyn.oninput = function() {
+                        if (isRowLocked || isRestrictedRole) return;
                         showAutocomplete(this, 'subsystems', (newVal) => { updateTaskPropFromSheet(t.id, col.key, newVal); renderSheet(); });
                     };
                 }
                 inDyn.onchange = function() {
+                    if (isRowLocked || isRestrictedRole) return;
                     updateTaskPropFromSheet(t.id, col.key, this.value);
                 };
 
@@ -12591,7 +12809,12 @@ function renderTaskSheet() {
             const tdStatus = document.createElement('td');
             const selectStatus = document.createElement('select');
             selectStatus.className = 'excel-select';
+            if (isRowLocked || isViewer) {
+                selectStatus.disabled = true;
+                selectStatus.style.opacity = '0.5';
+            }
             selectStatus.onchange = function() {
+                if (isRowLocked || isViewer) return;
                 updateTaskStatusFromSheet(t.id, this.value);
             };
 
@@ -12619,9 +12842,25 @@ function renderTaskSheet() {
             btnDel.className = 'btn-gantt-action';
             btnDel.style.color = '#f87171';
             btnDel.textContent = 'Delete';
-            btnDel.onclick = () => deleteSheetTask(t.id);
+            if (isRowLocked || isRestrictedRole) {
+                btnDel.disabled = true;
+                btnDel.style.opacity = '0.4';
+                btnDel.style.cursor = 'not-allowed';
+            }
+            btnDel.onclick = () => {
+                if (isRowLocked || isRestrictedRole) return;
+                deleteSheetTask(t.id);
+            };
             tdAction.appendChild(btnDel);
             row.appendChild(tdAction);
+
+            // Click table row to open properties panel and acquire edit lock
+            row.onclick = function(e) {
+                // Prevent trigger when clicking input text elements
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT' && e.target.tagName !== 'BUTTON') {
+                    selectNode(t.id);
+                }
+            };
 
             tbody.appendChild(row);
         });
@@ -12831,12 +13070,43 @@ function updateTaskStatusFromSheet(id, val) {
                 action: 'status_change',
                 fromStatus: fromStatus,
                 toStatus: toStatus,
-                assignee: n.assignee || 'User'
+                assignee: getActiveUserDisplayName()
             });
         }
         save();
         renderSheet();
     }
+}
+
+function getActiveUserDisplayName() {
+    if (!supabaseClient) return 'User';
+    let currentUserObj = null;
+    
+    // Check v2 getUser first (cached in session wrapper), then session(), then user() fallback
+    const sessionObj = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
+    if (sessionObj && sessionObj.user) {
+        currentUserObj = sessionObj.user;
+    } else {
+        currentUserObj = supabaseClient.auth.currentUser || (supabaseClient.auth.user ? supabaseClient.auth.user() : null);
+    }
+    
+    if (currentUserObj) {
+        const userEmail = currentUserObj.email;
+        if (userEmail) {
+            // Case-insensitive profile cache matching
+            const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === userEmail.toLowerCase());
+            if (mappedProfile && mappedProfile.assignee_name) {
+                return mappedProfile.assignee_name;
+            }
+            if (mappedProfile && mappedProfile.display_name) {
+                return mappedProfile.display_name;
+            }
+            // Fallback: Use capitalized email segment
+            const localPart = userEmail.split('@')[0];
+            return localPart.charAt(0).toUpperCase() + localPart.slice(1);
+        }
+    }
+    return 'User';
 }
 
 function deleteSheetTask(taskId) {
@@ -12910,6 +13180,7 @@ function addSheetTaskRow() {
         notes: '',
         createdAt: nowIso,
         updatedAt: nowIso,
+        created_by: getActiveUserDisplayName(),
         doneAt: null,
         children: []
     };
@@ -12924,7 +13195,6 @@ function addSheetTaskRow() {
     projectNode.children.push(newTask);
 
     // Write history log event
-    data.history = data.history || [];
     data.history.push({
         timestamp: nowIso,
         projectId: projectNode.id,
@@ -12933,7 +13203,7 @@ function addSheetTaskRow() {
         action: 'status_change',
         fromStatus: 'todo',
         toStatus: 'todo',
-        assignee: 'User'
+        assignee: getActiveUserDisplayName()
     });
 
     save();
@@ -14056,7 +14326,32 @@ function renderPivotTable() {
     area.innerHTML = '';
 
     const rawTasks = allNodes(data).filter(n => getDepth(n.id) === 4);
-    const tasks = rawTasks.filter(t => !shouldHideTask(t));
+    
+    // Resolve the logged-in user's assigned name mapping from userProfilesCache
+    let loggedInAssigneeName = '';
+    if (supabaseClient) {
+        let currentUserObj = null;
+        const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
+        if (session && session.user) {
+            currentUserObj = session.user;
+        } else {
+            currentUserObj = supabaseClient.auth.user ? supabaseClient.auth.user() : null;
+        }
+        if (currentUserObj) {
+            const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === currentUserObj.email.toLowerCase());
+            if (mappedProfile && mappedProfile.assignee_name) {
+                loggedInAssigneeName = mappedProfile.assignee_name;
+            }
+        }
+    }
+    
+    let tasks = rawTasks.filter(t => !shouldHideTask(t));
+    if (pivotOnlyAssignedToMe) {
+        // Filter tasks down to the active user's mapped assignee name
+        // (if not mapped or not logged in, treat assignee mapping as empty so it filters out tasks)
+        tasks = tasks.filter(t => t.assignee === loggedInAssigneeName);
+    }
+    
     const projects = getProjectsList();
 
     function getTaskDimVal(task, dim) {
@@ -14171,6 +14466,10 @@ function renderPivotTable() {
                     <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Highlight (Days):</span>
                     <input type="number" min="0" step="0.1" value="${highlightDurationDays}" onchange="setHighlightDurationDays(this.value)" style="width: 50px; background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; text-align: center;">
                 </div>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
+                    <input type="checkbox" ${pivotOnlyAssignedToMe ? 'checked' : ''} onchange="setPivotOnlyAssignedToMe(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
+                    Only Assigned to Me
+                </label>
                 <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
                     <input type="checkbox" ${pivotZebraStripes ? 'checked' : ''} onchange="setPivotZebraStripes(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
                     Zebra Stripes
@@ -14609,202 +14908,6 @@ function renderPivotTable() {
         </th>
     </tr>`;
 
-    // --- Pivot Table News Section Generator (Mimics activePivotHierarchy columns dynamically) ---
-    const nowTime = Date.now();
-    const rangeMs = pivotNewsDays * 24 * 60 * 60 * 1000;
-    
-    // Gather all leaf tasks matching active pivot table filters (excluding hidden tasks)
-    const activeTasks = tasks;
-    const newsItems = [];
-    
-    activeTasks.forEach(t => {
-        const createdMs = t.createdAt ? new Date(t.createdAt).getTime() : 0;
-        const updatedMs = t.updatedAt ? new Date(t.updatedAt).getTime() : 0;
-        const doneMs = t.doneAt ? new Date(t.doneAt).getTime() : 0;
-        
-        // Match status done completions
-        const hasDoneEvent = t.status === 'done' && doneMs && (nowTime - doneMs <= rangeMs);
-        if (hasDoneEvent) {
-            newsItems.push({
-                time: doneMs,
-                type: 'done',
-                task: t,
-                details: 'Task marked completed'
-            });
-        }
-        
-        // Match creations (only if the task hasn't also been completed in this same news window)
-        if (createdMs && (nowTime - createdMs <= rangeMs) && !hasDoneEvent) {
-            newsItems.push({
-                time: createdMs,
-                type: 'created',
-                task: t,
-                details: 'Task initialized in database'
-            });
-        }
-        
-        // Match other updates/modifications (avoid duplicating creation events)
-        if (updatedMs && (nowTime - updatedMs <= rangeMs) && Math.abs(updatedMs - createdMs) > 2000 && Math.abs(updatedMs - doneMs) > 2000) {
-            newsItems.push({
-                time: updatedMs,
-                type: 'updated',
-                task: t,
-                details: 'Task properties/notes updated'
-            });
-        }
-    });
-
-    // Also parse history timeline entries for status movements
-    if (data.history) {
-        data.history.forEach(h => {
-            const histMs = h.timestamp ? new Date(h.timestamp).getTime() : 0;
-            if (histMs && (nowTime - histMs <= rangeMs)) {
-                // Avoid status change duplicates of 'done' which are already logged above
-                if (h.toStatus === 'done') return;
-                
-                // Lookup current properties of the task if still present
-                const matchedTask = findNode(h.taskId);
-                
-                // Create a temporary mock task matching historical title/properties if the original is gone,
-                // or extend matchedTask to preserve dimension lookups via getTaskDimVal
-                const mockTask = matchedTask ? { ...matchedTask } : { id: h.taskId, title: h.taskTitle, status: h.toStatus };
-                if (!mockTask.assignee && h.assignee) {
-                    mockTask.assignee = h.assignee;
-                }
-                
-                newsItems.push({
-                    time: histMs,
-                    type: 'status',
-                    task: mockTask,
-                    details: `Status Shift: ${sLabel(h.fromStatus)} ➔ ${sLabel(h.toStatus)}`
-                });
-            }
-        });
-    }
-
-    // Deduplicate news items by task ID, keeping only the most recent event per task to avoid spam
-    const seenTaskIds = new Set();
-    const uniqueNewsItems = [];
-    // Sort temporarily by time descending so we grab the newest event first
-    newsItems.sort((a, b) => b.time - a.time);
-    newsItems.forEach(item => {
-        if (!seenTaskIds.has(item.task.id)) {
-            seenTaskIds.add(item.task.id);
-            uniqueNewsItems.push(item);
-        }
-    });
-    
-    // Replace array with the deduplicated list
-    newsItems.length = 0;
-    newsItems.push(...uniqueNewsItems);
-
-    // Sort news newest first (maintain ordering)
-    newsItems.sort((a, b) => b.time - a.time);
-
-    // Format relative timestamp
-    const getRelativeTimeString = (ms) => {
-        const diffSecs = Math.floor((nowTime - ms) / 1000);
-        if (diffSecs < 60) return 'Just now';
-        const diffMins = Math.floor(diffSecs / 60);
-        if (diffMins < 60) return `${diffMins}m ago`;
-        const diffHours = Math.floor(diffMins / 60);
-        if (diffHours < 24) return `${diffHours}h ago`;
-        const diffDays = Math.floor(diffHours / 24);
-        return `${diffDays}d ago`;
-    };
-
-    // Render table headers dynamically matching activePivotHierarchy columns
-    let newsTheadHtml = '<tr>';
-    activePivotHierarchy.forEach(h => {
-        newsTheadHtml += `<th style="width: 1%; white-space: nowrap;">${hierarchyLabels[h]}</th>`;
-    });
-    newsTheadHtml += `
-        <th style="width: auto;">Task Title</th>
-        <th style="text-align:right; width: 5%; white-space: nowrap;">Occurred</th>
-    </tr>`;
-
-    // Build the news items table body rows with dynamic cell-spanning groupings
-    let newsTbodyHtml = '';
-    if (newsItems.length === 0) {
-        newsTbodyHtml = `<tr><td colspan="${activePivotHierarchy.length + 2}" style="text-align:center;padding:16px;color:var(--text-muted);">No activity logged during this timeframe. Try selecting a broader news window.</td></tr>`;
-    } else {
-        // Track unique spanned values per category level index matching activePivotHierarchy
-        const lastDimValues = Array(activePivotHierarchy.length).fill(null);
-        
-        newsItems.forEach(item => {
-            // Build cells for active hierarchy dimensions
-            let dimensionCellsHtml = '';
-            let isParentDifferent = false;
-            
-            activePivotHierarchy.forEach((dim, idx) => {
-                const rawVal = getTaskDimVal(item.task, dim);
-                const displayVal = rawVal === 'Unassigned' ? '' : sLabel(rawVal);
-                
-                // Grouping spanning check matching main pivot logic:
-                // If any parent category changes, all child categories reset spanning
-                if (isParentDifferent || rawVal !== lastDimValues[idx]) {
-                    const weight = idx === 0 ? '600' : idx === 1 ? '550' : '500';
-                    const color = dim === 'status' ? sColor(item.task.status) : (idx >= 3 ? 'var(--text-muted)' : 'var(--text)');
-                    
-                    dimensionCellsHtml += `<td class="pivot-dim-cell" style="font-weight:${weight}; vertical-align:top; border-bottom: none; color: ${color}; white-space: nowrap;">${displayVal}</td>`;
-                    lastDimValues[idx] = rawVal;
-                    isParentDifferent = true; // Force reset of child columns spanning
-                } else {
-                    dimensionCellsHtml += `<td style="border-top:none; border-bottom:none;"></td>`;
-                }
-            });
-            
-            newsTbodyHtml += `
-                <tr>
-                    ${dimensionCellsHtml}
-                    <td style="font-weight:500;">
-                        <span style="cursor: pointer; text-decoration: underline rgba(255,255,255,0.1);" onclick="event.stopPropagation(); selectNode('${item.task.id}');">${item.task.title}</span>
-                    </td>
-                    <td style="text-align:right; color:var(--text-muted); white-space:nowrap; width:1%;">${getRelativeTimeString(item.time)}</td>
-                </tr>
-            `;
-        });
-    }
-
-    let newsHtml = `
-        <div class="pivot-news-section" style="margin-top: 28px; padding: 18px; background: rgba(8,12,20,0.65); border: 1px solid var(--border); border-radius: 12px; backdrop-filter: blur(20px);">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; flex-wrap: wrap; gap: 10px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing:0.05em;">📡 Happenings Ledger (Pivot News)</span>
-                    <span style="font-size: 11px; color: var(--text-muted);">(${newsItems.length} transactions in view)</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                    <div style="display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px;">
-                        <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; margin-right: 4px;">Highlight Shift:</span>
-                        <button onclick="window.shiftPivotHighlight('left')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">◀</button>
-                        <button onclick="window.shiftPivotHighlight('up')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">▲</button>
-                        <button onclick="window.shiftPivotHighlight('down')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">▼</button>
-                        <button onclick="window.shiftPivotHighlight('right')" style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 4px; color: var(--text); cursor: pointer; font-size: 11px; font-weight: bold;">▶</button>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase;">Timeline:</span>
-                        <select onchange="setPivotNewsDays(this.value)" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; color: var(--text); font-size: 11px; cursor: pointer; outline: none;">
-                            <option value="1" ${pivotNewsDays === 1 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 24 Hours</option>
-                            <option value="3" ${pivotNewsDays === 3 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 3 Days</option>
-                            <option value="7" ${pivotNewsDays === 7 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 7 Days</option>
-                            <option value="14" ${pivotNewsDays === 14 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 14 Days</option>
-                            <option value="30" ${pivotNewsDays === 30 ? 'selected' : ''} style="background:#080c14;color:#fff;">Last 30 Days</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            
-            <table class="excel-table news-excel-table" style="table-layout: auto;">
-                <thead>
-                    ${newsTheadHtml}
-                </thead>
-                <tbody>
-                    ${newsTbodyHtml}
-                </tbody>
-            </table>
-        </div>
-    `;
-
     area.innerHTML = `
         ${configBarHtml}
         <table class="excel-table ${pivotZebraStripes ? 'zebra-enabled' : ''} ${freezeHeaders ? 'headers-frozen' : ''}">
@@ -14815,7 +14918,6 @@ function renderPivotTable() {
                 ${tbodyHtml || `<tr><td colspan="${activePivotHierarchy.length + 1}" style="text-align:center;color:var(--text-muted);">No tasks found.</td></tr>`}
             </tbody>
         </table>
-        ${newsHtml}
     `;
 }
 
@@ -14887,6 +14989,7 @@ function addPivotTask(rowVal, colVal) {
             notes: '',
             createdAt: nowIso,
             updatedAt: nowIso,
+            created_by: getActiveUserDisplayName(),
             children: []
         };
         parentProj.children.push(task);
@@ -14899,7 +15002,7 @@ function addPivotTask(rowVal, colVal) {
             action: 'status_change',
             fromStatus: 'todo',
             toStatus: status,
-            assignee: assignee || 'User'
+            assignee: getActiveUserDisplayName()
         });
 
         save();
@@ -14909,6 +15012,11 @@ function addPivotTask(rowVal, colVal) {
 
 // --- PROPERTIES ---
 function selectNode(id) {
+    // Release previous task lock broadcast if selecting a new task node
+    if (selectedId && selectedId !== id) {
+        broadcastTaskBlur(selectedId);
+    }
+    
     selectedId=id;
     const n=findNode(id); if(!n) return;
     document.getElementById('prop-title').value=n.title;
@@ -14976,6 +15084,11 @@ function selectNode(id) {
     setStatusPills(n.status);
     renderTagPills(n.tags||[]);
     document.getElementById('properties-panel').classList.add('open');
+    
+    // Broadcast realtime focus lock lock out event
+    broadcastTaskFocus(id);
+    enforceObjectLockUI(id);
+    
     redraw();
 }
 
@@ -15055,7 +15168,7 @@ function setStatus(s) {
                 action: 'status_change',
                 fromStatus: fromStatus,
                 toStatus: toStatus,
-                assignee: n.assignee || 'User'
+                assignee: getActiveUserDisplayName()
             });
         }
     }
@@ -15102,6 +15215,16 @@ function updateTitle(val) {
     if (oldVal.trim() !== newVal.trim()) {
         n.title=val;
         n.updatedAt = new Date().toISOString();
+        
+        // Propagate the updated title throughout history logs
+        if (data.history) {
+            data.history.forEach(ev => {
+                if (ev.taskId === n.id) {
+                    ev.taskTitle = val;
+                }
+            });
+        }
+        
         if (isNewDraft) savePropMemoryOnly(); else save();
     }
     clearTimeout(titleTimer);
@@ -15171,6 +15294,9 @@ function savePropMemoryOnly() {
     // Simply keeping changes in local variables; no write to Local Storage or Supabase push.
 }
 function closePanel() {
+    if (selectedId) {
+        broadcastTaskBlur(selectedId);
+    }
     selectedId=null;
     document.getElementById('properties-panel').classList.remove('open');
     redraw();
@@ -15213,6 +15339,10 @@ function addChildTo(parentId) {
 
     // Default node variables mapping to level requirements
     const nowIso = new Date().toISOString();
+    
+    // Resolve logged-in display name or email fallback to stamp as creator
+    const creatorEmail = getActiveUserDisplayName();
+
     const node = { 
         id: uid(), 
         title: 'New Node', 
@@ -15222,6 +15352,7 @@ function addChildTo(parentId) {
         notes: '', 
         createdAt: nowIso,
         updatedAt: nowIso,
+        created_by: creatorEmail,
         children: [] 
     };
     
@@ -15255,6 +15386,10 @@ function addFollowupTask() {
     
     // Create new node copying all attributes except ID, title, status, and comments
     const nowIso = new Date().toISOString();
+    
+    // Resolve logged-in display name or email fallback to stamp as creator
+    const creatorEmail = getActiveUserDisplayName();
+
     const followupNode = {
         id: uid(),
         title: 'Followup of ' + current.title,
@@ -15263,6 +15398,7 @@ function addFollowupTask() {
         tags: current.tags ? [...current.tags] : [],
         createdAt: nowIso,
         updatedAt: nowIso,
+        created_by: creatorEmail,
         children: []
     };
     
@@ -15434,6 +15570,17 @@ async function signOutGoogle() {
 }
 
 function updateGoogleAuthUIState(user) {
+    const appEl = document.getElementById('app');
+    const authContainer = document.getElementById('auth-container');
+    
+    if (user) {
+        if (appEl) appEl.style.display = 'flex';
+        if (authContainer) authContainer.style.display = 'none';
+    } else {
+        if (appEl) appEl.style.display = 'none';
+        if (authContainer) authContainer.style.display = 'flex';
+    }
+
     const statusLabel = document.getElementById('google-auth-status');
     const authBtn = document.getElementById('btn-google-signin');
     if (!statusLabel || !authBtn) return;
@@ -15465,14 +15612,14 @@ function updateGoogleAuthUIState(user) {
 
 // Push local state into Supabase cloud table row
 async function pushStateToSupabase() {
-    if (!supabaseClient) return;
+    if (!supabaseClient) return false;
     
     // Verify user session is authenticated before pushing database sync payloads
     const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         console.warn("Attempted to sync with Supabase while not logged in.");
         updateSupabaseStatusBadge('offline', '● Cloud Offline (Sign In)', '#94a3b8');
-        return;
+        return false;
     }
     
     const dbPayload = {
@@ -15488,15 +15635,659 @@ async function pushStateToSupabase() {
         
     if (error) throw error;
     console.log("State pushed to Supabase cloud successfully.");
+    return true;
 }
+
+// Dynamic Data Schema Migration Script
+async function verifyAndMigrateDataSchema() {
+    if (!supabaseClient) return;
+    try {
+        console.log("Beginning database verification checklist...");
+        
+        // 1. Fetch current users list to populate userProfilesCache
+        const { data: profiles } = await supabaseClient
+            .from('user_profiles')
+            .select('*');
+        if (profiles) {
+            userProfilesCache = profiles;
+            console.log("User profiles loaded:", userProfilesCache.length);
+        }
+
+        // Check if database normalization seeding has been done already
+        const { count, error: countErr } = await supabaseClient
+            .from('tasks')
+            .select('*', { count: 'exact', head: true });
+        
+        if (count > 0 && !countErr) {
+            console.log("Normalized tables are already populated. Skipping database seeding.");
+            return;
+        }
+
+        console.log("Normalized tables are empty. Initiating structural migration from monolithic schema...");
+
+        // Load the monolithic backup from local storage
+        const localDbRaw = localStorage.getItem('idealog');
+        if (!localDbRaw) {
+            console.log("No local storage data found to seed. Migration skipped.");
+            return;
+        }
+        
+        const localDataObj = JSON.parse(localDbRaw);
+        
+        // Traverse data tree nodes to flatten task records
+        const flatNodesList = [];
+        function traverseAndFlatten(node, parentId = null) {
+            if (!node) return;
+            flatNodesList.push({
+                id: node.id,
+                parent_id: parentId,
+                title: node.title || 'Untitled',
+                status: node.status || 'todo',
+                assignee: node.assignee || '',
+                notes: node.notes || '',
+                tags: node.tags || [],
+                depth: getDepth(node.id),
+                created_by: 'System Migration'
+            });
+            if (node.children && Array.isArray(node.children)) {
+                node.children.forEach(child => traverseAndFlatten(child, node.id));
+            }
+        }
+        traverseAndFlatten(localDataObj, null);
+        console.log(`Discovered ${flatNodesList.length} tree nodes to migrate.`);
+
+        // Insert nodes in sequential depth order to satisfy foreign key REFERENCES constraints
+        flatNodesList.sort((a, b) => a.depth - b.depth);
+
+        // Batch upload nodes to the normalized tasks table
+        for (const taskItem of flatNodesList) {
+            const { error: insErr } = await supabaseClient
+                .from('tasks')
+                .upsert({
+                    id: taskItem.id,
+                    parent_id: taskItem.parent_id,
+                    title: taskItem.title,
+                    status: taskItem.status,
+                    assignee: taskItem.assignee,
+                    notes: taskItem.notes,
+                    tags: taskItem.tags,
+                    depth: taskItem.depth,
+                    created_by: taskItem.created_by
+                });
+            if (insErr) {
+                console.warn(`Failed to migrate task ${taskItem.id} (${taskItem.title}):`, insErr);
+            }
+        }
+
+        // Migrate Object Lists lookup lists
+        const categoriesList = ['assignees', 'systems', 'subsystems', 'projects'];
+        for (const cat of categoriesList) {
+            const vals = objectLists[cat] || [];
+            for (const valueItem of vals) {
+                if (valueItem && valueItem.trim()) {
+                    await supabaseClient
+                        .from('object_lists')
+                        .upsert({
+                            category: cat,
+                            value: valueItem.trim()
+                        }, { onConflict: 'category,value' });
+                }
+            }
+        }
+
+        // Migrate Task comments history
+        const commentsList = [];
+        function extractComments(node) {
+            if (!node) return;
+            if (node.comments && Array.isArray(node.comments)) {
+                node.comments.forEach((c, idx) => {
+                    commentsList.push({
+                        id: c.id || `c-${node.id}-${idx}`,
+                        task_id: node.id,
+                        author: c.author || 'User',
+                        content: c.content || '',
+                        timestamp: c.timestamp || new Date().toISOString()
+                    });
+                });
+            }
+            if (node.children && Array.isArray(node.children)) {
+                node.children.forEach(extractComments);
+            }
+        }
+        extractComments(localDataObj);
+        
+        if (commentsList.length > 0) {
+            console.log(`Migrating ${commentsList.length} task comments...`);
+            for (const comment of commentsList) {
+                await supabaseClient.from('task_comments').upsert(comment);
+            }
+        }
+
+        // Migrate Legacy History Logs
+        const historyEvents = localDataObj.history || [];
+        if (historyEvents.length > 0) {
+            console.log(`Migrating ${historyEvents.length} timeline events...`);
+            const chunks = [];
+            for (const ev of historyEvents) {
+                chunks.push({
+                    task_id: ev.taskId,
+                    timestamp: ev.timestamp || new Date().toISOString(),
+                    author: ev.assignee || 'User',
+                    field: ev.action || 'status_change',
+                    old_value: ev.fromStatus || '',
+                    new_value: ev.toStatus || ''
+                });
+            }
+            // Batch insert history logs (filter out invalid reference entries)
+            for (const chunk of chunks) {
+                const nodeExists = flatNodesList.some(n => n.id === chunk.task_id);
+                if (nodeExists) {
+                    await supabaseClient.from('task_history_events').insert(chunk);
+                }
+            }
+        }
+
+        console.log("Database schema structural migration finalized successfully!");
+    } catch (migEx) {
+        console.error("Migration parser execution exception:", migEx);
+    }
+}
+
+// User Roles Management UI Controller Logic
+function openUserRolesManagementModal() {
+    const modal = document.getElementById('user-roles-mgmt-modal');
+    if (!modal) return;
+    
+    modal.style.display = 'flex';
+    
+    // Populate user profiles list
+    const container = document.getElementById('users-roles-list-container');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (userProfilesCache.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 10px;">No registered users loaded from Supabase database.</div>`;
+        return;
+    }
+    
+    userProfilesCache.forEach(profile => {
+        const item = document.createElement('div');
+        item.style.display = 'flex';
+        item.style.justify = 'space-between';
+        item.style.alignItems = 'center';
+        item.style.background = 'rgba(255, 255, 255, 0.02)';
+        item.style.border = '1px solid var(--border)';
+        item.style.borderRadius = '8px';
+        item.style.padding = '8px 12px';
+        
+        const userInfo = document.createElement('div');
+        userInfo.style.display = 'flex';
+        userInfo.style.flexDirection = 'column';
+        userInfo.style.gap = '2px';
+        userInfo.innerHTML = `
+            <strong style="font-size: 12.5px; color: var(--text);">${profile.display_name || 'Anonymous User'}</strong>
+            <span style="font-size: 10.5px; color: var(--text-muted);">${profile.email}</span>
+        `;
+        
+        const controlsContainer = document.createElement('div');
+        controlsContainer.style.display = 'flex';
+        controlsContainer.style.gap = '8px';
+        controlsContainer.style.alignItems = 'center';
+
+        // 1. Assignee Link Dropdown
+        const assigneeSelect = document.createElement('select');
+        assigneeSelect.style.background = '#131924';
+        assigneeSelect.style.border = '1px solid var(--border)';
+        assigneeSelect.style.borderRadius = '6px';
+        assigneeSelect.style.color = 'var(--text)';
+        assigneeSelect.style.padding = '4px 8px';
+        assigneeSelect.style.fontSize = '12px';
+        assigneeSelect.style.outline = 'none';
+
+        // Populate dynamic assignees from objectLists.assignees
+        const unassignedOpt = document.createElement('option');
+        unassignedOpt.value = '';
+        unassignedOpt.textContent = 'Unmapped Assignee';
+        assigneeSelect.appendChild(unassignedOpt);
+
+        const listAssignees = (objectLists && objectLists.assignees) ? objectLists.assignees : [];
+        listAssignees.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (profile.assignee_name === name) opt.selected = true;
+            assigneeSelect.appendChild(opt);
+        });
+
+        assigneeSelect.onchange = async (e) => {
+            await updateRemoteUserProfileAssignee(profile.id, e.target.value);
+        };
+
+        // 2. Role Permissions Dropdown
+        const roleSelect = document.createElement('select');
+        roleSelect.style.background = '#131924';
+        roleSelect.style.border = '1px solid var(--border)';
+        roleSelect.style.borderRadius = '6px';
+        roleSelect.style.color = 'var(--text)';
+        roleSelect.style.padding = '4px 8px';
+        roleSelect.style.fontSize = '12px';
+        roleSelect.style.outline = 'none';
+        
+        const roles = ['admin', 'manager', 'basic', 'viewer'];
+        roles.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r;
+            opt.textContent = r.charAt(0).toUpperCase() + r.slice(1);
+            if (profile.role === r) opt.selected = true;
+            roleSelect.appendChild(opt);
+        });
+        
+        roleSelect.onchange = async (e) => {
+            await updateRemoteUserProfileRole(profile.id, e.target.value);
+        };
+        
+        controlsContainer.appendChild(assigneeSelect);
+        controlsContainer.appendChild(roleSelect);
+
+        item.appendChild(userInfo);
+        item.appendChild(controlsContainer);
+        container.appendChild(item);
+    });
+}
+
+function closeUserRolesManagementModal() {
+    const modal = document.getElementById('user-roles-mgmt-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function updateRemoteUserProfileRole(userId, newRole) {
+    if (currentUserRole !== 'admin') {
+        alert("Action denied. Only Administrators are permitted to modify user roles.");
+        openUserRolesManagementModal();
+        return;
+    }
+    if (!supabaseClient) return;
+    try {
+        console.log(`Updating user ${userId} role to: ${newRole}`);
+        const { error } = await supabaseClient
+            .from('user_profiles')
+            .update({ role: newRole })
+            .eq('id', userId);
+            
+        if (error) {
+            alert("Error updating role: " + error.message);
+        } else {
+            console.log("User role successfully updated in Supabase user_profiles.");
+            const { data: profiles } = await supabaseClient.from('user_profiles').select('*');
+            if (profiles) {
+                userProfilesCache = profiles;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to update role:", e);
+    }
+}
+
+async function updateRemoteUserProfileAssignee(userId, assigneeName) {
+    if (currentUserRole !== 'admin') {
+        alert("Action denied. Only Administrators are permitted to map user assignees.");
+        openUserRolesManagementModal();
+        return;
+    }
+    if (!supabaseClient) return;
+    try {
+        console.log(`Updating user ${userId} assignee mapping to: ${assigneeName}`);
+        const { error } = await supabaseClient
+            .from('user_profiles')
+            .update({ assignee_name: assigneeName })
+            .eq('id', userId);
+            
+        if (error) {
+            alert("Error updating assignee mapping: " + error.message);
+        } else {
+            console.log("User assignee mapping successfully updated in Supabase user_profiles.");
+            const { data: profiles } = await supabaseClient.from('user_profiles').select('*');
+            if (profiles) {
+                userProfilesCache = profiles;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to update user assignee mapping:", e);
+    }
+}
+
+// Toggle admin link visibility during migration check
+async function toggleAdminLinkContainer() {
+    const adminLink = document.getElementById('admin-users-link-container');
+    const headerAdminBtn = document.getElementById('btn-header-admin-users');
+    
+    if (currentUserRole === 'admin') {
+        if (adminLink) adminLink.style.display = 'block';
+        if (headerAdminBtn) headerAdminBtn.style.display = 'inline-flex';
+    } else {
+        if (adminLink) adminLink.style.display = 'none';
+        if (headerAdminBtn) headerAdminBtn.style.display = 'none';
+    }
+}
+
+// --- SUPABASE REALTIME PRESENCE & COLLABORATIVE OBJECT LOCKING ---
+let realtimeLockChannel = null;
+const LOCK_EXPIRY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minutes autolock release timeout
+
+function setupSupabaseRealtimePresenceLocks(user) {
+    if (!supabaseClient) return;
+    
+    // Subscribe to task_locks broadcast channel
+    realtimeLockChannel = supabaseClient.channel('task_locks', {
+        config: {
+            broadcast: { self: false }
+        }
+    });
+
+    realtimeLockChannel
+        .on('broadcast', { event: 'task_focus' }, (payload) => {
+            const { taskId, userEmail, userName, timestamp } = payload.payload;
+            console.log(`Task ${taskId} focused/locked by ${userName} (${userEmail})`);
+            currentLockInfo[taskId] = {
+                userEmail,
+                userName,
+                timestamp: timestamp || new Date().toISOString()
+            };
+            
+            // Clean up locks focused on our actively selected task if it got locked out
+            if (selectedId === taskId) {
+                enforceObjectLockUI(taskId);
+            }
+            redraw();
+        })
+        .on('broadcast', { event: 'task_blur' }, (payload) => {
+            const { taskId } = payload.payload;
+            console.log(`Task ${taskId} released/unlocked`);
+            delete currentLockInfo[taskId];
+            
+            if (selectedId === taskId) {
+                enforceObjectLockUI(taskId);
+            }
+            redraw();
+        })
+        .subscribe((status) => {
+            console.log("Realtime Lock Channel Subscription status:", status);
+        });
+
+    // Run clean up routine for expired locks periodically (once per minute)
+    setInterval(() => {
+        const now = Date.now();
+        let changed = false;
+        for (const taskId in currentLockInfo) {
+            const lock = currentLockInfo[taskId];
+            const lockTime = new Date(lock.timestamp).getTime();
+            if (now - lockTime > LOCK_EXPIRY_TIMEOUT_MS) {
+                console.log(`Lock on task ${taskId} by ${lock.userName} expired.`);
+                delete currentLockInfo[taskId];
+                changed = true;
+                if (selectedId === taskId) {
+                    enforceObjectLockUI(taskId);
+                }
+            }
+        }
+        if (changed) redraw();
+    }, 60000);
+}
+
+function broadcastTaskFocus(taskId) {
+    if (!supabaseClient || !realtimeLockChannel) return;
+    supabaseClient.auth.getUser().then(({ data: { user } }) => {
+        if (!user) return;
+        const userName = user.user_metadata?.name || split_part(user.email, '@', 1);
+        realtimeLockChannel.send({
+            type: 'broadcast',
+            event: 'task_focus',
+            payload: {
+                taskId,
+                userEmail: user.email,
+                userName: userName,
+                timestamp: new Date().toISOString()
+            }
+        });
+    });
+}
+
+function broadcastTaskBlur(taskId) {
+    if (!supabaseClient || !realtimeLockChannel) return;
+    realtimeLockChannel.send({
+        type: 'broadcast',
+        event: 'task_blur',
+        payload: { taskId }
+    });
+}
+
+function split_part(str, delimiter, partIndex) {
+    if (!str) return 'User';
+    const split = str.split(delimiter);
+    return split[partIndex - 1] || 'User';
+}
+
+function enforceObjectLockUI(taskId) {
+    const lock = currentLockInfo[taskId];
+    const isLocked = !!lock;
+    
+    const panel = document.getElementById('properties-panel');
+    const lockIndicator = document.getElementById('properties-lock-indicator') || createLockIndicator();
+    
+    // Inputs inside panel
+    const inputs = panel.querySelectorAll('input, textarea, select, button.status-pill');
+    
+    // Determine RBAC permissions
+    const isViewer = currentUserRole === 'viewer';
+    const isBasic = currentUserRole === 'basic';
+    const isWriteAllowed = currentUserRole === 'admin' || currentUserRole === 'manager';
+    
+    // Hide panel bottom buttons (Delete / Followup Task) for restricted roles
+    const deleteBtn = panel.querySelector('.btn-danger');
+    const followupBtn = panel.querySelector('.panel-actions button.btn-secondary');
+    if (deleteBtn) deleteBtn.style.display = isWriteAllowed ? 'block' : 'none';
+    if (followupBtn) followupBtn.style.display = isWriteAllowed ? 'block' : 'none';
+
+    if (isLocked) {
+        lockIndicator.style.display = 'block';
+        lockIndicator.innerHTML = `🔒 Locked by <strong style="color: #f87171;">${lock.userName}</strong> (${lock.userEmail}) <button onclick="overrideForceUnlock('${taskId}')" style="margin-left: 8px; font-size: 10px; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(248, 113, 113, 0.4); background: rgba(248, 113, 113, 0.1); color: #f87171; cursor: pointer; font-weight: bold;">Force Unlock</button>`;
+        
+        inputs.forEach(input => {
+            if (input.className !== 'panel-close' && !input.closest('#properties-lock-indicator')) {
+                input.disabled = true;
+                if (input.tagName === 'INPUT' || input.tagName === 'TEXTAREA') {
+                    input.style.opacity = '0.5';
+                }
+            }
+        });
+    } else {
+        lockIndicator.style.display = 'none';
+        
+        inputs.forEach(input => {
+            if (input.className === 'panel-close') return;
+            
+            // Check if it's the comments input or send button
+            const isCommentBox = input.id === 'comment-add-input' || input.innerHTML === 'Send' || input.getAttribute('onclick') === 'addNewComment()';
+            // Check if it's the status pill elements
+            const isStatusPill = input.classList.contains('status-pill');
+            
+            if (isViewer) {
+                // Viewer gets blocked from everything
+                input.disabled = true;
+                input.style.opacity = '0.5';
+            } else if (isBasic) {
+                // Basic user can edit comments and status, but not other properties (assignee, tags, title, custom cols)
+                if (isCommentBox || isStatusPill) {
+                    input.disabled = false;
+                    input.style.opacity = '';
+                } else {
+                    input.disabled = true;
+                    input.style.opacity = '0.5';
+                }
+            } else {
+                // Admin and Manager get full edit capabilities
+                input.disabled = false;
+                input.style.opacity = '';
+            }
+        });
+    }
+}
+
+function createLockIndicator() {
+    const panelBody = document.querySelector('#properties-panel .panel-body');
+    const indicator = document.createElement('div');
+    indicator.id = 'properties-lock-indicator';
+    indicator.style.cssText = 'background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 8px 12px; color: #f87171; font-size: 11.5px; margin-bottom: 12px; display: none; align-items: center; justify-content: space-between;';
+    panelBody.insertBefore(indicator, panelBody.firstChild);
+    return indicator;
+}
+
+function overrideForceUnlock(taskId) {
+    if (confirm("Force override active lock? This will unlock the task for edits.")) {
+        broadcastTaskBlur(taskId);
+        delete currentLockInfo[taskId];
+        enforceObjectLockUI(taskId);
+        redraw();
+    }
+}
+
+// --- VERSION HISTORY DROPDOWN CONTROLLER ---
+function toggleTaskHistoryDropdown(event) {
+    if (event) event.stopPropagation();
+    const panel = document.getElementById('task-history-dropdown-panel');
+    if (!panel) return;
+    
+    if (panel.style.display === 'none' || panel.style.display === '') {
+        panel.style.display = 'flex';
+        populateTaskHistoryDropdown();
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+async function populateTaskHistoryDropdown() {
+    const listContainer = document.getElementById('task-history-events-list');
+    const creatorLabel = document.getElementById('task-creator-label');
+    if (!listContainer || !selectedId) return;
+    
+    listContainer.innerHTML = '';
+    
+    // 1. Resolve Task Creator Metadata
+    const taskNode = findNode(selectedId);
+    if (taskNode) {
+        // Fallback checks
+        creatorLabel.textContent = `Creator: ${taskNode.created_by || 'System'}`;
+    }
+    
+    // 2. Fetch history logs from both database table and local memory, then deduplicate
+    let historyEvents = [];
+    if (supabaseClient) {
+        try {
+            const { data: events, error } = await supabaseClient
+                .from('task_history_events')
+                .select('*')
+                .eq('task_id', selectedId)
+                .order('timestamp', { ascending: false });
+            if (events && !error) {
+                historyEvents = events.map(ev => ({
+                    timestamp: ev.timestamp,
+                    action: ev.field === 'status' ? 'status_change' : 'update',
+                    fromStatus: ev.old_value,
+                    toStatus: ev.new_value,
+                    assignee: ev.author,
+                    field: ev.field
+                }));
+            }
+        } catch (dbEx) {
+            console.warn("Failed to load history events from Supabase:", dbEx);
+        }
+    }
+    
+    // Add local state history records to verify immediate/offline logs
+    if (data.history) {
+        const localEvents = data.history
+            .filter(ev => ev.taskId === selectedId)
+            .map(ev => ({
+                timestamp: ev.timestamp,
+                action: ev.action || 'status_change',
+                fromStatus: ev.fromStatus || '',
+                toStatus: ev.toStatus || '',
+                assignee: ev.assignee || getActiveUserDisplayName(),
+                field: ev.field || 'status'
+            }));
+            
+        // Append local events, avoiding duplicates by matching timestamp
+        localEvents.forEach(le => {
+            const exists = historyEvents.some(re => re.timestamp === le.timestamp);
+            if (!exists) {
+                historyEvents.push(le);
+            }
+        });
+    }
+    
+    // Sort combined history events newest first
+    historyEvents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    if (historyEvents.length === 0) {
+        listContainer.innerHTML = `<div style="text-align: center; font-size: 11px; color: var(--text-muted); padding: 8px 0;">No edits recorded yet.</div>`;
+        return;
+    }
+    
+    historyEvents.forEach(ev => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display: flex; flex-direction: column; gap: 3px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 11px;';
+        
+        const timestamp = ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date(ev.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+        const actor = ev.assignee === 'User' ? getActiveUserDisplayName() : (ev.assignee || 'User');
+        
+        let changeDesc = '';
+        if (ev.action === 'status_change') {
+            changeDesc = `Changed status: <span style="color: var(--text-muted); text-decoration: line-through;">${ev.fromStatus}</span> ➔ <span style="color: var(--accent); font-weight: bold;">${ev.toStatus}</span>`;
+        } else {
+            const fieldLabel = ev.field ? ev.field.toUpperCase() : 'PROPERTY';
+            changeDesc = `Modified ${fieldLabel}: <span style="color: var(--text-muted);">${ev.fromStatus || 'none'}</span> ➔ <span style="color: var(--text);">${ev.toStatus || 'none'}</span>`;
+        }
+        
+        item.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 3px; margin-bottom: 2px;">
+                <strong style="color: var(--accent);">${actor}</strong>
+                <span style="font-size: 9px; color: var(--text-muted);">${timestamp}</span>
+            </div>
+            <div style="line-height: 1.3; color: var(--text-dim); word-break: break-word;">${changeDesc}</div>
+        `;
+        
+        listContainer.appendChild(item);
+    });
+}
+
+// Add global listener to close dropdown on outer clicks
+document.addEventListener('click', (e) => {
+    const panel = document.getElementById('task-history-dropdown-panel');
+    const clockBtn = document.getElementById('btn-task-history-clock');
+    if (panel && clockBtn && panel.style.display === 'flex') {
+        if (!panel.contains(e.target) && !clockBtn.contains(e.target)) {
+            panel.style.display = 'none';
+        }
+    }
+});
+
 function switchView(view) {
     currentView=view;
     document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('btn-'+view).classList.add('active');
-    ['gitboard','spreadsheet'].forEach(v => {
-        const el = document.getElementById(v+'-view');
-        if (el) el.style.display = v===view?'flex':'none';
-    });
+    
+    // Manage wrapper display types correctly
+    const gitView = document.getElementById('gitboard-view');
+    const sheetView = document.getElementById('spreadsheet-view');
+    
+    if (view === 'gitboard') {
+        if (gitView) gitView.style.display = 'flex';
+        if (sheetView) sheetView.style.display = 'none';
+    } else {
+        if (gitView) gitView.style.display = 'none';
+        if (sheetView) sheetView.style.display = 'flex';
+    }
     redraw();
 }
 function redraw() {
@@ -15515,6 +16306,56 @@ function showTip(e,n) {
     t.classList.add('visible');
 }
 function hideTip() { document.getElementById('tooltip').classList.remove('visible'); }
+
+// --- UNDO/REDO TOAST & HOTKEYS ---
+function showUndoToast(message, isUndoAction = false) {
+    let toast = document.getElementById('undo-redo-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'undo-redo-toast';
+        toast.style.cssText = 'position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px); background: rgba(8, 12, 20, 0.95); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 16px; color: var(--text); font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 12px; box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4); z-index: 99999; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s; opacity: 0; pointer-events: auto;';
+        document.body.appendChild(toast);
+    }
+    
+    // Build internal alert markup with action buttons
+    toast.innerHTML = `
+        <span>${message}</span>
+        ${isUndoAction ? `<button onclick="redo()" style="background: var(--accent); border: none; outline: none; color: white; border-radius: 4px; padding: 3px 8px; font-size: 10px; font-weight: bold; cursor: pointer; transition: transform 0.1s;">Redo</button>` : ''}
+    `;
+    
+    // Slide up animation transition
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+    toast.style.opacity = '1';
+    
+    clearTimeout(toast.dismissTimeout);
+    toast.dismissTimeout = setTimeout(() => {
+        toast.style.transform = 'translateX(-50%) translateY(100px)';
+        toast.style.opacity = '0';
+    }, 4500);
+}
+
+// Global hotkeys hook
+window.addEventListener('keydown', (e) => {
+    // Ignore trigger inputs if active inside properties panel fields, comments, or modal dialogues
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+        return;
+    }
+    
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        if (e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                redo();
+            } else {
+                undo();
+            }
+        } else if (e.key.toLowerCase() === 'y') {
+            e.preventDefault();
+            redo();
+        }
+    }
+});
 
 // --- INIT ---
 updateSidebarDrawerVisibility();
