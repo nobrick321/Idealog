@@ -845,7 +845,7 @@
             background: rgba(99,102,241,0.15) !important;
         }
         .pivot-th-drag::after {
-            content: ' ☰';
+            content: '';
             font-size: 8px;
             opacity: 0.4;
             margin-left: 2px;
@@ -12129,6 +12129,7 @@ let currentSheetTab = 'pivot';
 let pivotRowDim = 'project';
 let pivotColDim = 'status';
 // Dynamic column list stored in localStorage or default to system/subsystem/codename/deployment
+let activePivotColumnFilters = {}; // Maps dimension keys (e.g. project, status, assignee) to arrays of checked/allowed value strings
 let parsedCols = JSON.parse(localStorage.getItem('idealog_sheet_cols') || 'null');
 if (!Array.isArray(parsedCols)) {
     parsedCols = [
@@ -14394,6 +14395,14 @@ function renderPivotTable() {
         return val ? val.toString().trim() : 'Unassigned';
     }
 
+    // Apply active spreadsheet column filters to tasks list
+    Object.keys(activePivotColumnFilters).forEach(dim => {
+        const allowedVals = activePivotColumnFilters[dim];
+        if (allowedVals && Array.isArray(allowedVals)) {
+            tasks = tasks.filter(t => allowedVals.includes(getTaskDimVal(t, dim)));
+        }
+    });
+
     let rowVals = [];
     if (pivotRowDim === 'project') {
         rowVals = projects.map(p => p.title);
@@ -14476,10 +14485,6 @@ function renderPivotTable() {
                     <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Highlight (Days):</span>
                     <input type="number" min="0" step="0.1" value="${highlightDurationDays}" onchange="setHighlightDurationDays(this.value)" style="width: 50px; background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; text-align: center;">
                 </div>
-                <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
-                    <input type="checkbox" ${pivotOnlyAssignedToMe ? 'checked' : ''} onchange="setPivotOnlyAssignedToMe(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
-                    Only Assigned to Me
-                </label>
                 <label style="display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
                     <input type="checkbox" ${pivotZebraStripes ? 'checked' : ''} onchange="setPivotZebraStripes(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
                     Zebra Stripes
@@ -14902,13 +14907,21 @@ function renderPivotTable() {
     // Render table headers with HTML5 drag and drop handlers only
     let theadHtml = '<tr>';
     activePivotHierarchy.forEach((h, idx) => {
+        // Find if this dimension has any active column filters checked/set
+        const isFilterActive = activePivotColumnFilters[h] && Array.isArray(activePivotColumnFilters[h]);
+        const filterColor = isFilterActive ? 'var(--accent)' : 'var(--text-muted)';
         theadHtml += `
             <th class="pivot-th-drag" draggable="true" 
                 ondragstart="handlePivotDragStart(event, ${idx})" 
                 ondragover="event.preventDefault()" 
                 ondrop="handlePivotDrop(event, ${idx})"
-                style="width: 1%; white-space: nowrap; cursor: grab;">
-                <span>${hierarchyLabels[h]}</span>
+                style="width: 1%; white-space: nowrap; cursor: grab; padding: 4px 6px;">
+                <div style="display: inline-flex; align-items: center; gap: 6px;">
+                    <span>${hierarchyLabels[h]}</span>
+                    <button class="view-btn" onclick="event.stopPropagation(); togglePivotColumnFilterDropdown(event, '${h}')" 
+                        style="background: transparent; border: none; padding: 0 2px; line-height: 1; color: ${filterColor}; font-size: 9px; cursor: pointer; border-radius: 4px; display: inline-block; vertical-align: middle;" 
+                        title="Filter Column">▼</button>
+                </div>
             </th>`;
     });
 
@@ -14956,6 +14969,164 @@ function handlePivotDrop(e, idx) {
         }
     }
 }
+
+// Active Pivot Column Filter dropdown tracker element
+let activePivotColumnFilterDropdownEl = null;
+
+function togglePivotColumnFilterDropdown(event, dimKey) {
+    if (activePivotColumnFilterDropdownEl) {
+        activePivotColumnFilterDropdownEl.remove();
+        activePivotColumnFilterDropdownEl = null;
+    }
+
+    const rawTasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    
+    // Resolve logged in user mapping
+    let loggedInAssigneeName = '';
+    if (supabaseClient) {
+        const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
+        const currentUserObj = session ? session.user : (supabaseClient.auth.user ? supabaseClient.auth.user() : null);
+        if (currentUserObj) {
+            const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === currentUserObj.email.toLowerCase());
+            if (mappedProfile && mappedProfile.assignee_name) {
+                loggedInAssigneeName = mappedProfile.assignee_name;
+            }
+        }
+    }
+    
+    // Evaluate list of remaining active tasks *after* global controls filter is applied (except column filters themselves)
+    let visibleTasks = rawTasks.filter(t => !shouldHideTask(t));
+    if (pivotOnlyAssignedToMe) {
+        visibleTasks = visibleTasks.filter(t => t.assignee === loggedInAssigneeName);
+    }
+
+    function getTaskDimValLocal(task, dim) {
+        if (dim === 'project') {
+            const parent = findParent(task.id);
+            return parent ? parent.title.trim() : 'Unassigned';
+        }
+        if (dim === 'assignee') {
+            return task.assignee ? task.assignee.trim() : 'Unassigned';
+        }
+        if (dim === 'status') {
+            return task.status || 'todo';
+        }
+        if (dim === 'created_on') {
+            return task.createdAt ? new Date(task.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unassigned';
+        }
+        if (dim === 'modified_on') {
+            return task.updatedAt ? new Date(task.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unassigned';
+        }
+        let val = task[dim];
+        if (val === undefined || val === '') {
+            const colDef = sheetColumns.find(c => c.key === dim);
+            if (colDef) {
+                const lowerL = colDef.label.toLowerCase();
+                if (lowerL === 'system') val = task.system;
+                else if (lowerL === 'subsystem') val = task.subsystem;
+            }
+        }
+        return val ? val.toString().trim() : 'Unassigned';
+    }
+
+    // Extract unique visible values matching this column key
+    const uniqueValues = Array.from(new Set(visibleTasks.map(t => getTaskDimValLocal(t, dimKey)))).sort((a,b) => a.localeCompare(b));
+    if (uniqueValues.length === 0) {
+        uniqueValues.push('Unassigned');
+    }
+
+    // Set allowed values (default to all selected if no filter active yet)
+    const allowed = activePivotColumnFilters[dimKey] || uniqueValues;
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'autocomplete-suggestions';
+    dropdown.style.cssText = 'position: absolute; display: flex; flex-direction: column; gap: 6px; padding: 12px; background: #0b0f19; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); min-width: 180px; max-height: 250px; overflow-y: auto; z-index: 10000;';
+
+    const rect = event.target.getBoundingClientRect();
+    dropdown.style.left = rect.left + window.scrollX + 'px';
+    dropdown.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+
+    // "Select All" toggle checkbox
+    const selectAllWrap = document.createElement('label');
+    selectAllWrap.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text); cursor: pointer; border-bottom: 1px solid var(--border); padding-bottom: 4px; font-weight: bold; margin-bottom: 2px;';
+    const isAllChecked = uniqueValues.every(val => allowed.includes(val));
+    selectAllWrap.innerHTML = `
+        <input type="checkbox" ${isAllChecked ? 'checked' : ''} style="accent-color: var(--accent); cursor: pointer;">
+        <span>Select All</span>
+    `;
+    const selectAllCheckbox = selectAllWrap.querySelector('input');
+    selectAllCheckbox.onchange = (e) => {
+        const checked = e.target.checked;
+        const allItemsCheckboxes = dropdown.querySelectorAll('.pivot-col-filter-item-chk');
+        allItemsCheckboxes.forEach(chk => {
+            chk.checked = checked;
+        });
+    };
+    dropdown.appendChild(selectAllWrap);
+
+    // List out options
+    uniqueValues.forEach(val => {
+        const label = document.createElement('label');
+        label.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); cursor: pointer; padding: 2px 0;';
+        const isChecked = allowed.includes(val);
+        label.innerHTML = `
+            <input type="checkbox" class="pivot-col-filter-item-chk" value="${val.replace(/"/g, '&quot;')}" ${isChecked ? 'checked' : ''} style="accent-color: var(--accent); cursor: pointer;">
+            <span>${val === 'Unassigned' ? 'Unassigned' : sLabel(val)}</span>
+        `;
+        dropdown.appendChild(label);
+    });
+
+    // Control buttons (Apply / Clear)
+    const btnContainer = document.createElement('div');
+    btnContainer.style.cssText = 'display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px;';
+    
+    const applyBtn = document.createElement('button');
+    applyBtn.textContent = 'Apply';
+    applyBtn.style.cssText = 'background: var(--accent); color: #fff; border: none; border-radius: 4px; padding: 3px 10px; font-size: 10px; font-weight: bold; cursor: pointer;';
+    applyBtn.onclick = () => {
+        const checkedItems = dropdown.querySelectorAll('.pivot-col-filter-item-chk:checked');
+        const checkedVals = Array.from(checkedItems).map(chk => chk.value);
+        
+        // If all are checked, clear filter key to represent unfiltered; else save checked values
+        if (checkedVals.length === uniqueValues.length) {
+            delete activePivotColumnFilters[dimKey];
+        } else {
+            activePivotColumnFilters[dimKey] = checkedVals;
+        }
+        
+        dropdown.remove();
+        activePivotColumnFilterDropdownEl = null;
+        renderPivotTable();
+    };
+
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = 'Clear';
+    clearBtn.style.cssText = 'background: rgba(255,255,255,0.05); color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; font-size: 10px; cursor: pointer;';
+    clearBtn.onclick = () => {
+        delete activePivotColumnFilters[dimKey];
+        dropdown.remove();
+        activePivotColumnFilterDropdownEl = null;
+        renderPivotTable();
+    };
+
+    btnContainer.appendChild(clearBtn);
+    btnContainer.appendChild(applyBtn);
+    dropdown.appendChild(btnContainer);
+
+    document.body.appendChild(dropdown);
+    activePivotColumnFilterDropdownEl = dropdown;
+
+    // Prevent this click from immediately bubbling to document trigger
+    event.stopPropagation();
+}
+
+// Global window event listener to clear filter dropdown on click outside
+document.addEventListener('click', (e) => {
+    if (activePivotColumnFilterDropdownEl && !activePivotColumnFilterDropdownEl.contains(e.target)) {
+        activePivotColumnFilterDropdownEl.remove();
+        activePivotColumnFilterDropdownEl = null;
+    }
+});
 
 function addPivotTask(rowVal, colVal) {
     const projects = getProjectsList();
