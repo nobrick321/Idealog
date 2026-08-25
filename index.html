@@ -15270,12 +15270,13 @@ function renderPivotTable() {
                 ondragstart="handlePivotDragStart(event, ${idx})" 
                 ondragover="event.preventDefault()" 
                 ondrop="handlePivotDrop(event, ${idx})"
-                style="width: 1%; white-space: nowrap; cursor: grab; padding: 4px 6px;">
-                <div style="display: inline-flex; align-items: center; gap: 6px;">
+                onmousedown="handlePivotThMouseDown(event)"
+                onclick="event.stopPropagation(); handlePivotThClick(event, '${h}')"
+                style="width: 1%; white-space: nowrap; cursor: pointer; padding: 4px 6px;">
+                <div style="display: inline-flex; align-items: center; gap: 6px; pointer-events: none;">
                     <span>${hierarchyLabels[h]}</span>
-                    <button class="view-btn" onclick="event.stopPropagation(); togglePivotColumnFilterDropdown(event, '${h}')" 
-                        style="background: transparent; border: none; padding: 0 2px; line-height: 1; color: ${filterColor}; font-size: 9px; cursor: pointer; border-radius: 4px; display: inline-block; vertical-align: middle;" 
-                        title="Filter Column">▼</button>
+                    <span style="line-height: 1; color: ${filterColor}; font-size: 9px; display: inline-block; vertical-align: middle;" 
+                        title="Filter Column">▼</span>
                 </div>
             </th>`;
     });
@@ -15327,12 +15328,36 @@ function handlePivotDrop(e, idx) {
 
 // Active Pivot Column Filter dropdown tracker element
 let activePivotColumnFilterDropdownEl = null;
+let activePivotColumnFilterDimKey = null;
+let pivotMouseDownX = 0;
+let pivotMouseDownY = 0;
+
+function handlePivotThMouseDown(e) {
+    pivotMouseDownX = e.clientX;
+    pivotMouseDownY = e.clientY;
+}
+
+function handlePivotThClick(e, dimKey) {
+    const diffX = Math.abs(e.clientX - pivotMouseDownX);
+    const diffY = Math.abs(e.clientY - pivotMouseDownY);
+    if (diffX > 4 || diffY > 4) {
+        return;
+    }
+    togglePivotColumnFilterDropdown(e, dimKey);
+}
 
 function togglePivotColumnFilterDropdown(event, dimKey) {
+    const isSameDim = (activePivotColumnFilterDimKey === dimKey);
     if (activePivotColumnFilterDropdownEl) {
         activePivotColumnFilterDropdownEl.remove();
         activePivotColumnFilterDropdownEl = null;
+        activePivotColumnFilterDimKey = null;
     }
+    if (isSameDim) {
+        if (event) event.stopPropagation();
+        return;
+    }
+    activePivotColumnFilterDimKey = dimKey;
 
     const rawTasks = allNodes(data).filter(n => getDepth(n.id) === 4);
     
@@ -15528,6 +15553,7 @@ document.addEventListener('click', (e) => {
     if (activePivotColumnFilterDropdownEl && !activePivotColumnFilterDropdownEl.contains(e.target)) {
         activePivotColumnFilterDropdownEl.remove();
         activePivotColumnFilterDropdownEl = null;
+        activePivotColumnFilterDimKey = null;
     }
 });
 
