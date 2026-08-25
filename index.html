@@ -15391,85 +15391,133 @@ function togglePivotColumnFilterDropdown(event, dimKey) {
     }
 
     // Set allowed values (default to all selected if no filter active yet)
-    const allowed = activePivotColumnFilters[dimKey] || uniqueValues;
+    const currentAllowed = new Set(activePivotColumnFilters[dimKey] || uniqueValues);
 
     const dropdown = document.createElement('div');
     dropdown.className = 'autocomplete-suggestions';
-    dropdown.style.cssText = 'position: absolute; display: flex; flex-direction: column; gap: 6px; padding: 12px; background: #0b0f19; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); min-width: 180px; max-height: 250px; overflow-y: auto; z-index: 10000;';
+    dropdown.style.cssText = 'position: absolute; display: flex; flex-direction: column; gap: 6px; padding: 12px; background: #0b0f19; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); min-width: 180px; max-height: 400px; z-index: 10000;';
 
     const rect = event.target.getBoundingClientRect();
     dropdown.style.left = rect.left + window.scrollX + 'px';
     dropdown.style.top = (rect.bottom + window.scrollY + 4) + 'px';
 
+    // Search bar for filtering options
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search...';
+    searchInput.style.cssText = 'width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 11px; color: var(--text); outline: none; margin-bottom: 2px;';
+    dropdown.appendChild(searchInput);
+
     // "Select All" toggle checkbox
     const selectAllWrap = document.createElement('label');
     selectAllWrap.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text); cursor: pointer; border-bottom: 1px solid var(--border); padding-bottom: 4px; font-weight: bold; margin-bottom: 2px;';
-    const isAllChecked = uniqueValues.every(val => allowed.includes(val));
     selectAllWrap.innerHTML = `
-        <input type="checkbox" ${isAllChecked ? 'checked' : ''} style="accent-color: var(--accent); cursor: pointer;">
+        <input type="checkbox" style="accent-color: var(--accent); cursor: pointer;">
         <span>Select All</span>
     `;
     const selectAllCheckbox = selectAllWrap.querySelector('input');
-    selectAllCheckbox.onchange = (e) => {
-        const checked = e.target.checked;
-        const allItemsCheckboxes = dropdown.querySelectorAll('.pivot-col-filter-item-chk');
-        allItemsCheckboxes.forEach(chk => {
-            chk.checked = checked;
-        });
-    };
     dropdown.appendChild(selectAllWrap);
 
-    // List out options
-    uniqueValues.forEach(val => {
-        const label = document.createElement('label');
-        label.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); cursor: pointer; padding: 2px 0;';
-        const isChecked = allowed.includes(val);
-        label.innerHTML = `
-            <input type="checkbox" class="pivot-col-filter-item-chk" value="${val.replace(/"/g, '&quot;')}" ${isChecked ? 'checked' : ''} style="accent-color: var(--accent); cursor: pointer;">
-            <span>${val === 'Unassigned' ? 'Unassigned' : sLabel(val)}</span>
-        `;
-        dropdown.appendChild(label);
-    });
+    // Scrollable container for the checklists
+    const listContainer = document.createElement('div');
+    listContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex: 1;';
+    dropdown.appendChild(listContainer);
 
-    // Control buttons (Apply / Clear)
-    const btnContainer = document.createElement('div');
-    btnContainer.style.cssText = 'display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px;';
-    
-    const applyBtn = document.createElement('button');
-    applyBtn.textContent = 'Apply';
-    applyBtn.style.cssText = 'background: var(--accent); color: #fff; border: none; border-radius: 4px; padding: 3px 10px; font-size: 10px; font-weight: bold; cursor: pointer;';
-    applyBtn.onclick = () => {
-        const checkedItems = dropdown.querySelectorAll('.pivot-col-filter-item-chk:checked');
-        const checkedVals = Array.from(checkedItems).map(chk => chk.value);
-        
-        // If all are checked, clear filter key to represent unfiltered; else save checked values
-        if (checkedVals.length === uniqueValues.length) {
+    function applyFiltersImmediately() {
+        if (currentAllowed.size === uniqueValues.length) {
             delete activePivotColumnFilters[dimKey];
         } else {
-            activePivotColumnFilters[dimKey] = checkedVals;
+            activePivotColumnFilters[dimKey] = Array.from(currentAllowed);
         }
+        renderPivotTable();
+    }
+
+    function updateSelectAllState(filteredValues) {
+        if (filteredValues.length === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+            return;
+        }
+        const checkedCount = filteredValues.filter(val => currentAllowed.has(val)).length;
+        if (checkedCount === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        } else if (checkedCount === filteredValues.length) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = true;
+        }
+    }
+
+    function updateList() {
+        const query = searchInput.value.toLowerCase().trim();
+        const filteredValues = uniqueValues.filter(val => {
+            const displayVal = val === 'Unassigned' ? 'Unassigned' : sLabel(val);
+            return displayVal.toLowerCase().includes(query);
+        });
+
+        listContainer.innerHTML = '';
         
-        dropdown.remove();
-        activePivotColumnFilterDropdownEl = null;
-        renderPivotTable();
+        filteredValues.forEach(val => {
+            const label = document.createElement('label');
+            label.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); cursor: pointer; padding: 2px 0;';
+            const isChecked = currentAllowed.has(val);
+            label.innerHTML = `
+                <input type="checkbox" class="pivot-col-filter-item-chk" value="${val.replace(/"/g, '&quot;')}" ${isChecked ? 'checked' : ''} style="accent-color: var(--accent); cursor: pointer;">
+                <span>${val === 'Unassigned' ? 'Unassigned' : sLabel(val)}</span>
+            `;
+            
+            const chk = label.querySelector('input');
+            chk.onchange = (e) => {
+                if (e.target.checked) {
+                    currentAllowed.add(val);
+                } else {
+                    currentAllowed.delete(val);
+                }
+                updateSelectAllState(filteredValues);
+                applyFiltersImmediately();
+            };
+            
+            listContainer.appendChild(label);
+        });
+
+        updateSelectAllState(filteredValues);
+    }
+
+    selectAllCheckbox.onchange = (e) => {
+        const query = searchInput.value.toLowerCase().trim();
+        const filteredValues = uniqueValues.filter(val => {
+            const displayVal = val === 'Unassigned' ? 'Unassigned' : sLabel(val);
+            return displayVal.toLowerCase().includes(query);
+        });
+
+        const checked = e.target.checked;
+        filteredValues.forEach(val => {
+            if (checked) {
+                currentAllowed.add(val);
+            } else {
+                currentAllowed.delete(val);
+            }
+        });
+        
+        updateList();
+        applyFiltersImmediately();
     };
 
-    const clearBtn = document.createElement('button');
-    clearBtn.textContent = 'Clear';
-    clearBtn.style.cssText = 'background: rgba(255,255,255,0.05); color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; font-size: 10px; cursor: pointer;';
-    clearBtn.onclick = () => {
-        delete activePivotColumnFilters[dimKey];
-        dropdown.remove();
-        activePivotColumnFilterDropdownEl = null;
-        renderPivotTable();
+    searchInput.oninput = () => {
+        updateList();
     };
 
-    btnContainer.appendChild(clearBtn);
-    btnContainer.appendChild(applyBtn);
-    dropdown.appendChild(btnContainer);
+    updateList();
 
     document.body.appendChild(dropdown);
     activePivotColumnFilterDropdownEl = dropdown;
+
+    setTimeout(() => {
+        searchInput.focus();
+    }, 50);
 
     // Prevent this click from immediately bubbling to document trigger
     event.stopPropagation();
