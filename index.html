@@ -11119,6 +11119,14 @@ async function loadStartupData() {
     // Auto-populate codenames and deployments list arrays dynamically from task tree fields
     if (!objectLists.custom_zbal2zx) objectLists.custom_zbal2zx = [];
     if (!objectLists.custom_aar1e85) objectLists.custom_aar1e85 = [];
+    if (!objectLists.dependencies) {
+        objectLists.dependencies = {
+            codename_parents: {},   // codename -> system
+            deployment_parents: {}, // deployment -> codename
+            subsystem_parents: {},  // subsystem -> deployment
+            project_parents: {}     // project -> subsystem
+        };
+    }
     
     rebuildPerformanceCaches();
     
@@ -12213,7 +12221,13 @@ let objectLists = {
         "Refill speed is slow",
         "Homing in Bistu ejects a slide",
         "Matching of multiple block trays"
-    ]
+    ],
+    "dependencies": {
+        "codename_parents": {},
+        "deployment_parents": {},
+        "subsystem_parents": {},
+        "project_parents": {}
+    }
 };
 
 function saveSheetColumns() {
@@ -13835,23 +13849,264 @@ function renderListsSheet() {
     toolbar.style.cssText = 'padding: 0 0 12px 0; margin-bottom: 8px; display: flex; gap: 8px; border-bottom: 1px solid var(--border);';
     toolbar.innerHTML = `
         <button class="btn-secondary btn-sm" onclick="openListsImportModal()" style="max-width:180px;height:32px;background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.2);">📥 Bulk Import Lists Data</button>
+        <button class="btn-secondary btn-sm" onclick="clearAllDependenciesConfirm()" style="max-width:180px;height:32px;background:rgba(239,68,68,0.1);color:#ef4444;border-color:rgba(239,68,68,0.2);">⚠️ Reset All Dependencies</button>
     `;
     area.appendChild(toolbar);
 
-    const container = document.createElement('div');
-    container.style.cssText = 'display: flex; gap: 20px; width: 100%; height: calc(100% - 60px); overflow: auto; padding: 10px 0;';
+    const mainLayout = document.createElement('div');
+    mainLayout.style.cssText = 'display: flex; gap: 20px; width: 100%; height: calc(100% - 60px); overflow: hidden;';
 
+    // Left Panel: Dynamic Spanning Dependency Matrix Table
+    const matrixPanel = document.createElement('div');
+    matrixPanel.style.cssText = 'flex: 2; background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto;';
+    
+    matrixPanel.innerHTML = `
+        <div style="font-size: 13px; font-weight: bold; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 6px;">
+            🔗 Entity Hierarchy Dependency Matrix
+        </div>
+    `;
+
+    // Extract current definitions
+    const deps = objectLists.dependencies || { codename_parents: {}, deployment_parents: {}, subsystem_parents: {}, project_parents: {} };
+    
+    // Build a structured tree matching System -> Codename -> Deployment -> Subsystem -> Project
+    // We scan raw list elements to ensure even orphans are accounted for
+    const systems = objectLists.systems || [];
+    const codenames = objectLists.custom_zbal2zx || [];
+    const deployments = objectLists.custom_aar1e85 || [];
+    const subsystems = objectLists.subsystems || [];
+    const projects = objectLists.projects || [];
+
+    // Helper to find matching keys case-insensitively
+    const getChildren = (parentDict, parentVal) => {
+        if (!parentVal) return [];
+        const pLower = parentVal.trim().toLowerCase();
+        return Object.keys(parentDict).filter(child => {
+            const p = parentDict[child];
+            return p && p.trim().toLowerCase() === pLower;
+        });
+    };
+
+    const tree = [];
+    systems.forEach(sys => {
+        const sysNode = { name: sys, children: [] };
+        const sysCodes = getChildren(deps.codename_parents, sys);
+        
+        sysCodes.forEach(code => {
+            const codeNode = { name: code, children: [] };
+            const codeDeps = getChildren(deps.deployment_parents, code);
+            
+            codeDeps.forEach(dep => {
+                const depNode = { name: dep, children: [] };
+                const depSubs = getChildren(deps.subsystem_parents, dep);
+                
+                depSubs.forEach(sub => {
+                    const subNode = { name: sub, children: [] };
+                    const subProjs = getChildren(deps.project_parents, sub);
+                    
+                    subProjs.forEach(proj => {
+                        subNode.children.push({ name: proj });
+                    });
+                    depNode.children.push(subNode);
+                });
+                codeNode.children.push(depNode);
+            });
+            sysNode.children.push(codeNode);
+        });
+        tree.push(sysNode);
+    });
+
+    // Also collect orphans (items that do not have parents defined) to display them under an "Orphaned" branch so nothing is lost
+    const getOrphans = (list, parentDict) => {
+        return list.filter(item => {
+            const lower = item.toLowerCase();
+            return !Object.keys(parentDict).some(child => child.toLowerCase() === lower);
+        });
+    };
+
+    // Calculate grid rows for spanning table representation
+    const tableRows = [];
+    
+    function traverse(node, path = []) {
+        const currentPath = [...path, node.name];
+        if (!node.children || node.children.length === 0) {
+            tableRows.push(currentPath);
+            return;
+        }
+        node.children.forEach(child => traverse(child, currentPath));
+    }
+
+    tree.forEach(sysNode => {
+        traverse(sysNode, []);
+    });
+
+    // Generate HTML for Spanning Table
+    let tableHtml = `
+        <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:11px;">
+            <thead>
+                <tr>
+                    <th style="padding: 6px;">System</th>
+                    <th style="padding: 6px;">Codename</th>
+                    <th style="padding: 6px;">Deployment</th>
+                    <th style="padding: 6px;">Subsystem</th>
+                    <th style="padding: 6px;">Project</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    if (tableRows.length === 0) {
+        tableHtml += `<tr><td colspan="5" style="text-align:center; padding:12px; color:var(--text-muted);">No dependencies defined. Click buttons to add associations.</td></tr>`;
+    } else {
+        // Calculate spanning indexes
+        let i = 0;
+        while (i < tableRows.length) {
+            const row = tableRows[i];
+            
+            // Calculate spans
+            let sysSpan = 1;
+            while (i + sysSpan < tableRows.length && tableRows[i + sysSpan][0] === row[0]) {
+                sysSpan++;
+            }
+
+            let codeSpan = 1;
+            while (i + codeSpan < tableRows.length && 
+                   tableRows[i + codeSpan][0] === row[0] && 
+                   tableRows[i + codeSpan][1] === row[1]) {
+                codeSpan++;
+            }
+
+            let depSpan = 1;
+            while (i + depSpan < tableRows.length && 
+                   tableRows[i + depSpan][0] === row[0] && 
+                   tableRows[i + depSpan][1] === row[1] &&
+                   tableRows[i + depSpan][2] === row[2]) {
+                depSpan++;
+            }
+
+            let subSpan = 1;
+            while (i + subSpan < tableRows.length && 
+                   tableRows[i + subSpan][0] === row[0] && 
+                   tableRows[i + subSpan][1] === row[1] &&
+                   tableRows[i + subSpan][2] === row[2] &&
+                   tableRows[i + subSpan][3] === row[3]) {
+                subSpan++;
+            }
+
+            for (let rIdx = 0; rIdx < sysSpan; rIdx++) {
+                const currentRow = tableRows[i + rIdx];
+                tableHtml += `<tr style="border-bottom: 1px solid var(--border);">`;
+
+                // System (level 0)
+                if (rIdx === 0) {
+                    tableHtml += `
+                        <td rowspan="${sysSpan}" style="vertical-align:top; padding: 6px; font-weight:600; border-right:1px solid var(--border);">
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                                <span>${currentRow[0]}</span>
+                                <button onclick="event.stopPropagation(); inlineAddDependencyChild('codename', '${currentRow[0].replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Codename under ${currentRow[0]}">+</button>
+                            </div>
+                        </td>
+                    `;
+                }
+
+                // Codename (level 1)
+                if (rIdx % codeSpan === 0) {
+                    const codeVal = currentRow[1] || '';
+                    tableHtml += `
+                        <td rowspan="${codeSpan}" style="vertical-align:top; padding: 6px; border-right:1px solid var(--border); background:rgba(255,255,255,0.005);">
+                            ${codeVal ? `
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                                <span>${codeVal}</span>
+                                <div style="display:flex; gap:2px;">
+                                    <button onclick="inlineAddDependencyChild('deployment', '${codeVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Deployment under ${codeVal}">+</button>
+                                    <button onclick="inlineRemoveDependency('codename', '${codeVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove association">×</button>
+                                </div>
+                            </div>
+                            ` : ''}
+                        </td>
+                    `;
+                }
+
+                // Deployment (level 2)
+                if (rIdx % depSpan === 0) {
+                    const depVal = currentRow[2] || '';
+                    tableHtml += `
+                        <td rowspan="${depSpan}" style="vertical-align:top; padding: 6px; border-right:1px solid var(--border);">
+                            ${depVal ? `
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                                <span>${depVal}</span>
+                                <div style="display:flex; gap:2px;">
+                                    <button onclick="inlineAddDependencyChild('subsystem', '${depVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Subsystem under ${depVal}">+</button>
+                                    <button onclick="inlineRemoveDependency('deployment', '${depVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove association">×</button>
+                                </div>
+                            </div>
+                            ` : ''}
+                        </td>
+                    `;
+                }
+
+                // Subsystem (level 3)
+                if (rIdx % subSpan === 0) {
+                    const subVal = currentRow[3] || '';
+                    tableHtml += `
+                        <td rowspan="${subSpan}" style="vertical-align:top; padding: 6px; border-right:1px solid var(--border); background:rgba(255,255,255,0.005);">
+                            ${subVal ? `
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                                <span>${subVal}</span>
+                                <div style="display:flex; gap:2px;">
+                                    <button onclick="inlineAddDependencyChild('project', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Project under ${subVal}">+</button>
+                                    <button onclick="inlineRemoveDependency('subsystem', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove association">×</button>
+                                </div>
+                            </div>
+                            ` : ''}
+                        </td>
+                    `;
+                }
+
+                // Project (level 4)
+                const projVal = currentRow[4] || '';
+                tableHtml += `
+                    <td style="vertical-align:top; padding: 6px;">
+                        ${projVal ? `
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                            <span>${projVal}</span>
+                            <button onclick="inlineRemoveDependency('project', '${projVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove association">×</button>
+                        </div>
+                        ` : ''}
+                    </td>
+                `;
+
+                tableHtml += `</tr>`;
+            }
+            i += sysSpan;
+        }
+    }
+
+    tableHtml += `
+            </tbody>
+        </table>
+    `;
+    
+    matrixPanel.innerHTML += tableHtml;
+    mainLayout.appendChild(matrixPanel);
+
+    // Right Panel: Traditional column-by-column list manager (for flat definitions)
+    const rightPanel = document.createElement('div');
+    rightPanel.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 4px;';
+    
     const columns = [
         { type: 'assignees', label: 'Assignees' },
         { type: 'systems', label: 'Systems' },
+        { type: 'custom_zbal2zx', label: 'Codenames' },
+        { type: 'custom_aar1e85', label: 'Deployments' },
         { type: 'subsystems', label: 'Subsystems' },
         { type: 'projects', label: 'Projects' }
     ];
 
-    // Auto-append dynamic custom columns to Object Lists sheet
+    // Append dynamic custom columns
     sheetColumns.forEach(col => {
         const lowerL = col.label.toLowerCase();
-        if (lowerL !== 'system' && lowerL !== 'subsystem' && lowerL !== 'project' && lowerL !== 'assignee') {
+        if (lowerL !== 'system' && lowerL !== 'subsystem' && lowerL !== 'project' && lowerL !== 'assignee' && col.key !== 'custom_zbal2zx' && col.key !== 'custom_aar1e85') {
             if (!objectLists[col.key]) {
                 objectLists[col.key] = [];
             }
@@ -13862,49 +14117,113 @@ function renderListsSheet() {
     columns.forEach(col => {
         if (!objectLists[col.type]) objectLists[col.type] = [];
         const colDiv = document.createElement('div');
-        colDiv.style.cssText = 'flex: 1; min-width: 200px; max-width: 320px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; height: fit-content;';
+        colDiv.style.cssText = 'background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px;';
 
         const titleDiv = document.createElement('div');
-        titleDiv.style.cssText = 'font-size: 12px; font-weight: bold; color: var(--text-dim); text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;';
+        titleDiv.style.cssText = 'font-size: 11px; font-weight: bold; color: var(--text-dim); text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;';
         titleDiv.innerHTML = `
             <span>${col.label}</span>
             <div style="display: flex; align-items: center; gap: 6px;">
-                <button onclick="openBulkMergeModal('${col.type}')" title="Bulk Merge items in this list" style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); border-radius: 4px; color: #818cf8; font-size: 9px; padding: 2px 5px; cursor: pointer; font-weight: bold;">⎘ Bulk Merge</button>
+                <button onclick="openBulkMergeModal('${col.type}')" title="Bulk Merge items" style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); border-radius: 4px; color: #818cf8; font-size: 8px; padding: 2px 4px; cursor: pointer; font-weight: bold;">⎘ Merge</button>
                 <span style="font-size: 10px; color: var(--text-muted); font-weight: normal;">${objectLists[col.type].length}</span>
             </div>
         `;
         colDiv.appendChild(titleDiv);
 
-        // Input Form
+        // Input Add Form
         const form = document.createElement('div');
         form.style.cssText = 'display: flex; gap: 6px;';
         form.innerHTML = `
-            <input id="list-input-${col.type}" type="text" placeholder="Add new ${col.label.toLowerCase()}…" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 4px 8px; font-size: 11px; outline: none;">
-            <button onclick="addListItem('${col.type}')" style="background: var(--accent); color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold; cursor: pointer;">Add</button>
+            <input id="list-input-${col.type}" type="text" placeholder="Add to ${col.label.toLowerCase()}…" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 4px 8px; font-size: 11px; outline: none;">
+            <button onclick="addListItem('${col.type}')" style="background: var(--accent); color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold; cursor: pointer;">+</button>
         `;
         colDiv.appendChild(form);
 
-        // List Container
+        // Render List items inside container
         const listContainer = document.createElement('div');
-        listContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px; max-height: 400px; overflow-y: auto;';
+        listContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto;';
 
         objectLists[col.type].forEach((item, idx) => {
             const row = document.createElement('div');
             row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; gap: 4px;';
             row.innerHTML = `
                 <input type="text" value="${item}" onchange="editListItem('${col.type}', ${idx}, this.value)" style="background: transparent; border: none; color: var(--text); font-size: 11px; outline: none; flex: 1; min-width: 50px;">
-                <button onclick="mergeListItem('${col.type}', ${idx})" title="Merge items" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px; transition: color 0.15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">⎘ Merge</button>
+                <button onclick="mergeListItem('${col.type}', ${idx})" title="Merge items" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px; transition: color 0.15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">⎘</button>
                 <button onclick="deleteListItem('${col.type}', ${idx})" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; transition: color 0.15s;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='var(--text-muted)'">×</button>
             `;
             listContainer.appendChild(row);
         });
 
         colDiv.appendChild(listContainer);
-        container.appendChild(colDiv);
+        rightPanel.appendChild(colDiv);
     });
 
-    area.appendChild(container);
+    mainLayout.appendChild(rightPanel);
+    area.appendChild(mainLayout);
 }
+
+// Inline input handler (Option A) to define dependency mappings
+window.inlineAddDependencyChild = function(childType, parentVal) {
+    const listKey = childType === 'codename' ? 'custom_zbal2zx' : (childType === 'deployment' ? 'custom_aar1e85' : (childType === 'subsystem' ? 'subsystems' : 'projects'));
+    const options = objectLists[listKey] || [];
+    
+    if (options.length === 0) {
+        alert(`Please add some flat items to the "${listKey}" list first before nesting them.`);
+        return;
+    }
+
+    const val = prompt(`Select or type a child option to nest under "${parentVal}":\n\nAvailable options:\n${options.join(', ')}`);
+    if (!val || !val.trim()) return;
+    
+    const trimmedVal = val.trim();
+    // Validate existence in base list
+    const matchedOption = options.find(opt => opt.toLowerCase() === trimmedVal.toLowerCase());
+    if (!matchedOption) {
+        if (confirm(`"${trimmedVal}" does not exist in the base list. Add it first?`)) {
+            options.push(trimmedVal);
+            options.sort((a,b) => a.localeCompare(b));
+        } else {
+            return;
+        }
+    }
+    
+    const finalVal = matchedOption || trimmedVal;
+    const deps = objectLists.dependencies;
+    
+    // Save to flat mapping dictionaries matching target level
+    if (childType === 'codename') deps.codename_parents[finalVal] = parentVal;
+    else if (childType === 'deployment') deps.deployment_parents[finalVal] = parentVal;
+    else if (childType === 'subsystem') deps.subsystem_parents[finalVal] = parentVal;
+    else if (childType === 'project') deps.project_parents[finalVal] = parentVal;
+    
+    saveObjectLists();
+    renderListsSheet();
+};
+
+window.inlineRemoveDependency = function(childType, childVal) {
+    if (!confirm(`Are you sure you want to remove the parent hierarchy link for "${childVal}"?`)) return;
+    const deps = objectLists.dependencies;
+    
+    if (childType === 'codename') delete deps.codename_parents[childVal];
+    else if (childType === 'deployment') delete deps.deployment_parents[childVal];
+    else if (childType === 'subsystem') delete deps.subsystem_parents[childVal];
+    else if (childType === 'project') delete deps.project_parents[childVal];
+    
+    saveObjectLists();
+    renderListsSheet();
+};
+
+window.clearAllDependenciesConfirm = function() {
+    if (!confirm("Are you sure you want to completely reset all hierarchical entity associations? Flat lists will be preserved.")) return;
+    objectLists.dependencies = {
+        codename_parents: {},
+        deployment_parents: {},
+        subsystem_parents: {},
+        project_parents: {}
+    };
+    saveObjectLists();
+    renderListsSheet();
+};
 
 function addListItem(type) {
     const input = document.getElementById(`list-input-${type}`);
@@ -14174,7 +14493,43 @@ function showAutocomplete(inputEl, type, onSelect) {
     else if (type === 'projects') listSet = cachedObjectLists.projects;
     
     // Fallback to legacy objectLists array if not cached
-    const list = listSet ? Array.from(listSet) : (objectLists[type] || []);
+    let list = listSet ? Array.from(listSet) : (objectLists[type] || []);
+    
+    // Top-down cascading dropdown filtering based on dependencies
+    if (objectLists && objectLists.dependencies && selectedId) {
+        const deps = objectLists.dependencies;
+        const n = findNode(selectedId);
+        if (n) {
+            // System -> Codename (custom_zbal2zx) -> Deployment (custom_aar1e85) -> Subsystem -> Project
+            const checkMatch = (dict, child, parent) => {
+                if (!dict || !child || !parent) return true;
+                const childParent = dict[Object.keys(dict).find(k => k.toLowerCase() === child.toLowerCase())];
+                return childParent ? childParent.toLowerCase() === parent.toLowerCase() : true;
+            };
+
+            if (type === 'custom_zbal2zx') { // Codename
+                const activeSystem = n.system || '';
+                if (activeSystem) {
+                    list = list.filter(item => checkMatch(deps.codename_parents, item, activeSystem));
+                }
+            } else if (type === 'custom_aar1e85') { // Deployment
+                const activeCodename = n.custom_zbal2zx || '';
+                if (activeCodename) {
+                    list = list.filter(item => checkMatch(deps.deployment_parents, item, activeCodename));
+                }
+            } else if (type === 'subsystems') { // Subsystem
+                const activeDeployment = n.custom_aar1e85 || '';
+                if (activeDeployment) {
+                    list = list.filter(item => checkMatch(deps.subsystem_parents, item, activeDeployment));
+                }
+            } else if (type === 'projects') { // Project
+                const activeSubsystem = n.subsystem || '';
+                if (activeSubsystem) {
+                    list = list.filter(item => checkMatch(deps.project_parents, item, activeSubsystem));
+                }
+            }
+        }
+    }
     
     // Ensure the suggestion list contains unique case-insensitive values only
     const uniqueList = [];
@@ -15036,85 +15391,133 @@ function togglePivotColumnFilterDropdown(event, dimKey) {
     }
 
     // Set allowed values (default to all selected if no filter active yet)
-    const allowed = activePivotColumnFilters[dimKey] || uniqueValues;
+    const currentAllowed = new Set(activePivotColumnFilters[dimKey] || uniqueValues);
 
     const dropdown = document.createElement('div');
     dropdown.className = 'autocomplete-suggestions';
-    dropdown.style.cssText = 'position: absolute; display: flex; flex-direction: column; gap: 6px; padding: 12px; background: #0b0f19; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); min-width: 180px; max-height: 250px; overflow-y: auto; z-index: 10000;';
+    dropdown.style.cssText = 'position: absolute; display: flex; flex-direction: column; gap: 6px; padding: 12px; background: #0b0f19; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); min-width: 180px; max-height: 400px; z-index: 10000;';
 
     const rect = event.target.getBoundingClientRect();
     dropdown.style.left = rect.left + window.scrollX + 'px';
     dropdown.style.top = (rect.bottom + window.scrollY + 4) + 'px';
 
+    // Search bar for filtering options
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search...';
+    searchInput.style.cssText = 'width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 11px; color: var(--text); outline: none; margin-bottom: 2px;';
+    dropdown.appendChild(searchInput);
+
     // "Select All" toggle checkbox
     const selectAllWrap = document.createElement('label');
     selectAllWrap.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text); cursor: pointer; border-bottom: 1px solid var(--border); padding-bottom: 4px; font-weight: bold; margin-bottom: 2px;';
-    const isAllChecked = uniqueValues.every(val => allowed.includes(val));
     selectAllWrap.innerHTML = `
-        <input type="checkbox" ${isAllChecked ? 'checked' : ''} style="accent-color: var(--accent); cursor: pointer;">
+        <input type="checkbox" style="accent-color: var(--accent); cursor: pointer;">
         <span>Select All</span>
     `;
     const selectAllCheckbox = selectAllWrap.querySelector('input');
-    selectAllCheckbox.onchange = (e) => {
-        const checked = e.target.checked;
-        const allItemsCheckboxes = dropdown.querySelectorAll('.pivot-col-filter-item-chk');
-        allItemsCheckboxes.forEach(chk => {
-            chk.checked = checked;
-        });
-    };
     dropdown.appendChild(selectAllWrap);
 
-    // List out options
-    uniqueValues.forEach(val => {
-        const label = document.createElement('label');
-        label.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); cursor: pointer; padding: 2px 0;';
-        const isChecked = allowed.includes(val);
-        label.innerHTML = `
-            <input type="checkbox" class="pivot-col-filter-item-chk" value="${val.replace(/"/g, '&quot;')}" ${isChecked ? 'checked' : ''} style="accent-color: var(--accent); cursor: pointer;">
-            <span>${val === 'Unassigned' ? 'Unassigned' : sLabel(val)}</span>
-        `;
-        dropdown.appendChild(label);
-    });
+    // Scrollable container for the checklists
+    const listContainer = document.createElement('div');
+    listContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex: 1;';
+    dropdown.appendChild(listContainer);
 
-    // Control buttons (Apply / Clear)
-    const btnContainer = document.createElement('div');
-    btnContainer.style.cssText = 'display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px;';
-    
-    const applyBtn = document.createElement('button');
-    applyBtn.textContent = 'Apply';
-    applyBtn.style.cssText = 'background: var(--accent); color: #fff; border: none; border-radius: 4px; padding: 3px 10px; font-size: 10px; font-weight: bold; cursor: pointer;';
-    applyBtn.onclick = () => {
-        const checkedItems = dropdown.querySelectorAll('.pivot-col-filter-item-chk:checked');
-        const checkedVals = Array.from(checkedItems).map(chk => chk.value);
-        
-        // If all are checked, clear filter key to represent unfiltered; else save checked values
-        if (checkedVals.length === uniqueValues.length) {
+    function applyFiltersImmediately() {
+        if (currentAllowed.size === uniqueValues.length) {
             delete activePivotColumnFilters[dimKey];
         } else {
-            activePivotColumnFilters[dimKey] = checkedVals;
+            activePivotColumnFilters[dimKey] = Array.from(currentAllowed);
         }
+        renderPivotTable();
+    }
+
+    function updateSelectAllState(filteredValues) {
+        if (filteredValues.length === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+            return;
+        }
+        const checkedCount = filteredValues.filter(val => currentAllowed.has(val)).length;
+        if (checkedCount === 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        } else if (checkedCount === filteredValues.length) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = true;
+        }
+    }
+
+    function updateList() {
+        const query = searchInput.value.toLowerCase().trim();
+        const filteredValues = uniqueValues.filter(val => {
+            const displayVal = val === 'Unassigned' ? 'Unassigned' : sLabel(val);
+            return displayVal.toLowerCase().includes(query);
+        });
+
+        listContainer.innerHTML = '';
         
-        dropdown.remove();
-        activePivotColumnFilterDropdownEl = null;
-        renderPivotTable();
+        filteredValues.forEach(val => {
+            const label = document.createElement('label');
+            label.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); cursor: pointer; padding: 2px 0;';
+            const isChecked = currentAllowed.has(val);
+            label.innerHTML = `
+                <input type="checkbox" class="pivot-col-filter-item-chk" value="${val.replace(/"/g, '&quot;')}" ${isChecked ? 'checked' : ''} style="accent-color: var(--accent); cursor: pointer;">
+                <span>${val === 'Unassigned' ? 'Unassigned' : sLabel(val)}</span>
+            `;
+            
+            const chk = label.querySelector('input');
+            chk.onchange = (e) => {
+                if (e.target.checked) {
+                    currentAllowed.add(val);
+                } else {
+                    currentAllowed.delete(val);
+                }
+                updateSelectAllState(filteredValues);
+                applyFiltersImmediately();
+            };
+            
+            listContainer.appendChild(label);
+        });
+
+        updateSelectAllState(filteredValues);
+    }
+
+    selectAllCheckbox.onchange = (e) => {
+        const query = searchInput.value.toLowerCase().trim();
+        const filteredValues = uniqueValues.filter(val => {
+            const displayVal = val === 'Unassigned' ? 'Unassigned' : sLabel(val);
+            return displayVal.toLowerCase().includes(query);
+        });
+
+        const checked = e.target.checked;
+        filteredValues.forEach(val => {
+            if (checked) {
+                currentAllowed.add(val);
+            } else {
+                currentAllowed.delete(val);
+            }
+        });
+        
+        updateList();
+        applyFiltersImmediately();
     };
 
-    const clearBtn = document.createElement('button');
-    clearBtn.textContent = 'Clear';
-    clearBtn.style.cssText = 'background: rgba(255,255,255,0.05); color: var(--text-dim); border: 1px solid var(--border); border-radius: 4px; padding: 3px 8px; font-size: 10px; cursor: pointer;';
-    clearBtn.onclick = () => {
-        delete activePivotColumnFilters[dimKey];
-        dropdown.remove();
-        activePivotColumnFilterDropdownEl = null;
-        renderPivotTable();
+    searchInput.oninput = () => {
+        updateList();
     };
 
-    btnContainer.appendChild(clearBtn);
-    btnContainer.appendChild(applyBtn);
-    dropdown.appendChild(btnContainer);
+    updateList();
 
     document.body.appendChild(dropdown);
     activePivotColumnFilterDropdownEl = dropdown;
+
+    setTimeout(() => {
+        searchInput.focus();
+    }, 50);
 
     // Prevent this click from immediately bubbling to document trigger
     event.stopPropagation();
@@ -15460,6 +15863,70 @@ function updateProp(prop,val) {
                 n.system = sanitizedVal;
             } else if (lowerL === 'subsystem') {
                 n.subsystem = sanitizedVal;
+            }
+        }
+    }
+
+    // Bidirectional bottom-up dependency auto-fill helper
+    if (objectLists && objectLists.dependencies) {
+        const deps = objectLists.dependencies;
+        let changed = false;
+
+        // Helper to find parent elements dynamically
+        const getParent = (dict, child) => {
+            if (!dict || !child) return null;
+            const cLower = child.trim().toLowerCase();
+            const key = Object.keys(dict).find(k => k.toLowerCase() === cLower);
+            return key ? dict[key] : null;
+        };
+
+        const updatePropField = (fieldKey, parentVal) => {
+            if (!parentVal) return;
+            const oldFieldVal = n[fieldKey] || '';
+            if (oldFieldVal !== parentVal) {
+                n[fieldKey] = parentVal;
+                // Also mirror it to custom sheet columns if applicable
+                const matchingCol = sheetColumns.find(c => c.label.toLowerCase() === fieldKey || c.key === fieldKey);
+                if (matchingCol) {
+                    n[matchingCol.key] = parentVal;
+                }
+                if (fieldKey === 'system') n.system = parentVal;
+                if (fieldKey === 'subsystem') n.subsystem = parentVal;
+                changed = true;
+            }
+        };
+
+        // Bottom-up cascade:
+        // Project (n.project/n.title) -> Subsystem -> Deployment (custom_aar1e85) -> Codename (custom_zbal2zx) -> System
+        let currentProject = prop === 'project' ? sanitizedVal : (n.project || n.title || '');
+        if (currentProject) {
+            const resolvedSubsystem = getParent(deps.project_parents, currentProject);
+            if (resolvedSubsystem) {
+                updatePropField('subsystem', resolvedSubsystem);
+            }
+        }
+
+        let currentSubsystem = n.subsystem || '';
+        if (currentSubsystem) {
+            const resolvedDeployment = getParent(deps.subsystem_parents, currentSubsystem);
+            if (resolvedDeployment) {
+                updatePropField('custom_aar1e85', resolvedDeployment);
+            }
+        }
+
+        let currentDeployment = n.custom_aar1e85 || '';
+        if (currentDeployment) {
+            const resolvedCodename = getParent(deps.deployment_parents, currentDeployment);
+            if (resolvedCodename) {
+                updatePropField('custom_zbal2zx', resolvedCodename);
+            }
+        }
+
+        let currentCodename = n.custom_zbal2zx || '';
+        if (currentCodename) {
+            const resolvedSystem = getParent(deps.codename_parents, currentCodename);
+            if (resolvedSystem) {
+                updatePropField('system', resolvedSystem);
             }
         }
     }
