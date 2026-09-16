@@ -11123,9 +11123,13 @@ async function loadStartupData() {
         objectLists.dependencies = {
             codename_parents: {},   // codename -> system
             deployment_parents: {}, // deployment -> codename
-            subsystem_parents: {},  // subsystem -> deployment
-            project_parents: {}     // project -> subsystem
+            subsystem_parents: {},  // subsystem -> system
+            project_links: {}       // project -> { codename, subsystem }
         };
+    }
+    // Backward compatibility normalization for legacy project_parents / subsystem_parents
+    if (!objectLists.dependencies.project_links) {
+        objectLists.dependencies.project_links = {};
     }
     
     rebuildPerformanceCaches();
@@ -12226,7 +12230,7 @@ let objectLists = {
         "codename_parents": {},
         "deployment_parents": {},
         "subsystem_parents": {},
-        "project_parents": {}
+        "project_links": {}
     }
 };
 
@@ -13856,28 +13860,20 @@ function renderListsSheet() {
     const mainLayout = document.createElement('div');
     mainLayout.style.cssText = 'display: flex; gap: 20px; width: 100%; height: calc(100% - 60px); overflow: hidden;';
 
-    // Left Panel: Dynamic Spanning Dependency Matrix Table
+    // Left Panel: Multi-Table Dependency Graph Container
     const matrixPanel = document.createElement('div');
-    matrixPanel.style.cssText = 'flex: 2; background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto;';
-    
-    matrixPanel.innerHTML = `
-        <div style="font-size: 13px; font-weight: bold; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 6px;">
-            🔗 Entity Hierarchy Dependency Matrix
-        </div>
-    `;
+    matrixPanel.style.cssText = 'flex: 2; background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto;';
 
     // Extract current definitions
-    const deps = objectLists.dependencies || { codename_parents: {}, deployment_parents: {}, subsystem_parents: {}, project_parents: {} };
-    
-    // Build a structured tree matching System -> Codename -> Deployment -> Subsystem -> Project
-    // We scan raw list elements to ensure even orphans are accounted for
+    const deps = objectLists.dependencies || { codename_parents: {}, deployment_parents: {}, subsystem_parents: {}, project_links: {} };
+    if (!deps.project_links) deps.project_links = {};
+
     const systems = objectLists.systems || [];
     const codenames = objectLists.custom_zbal2zx || [];
     const deployments = objectLists.custom_aar1e85 || [];
     const subsystems = objectLists.subsystems || [];
     const projects = objectLists.projects || [];
 
-    // Helper to find matching keys case-insensitively
     const getChildren = (parentDict, parentVal) => {
         if (!parentVal) return [];
         const pLower = parentVal.trim().toLowerCase();
@@ -13887,119 +13883,68 @@ function renderListsSheet() {
         });
     };
 
-    const tree = [];
+    // ==========================================
+    // TABLE 1: System -> Codename -> Deployment
+    // ==========================================
+    const t1Rows = [];
     systems.forEach(sys => {
-        const sysNode = { name: sys, children: [] };
         const sysCodes = getChildren(deps.codename_parents, sys);
-        
-        sysCodes.forEach(code => {
-            const codeNode = { name: code, children: [] };
-            const codeDeps = getChildren(deps.deployment_parents, code);
-            
-            codeDeps.forEach(dep => {
-                const depNode = { name: dep, children: [] };
-                const depSubs = getChildren(deps.subsystem_parents, dep);
-                
-                depSubs.forEach(sub => {
-                    const subNode = { name: sub, children: [] };
-                    const subProjs = getChildren(deps.project_parents, sub);
-                    
-                    subProjs.forEach(proj => {
-                        subNode.children.push({ name: proj });
+        if (sysCodes.length === 0) {
+            t1Rows.push([sys, '', '']);
+        } else {
+            sysCodes.forEach(code => {
+                const codeDeps = getChildren(deps.deployment_parents, code);
+                if (codeDeps.length === 0) {
+                    t1Rows.push([sys, code, '']);
+                } else {
+                    codeDeps.forEach(dep => {
+                        t1Rows.push([sys, code, dep]);
                     });
-                    depNode.children.push(subNode);
-                });
-                codeNode.children.push(depNode);
+                }
             });
-            sysNode.children.push(codeNode);
-        });
-        tree.push(sysNode);
-    });
-
-    // Also collect orphans (items that do not have parents defined) to display them under an "Orphaned" branch so nothing is lost
-    const getOrphans = (list, parentDict) => {
-        return list.filter(item => {
-            const lower = item.toLowerCase();
-            return !Object.keys(parentDict).some(child => child.toLowerCase() === lower);
-        });
-    };
-
-    // Calculate grid rows for spanning table representation
-    const tableRows = [];
-    
-    function traverse(node, path = []) {
-        const currentPath = [...path, node.name];
-        if (!node.children || node.children.length === 0) {
-            tableRows.push(currentPath);
-            return;
         }
-        node.children.forEach(child => traverse(child, currentPath));
-    }
-
-    tree.forEach(sysNode => {
-        traverse(sysNode, []);
     });
 
-    // Generate HTML for Spanning Table
-    let tableHtml = `
-        <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:11px;">
-            <thead>
-                <tr>
-                    <th style="padding: 6px;">System</th>
-                    <th style="padding: 6px;">Codename</th>
-                    <th style="padding: 6px;">Deployment</th>
-                    <th style="padding: 6px;">Subsystem</th>
-                    <th style="padding: 6px;">Project</th>
-                </tr>
-            </thead>
-            <tbody>
+    let t1Html = `
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 12px; font-weight: bold; color: var(--accent); display: flex; justify-content: space-between; align-items: center;">
+                <span>📊 Table 1: System ➔ Codename ➔ Deployment</span>
+            </div>
+            <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:11px;">
+                <thead>
+                    <tr>
+                        <th style="padding: 6px; width: 33%;">System</th>
+                        <th style="padding: 6px; width: 33%;">Codename</th>
+                        <th style="padding: 6px; width: 34%;">Deployment</th>
+                    </tr>
+                </thead>
+                <tbody>
     `;
 
-    if (tableRows.length === 0) {
-        tableHtml += `<tr><td colspan="5" style="text-align:center; padding:12px; color:var(--text-muted);">No dependencies defined. Click buttons to add associations.</td></tr>`;
+    if (t1Rows.length === 0) {
+        t1Html += `<tr><td colspan="3" style="text-align:center; padding:10px; color:var(--text-muted);">No systems defined.</td></tr>`;
     } else {
-        // Calculate spanning indexes
         let i = 0;
-        while (i < tableRows.length) {
-            const row = tableRows[i];
-            
-            // Calculate spans
+        while (i < t1Rows.length) {
+            const row = t1Rows[i];
             let sysSpan = 1;
-            while (i + sysSpan < tableRows.length && tableRows[i + sysSpan][0] === row[0]) {
+            while (i + sysSpan < t1Rows.length && t1Rows[i + sysSpan][0] === row[0]) {
                 sysSpan++;
             }
 
             let codeSpan = 1;
-            while (i + codeSpan < tableRows.length && 
-                   tableRows[i + codeSpan][0] === row[0] && 
-                   tableRows[i + codeSpan][1] === row[1]) {
+            while (i + codeSpan < t1Rows.length && 
+                   t1Rows[i + codeSpan][0] === row[0] && 
+                   t1Rows[i + codeSpan][1] === row[1]) {
                 codeSpan++;
             }
 
-            let depSpan = 1;
-            while (i + depSpan < tableRows.length && 
-                   tableRows[i + depSpan][0] === row[0] && 
-                   tableRows[i + depSpan][1] === row[1] &&
-                   tableRows[i + depSpan][2] === row[2]) {
-                depSpan++;
-            }
-
-            let subSpan = 1;
-            while (i + subSpan < tableRows.length && 
-                   tableRows[i + subSpan][0] === row[0] && 
-                   tableRows[i + subSpan][1] === row[1] &&
-                   tableRows[i + subSpan][2] === row[2] &&
-                   tableRows[i + subSpan][3] === row[3]) {
-                subSpan++;
-            }
-
             for (let rIdx = 0; rIdx < sysSpan; rIdx++) {
-                const currentRow = tableRows[i + rIdx];
-                tableHtml += `<tr style="border-bottom: 1px solid var(--border);">`;
+                const currentRow = t1Rows[i + rIdx];
+                t1Html += `<tr style="border-bottom: 1px solid var(--border);">`;
 
-                // System (level 0)
                 if (rIdx === 0) {
-                    tableHtml += `
+                    t1Html += `
                         <td rowspan="${sysSpan}" style="vertical-align:top; padding: 6px; font-weight:600; border-right:1px solid var(--border);">
                             <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
                                 <span>${currentRow[0]}</span>
@@ -14009,17 +13954,16 @@ function renderListsSheet() {
                     `;
                 }
 
-                // Codename (level 1)
                 if (rIdx % codeSpan === 0) {
                     const codeVal = currentRow[1] || '';
-                    tableHtml += `
+                    t1Html += `
                         <td rowspan="${codeSpan}" style="vertical-align:top; padding: 6px; border-right:1px solid var(--border); background:rgba(255,255,255,0.005);">
                             ${codeVal ? `
                             <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
                                 <span>${codeVal}</span>
                                 <div style="display:flex; gap:2px;">
                                     <button onclick="inlineAddDependencyChild('deployment', '${codeVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Deployment under ${codeVal}">+</button>
-                                    <button onclick="inlineRemoveDependency('codename', '${codeVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove association">×</button>
+                                    <button onclick="inlineRemoveDependency('codename', '${codeVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove Codename association">×</button>
                                 </div>
                             </div>
                             ` : ''}
@@ -14027,67 +13971,200 @@ function renderListsSheet() {
                     `;
                 }
 
-                // Deployment (level 2)
-                if (rIdx % depSpan === 0) {
-                    const depVal = currentRow[2] || '';
-                    tableHtml += `
-                        <td rowspan="${depSpan}" style="vertical-align:top; padding: 6px; border-right:1px solid var(--border);">
-                            ${depVal ? `
-                            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
-                                <span>${depVal}</span>
-                                <div style="display:flex; gap:2px;">
-                                    <button onclick="inlineAddDependencyChild('subsystem', '${depVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Subsystem under ${depVal}">+</button>
-                                    <button onclick="inlineRemoveDependency('deployment', '${depVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove association">×</button>
-                                </div>
-                            </div>
-                            ` : ''}
-                        </td>
-                    `;
-                }
-
-                // Subsystem (level 3)
-                if (rIdx % subSpan === 0) {
-                    const subVal = currentRow[3] || '';
-                    tableHtml += `
-                        <td rowspan="${subSpan}" style="vertical-align:top; padding: 6px; border-right:1px solid var(--border); background:rgba(255,255,255,0.005);">
-                            ${subVal ? `
-                            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
-                                <span>${subVal}</span>
-                                <div style="display:flex; gap:2px;">
-                                    <button onclick="inlineAddDependencyChild('project', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Project under ${subVal}">+</button>
-                                    <button onclick="inlineRemoveDependency('subsystem', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove association">×</button>
-                                </div>
-                            </div>
-                            ` : ''}
-                        </td>
-                    `;
-                }
-
-                // Project (level 4)
-                const projVal = currentRow[4] || '';
-                tableHtml += `
+                const depVal = currentRow[2] || '';
+                t1Html += `
                     <td style="vertical-align:top; padding: 6px;">
-                        ${projVal ? `
+                        ${depVal ? `
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
-                            <span>${projVal}</span>
-                            <button onclick="inlineRemoveDependency('project', '${projVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove association">×</button>
+                            <span>${depVal}</span>
+                            <button onclick="inlineRemoveDependency('deployment', '${depVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove Deployment association">×</button>
                         </div>
                         ` : ''}
                     </td>
                 `;
 
-                tableHtml += `</tr>`;
+                t1Html += `</tr>`;
             }
             i += sysSpan;
         }
     }
 
-    tableHtml += `
-            </tbody>
-        </table>
+    t1Html += `
+                </tbody>
+            </table>
+        </div>
     `;
+
+    // ==========================================
+    // TABLE 2: System -> Subsystem
+    // ==========================================
+    const t2Rows = [];
+    systems.forEach(sys => {
+        const sysSubs = getChildren(deps.subsystem_parents, sys);
+        if (sysSubs.length === 0) {
+            t2Rows.push([sys, '']);
+        } else {
+            sysSubs.forEach(sub => {
+                t2Rows.push([sys, sub]);
+            });
+        }
+    });
+
+    let t2Html = `
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 12px; font-weight: bold; color: #38bdf8; display: flex; justify-content: space-between; align-items: center;">
+                <span>⚙️ Table 2: System ➔ Subsystem</span>
+            </div>
+            <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:11px;">
+                <thead>
+                    <tr>
+                        <th style="padding: 6px; width: 50%;">System</th>
+                        <th style="padding: 6px; width: 50%;">Subsystem</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    if (t2Rows.length === 0) {
+        t2Html += `<tr><td colspan="2" style="text-align:center; padding:10px; color:var(--text-muted);">No subsystems mapped.</td></tr>`;
+    } else {
+        let i = 0;
+        while (i < t2Rows.length) {
+            const row = t2Rows[i];
+            let sysSpan = 1;
+            while (i + sysSpan < t2Rows.length && t2Rows[i + sysSpan][0] === row[0]) {
+                sysSpan++;
+            }
+
+            for (let rIdx = 0; rIdx < sysSpan; rIdx++) {
+                const currentRow = t2Rows[i + rIdx];
+                t2Html += `<tr style="border-bottom: 1px solid var(--border);">`;
+
+                if (rIdx === 0) {
+                    t2Html += `
+                        <td rowspan="${sysSpan}" style="vertical-align:top; padding: 6px; font-weight:600; border-right:1px solid var(--border);">
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                                <span>${currentRow[0]}</span>
+                                <button onclick="event.stopPropagation(); inlineAddDependencyChild('subsystem', '${currentRow[0].replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Subsystem under ${currentRow[0]}">+</button>
+                            </div>
+                        </td>
+                    `;
+                }
+
+                const subVal = currentRow[1] || '';
+                t2Html += `
+                    <td style="vertical-align:top; padding: 6px;">
+                        ${subVal ? `
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                            <span>${subVal}</span>
+                            <button onclick="inlineRemoveDependency('subsystem', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove Subsystem association">×</button>
+                        </div>
+                        ` : ''}
+                    </td>
+                `;
+
+                t2Html += `</tr>`;
+            }
+            i += sysSpan;
+        }
+    }
+
+    t2Html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    // ====================================================
+    // TABLE 3: (Codename + Subsystem) -> Project
+    // ====================================================
+    // Build unique pairings of (Codename, Subsystem) that have projects assigned or can have projects assigned
+    const projectPairsMap = {}; // "codename:::subsystem" -> [project1, project2, ...]
     
-    matrixPanel.innerHTML += tableHtml;
+    // Scan project_links
+    Object.keys(deps.project_links).forEach(proj => {
+        const link = deps.project_links[proj];
+        if (link && (link.codename || link.subsystem)) {
+            const key = `${link.codename || 'Unassigned'}:::${link.subsystem || 'Unassigned'}`;
+            if (!projectPairsMap[key]) projectPairsMap[key] = [];
+            projectPairsMap[key].push(proj);
+        }
+    });
+
+    // Also include pairs that share common systems from Table 1 & Table 2
+    systems.forEach(sys => {
+        const sysCodes = getChildren(deps.codename_parents, sys);
+        const sysSubs = getChildren(deps.subsystem_parents, sys);
+        sysCodes.forEach(code => {
+            sysSubs.forEach(sub => {
+                const key = `${code}:::${sub}`;
+                if (!projectPairsMap[key]) projectPairsMap[key] = [];
+            });
+        });
+    });
+
+    const t3Keys = Object.keys(projectPairsMap).sort((a, b) => a.localeCompare(b));
+
+    let t3Html = `
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 12px; font-weight: bold; color: #34d399; display: flex; justify-content: space-between; align-items: center;">
+                <span>🎯 Table 3: (Codename + Subsystem) ➔ Projects</span>
+                <button onclick="inlineAddProjectPairLink()" class="btn-secondary btn-sm" style="height: 24px; font-size: 10px; padding: 0 8px; background: rgba(52,211,153,0.1); color: #34d399; border-color: rgba(52,211,153,0.3);">+ Link Project to Pair</button>
+            </div>
+            <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:11px;">
+                <thead>
+                    <tr>
+                        <th style="padding: 6px; width: 30%;">Codename</th>
+                        <th style="padding: 6px; width: 30%;">Subsystem</th>
+                        <th style="padding: 6px; width: 40%;">Projects</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    if (t3Keys.length === 0) {
+        t3Html += `<tr><td colspan="3" style="text-align:center; padding:10px; color:var(--text-muted);">No codename & subsystem pairs defined yet. Create associations in Table 1 & Table 2 first.</td></tr>`;
+    } else {
+        t3Keys.forEach(key => {
+            const [codeVal, subVal] = key.split(':::');
+            const projs = projectPairsMap[key];
+            
+            let projsHtml = '';
+            if (projs.length === 0) {
+                projsHtml = `<span style="color:var(--text-muted); font-style:italic;">No projects linked</span>`;
+            } else {
+                projsHtml = projs.map(p => `
+                    <div style="display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:4px; padding:2px 6px; margin:2px;">
+                        <span>${p}</span>
+                        <button onclick="inlineRemoveProjectLink('${p.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:11px; padding:0 2px;" title="Unlink Project">×</button>
+                    </div>
+                `).join('');
+            }
+
+            t3Html += `
+                <tr style="border-bottom: 1px solid var(--border);">
+                    <td style="padding: 6px; font-weight: 600; border-right: 1px solid var(--border);">${codeVal}</td>
+                    <td style="padding: 6px; border-right: 1px solid var(--border);">${subVal}</td>
+                    <td style="padding: 6px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;">
+                            <div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+                                ${projsHtml}
+                            </div>
+                            <button onclick="inlineAddProjectToSpecificPair('${codeVal.replace(/'/g, "\\'")}', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px; margin-left:auto;" title="Add Project to this pair">+</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    t3Html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    matrixPanel.innerHTML += t1Html + t2Html + t3Html;
     mainLayout.appendChild(matrixPanel);
 
     // Right Panel: Traditional column-by-column list manager (for flat definitions)
@@ -14162,21 +14239,20 @@ function renderListsSheet() {
     area.appendChild(mainLayout);
 }
 
-// Inline input handler (Option A) to define dependency mappings
+// Inline input handler for Table 1 (System -> Codename -> Deployment) and Table 2 (System -> Subsystem)
 window.inlineAddDependencyChild = function(childType, parentVal) {
     const listKey = childType === 'codename' ? 'custom_zbal2zx' : (childType === 'deployment' ? 'custom_aar1e85' : (childType === 'subsystem' ? 'subsystems' : 'projects'));
     const options = objectLists[listKey] || [];
     
     if (options.length === 0) {
-        alert(`Please add some flat items to the "${listKey}" list first before nesting them.`);
+        alert(`Please add some flat items to the "${listKey}" list first before associating them.`);
         return;
     }
 
-    const val = prompt(`Select or type a child option to nest under "${parentVal}":\n\nAvailable options:\n${options.join(', ')}`);
+    const val = prompt(`Select or type a ${childType} to associate with "${parentVal}":\n\nAvailable options:\n${options.join(', ')}`);
     if (!val || !val.trim()) return;
     
     const trimmedVal = val.trim();
-    // Validate existence in base list
     const matchedOption = options.find(opt => opt.toLowerCase() === trimmedVal.toLowerCase());
     if (!matchedOption) {
         if (confirm(`"${trimmedVal}" does not exist in the base list. Add it first?`)) {
@@ -14190,25 +14266,90 @@ window.inlineAddDependencyChild = function(childType, parentVal) {
     const finalVal = matchedOption || trimmedVal;
     const deps = objectLists.dependencies;
     
-    // Save to flat mapping dictionaries matching target level
     if (childType === 'codename') deps.codename_parents[finalVal] = parentVal;
     else if (childType === 'deployment') deps.deployment_parents[finalVal] = parentVal;
     else if (childType === 'subsystem') deps.subsystem_parents[finalVal] = parentVal;
-    else if (childType === 'project') deps.project_parents[finalVal] = parentVal;
     
     saveObjectLists();
     renderListsSheet();
 };
 
 window.inlineRemoveDependency = function(childType, childVal) {
-    if (!confirm(`Are you sure you want to remove the parent hierarchy link for "${childVal}"?`)) return;
+    if (!confirm(`Are you sure you want to remove the association for "${childVal}"?`)) return;
     const deps = objectLists.dependencies;
     
     if (childType === 'codename') delete deps.codename_parents[childVal];
     else if (childType === 'deployment') delete deps.deployment_parents[childVal];
     else if (childType === 'subsystem') delete deps.subsystem_parents[childVal];
-    else if (childType === 'project') delete deps.project_parents[childVal];
     
+    saveObjectLists();
+    renderListsSheet();
+};
+
+// Table 3: Add project to a specific (Codename + Subsystem) pair
+window.inlineAddProjectToSpecificPair = function(codename, subsystem) {
+    const projects = objectLists.projects || [];
+    if (projects.length === 0) {
+        alert("Please add some projects to the Projects list first.");
+        return;
+    }
+
+    const val = prompt(`Select or type a Project to link to [Codename: ${codename}, Subsystem: ${subsystem}]:\n\nAvailable Projects:\n${projects.join(', ')}`);
+    if (!val || !val.trim()) return;
+
+    const trimmedVal = val.trim();
+    const matchedOption = projects.find(opt => opt.toLowerCase() === trimmedVal.toLowerCase());
+    if (!matchedOption) {
+        if (confirm(`"${trimmedVal}" does not exist in the Projects list. Add it first?`)) {
+            projects.push(trimmedVal);
+            projects.sort((a,b) => a.localeCompare(b));
+        } else {
+            return;
+        }
+    }
+
+    const finalVal = matchedOption || trimmedVal;
+    if (!objectLists.dependencies.project_links) objectLists.dependencies.project_links = {};
+    objectLists.dependencies.project_links[finalVal] = { codename, subsystem };
+
+    saveObjectLists();
+    renderListsSheet();
+};
+
+window.inlineAddProjectPairLink = function() {
+    const codenames = objectLists.custom_zbal2zx || [];
+    const subsystems = objectLists.subsystems || [];
+    const projects = objectLists.projects || [];
+
+    if (codenames.length === 0 || subsystems.length === 0 || projects.length === 0) {
+        alert("Please ensure you have items in Codenames, Subsystems, and Projects first.");
+        return;
+    }
+
+    const codename = prompt(`Enter Codename:\nAvailable: ${codenames.join(', ')}`);
+    if (!codename) return;
+    const matchedCode = codenames.find(c => c.toLowerCase() === codename.trim().toLowerCase()) || codename.trim();
+
+    const subsystem = prompt(`Enter Subsystem:\nAvailable: ${subsystems.join(', ')}`);
+    if (!subsystem) return;
+    const matchedSub = subsystems.find(s => s.toLowerCase() === subsystem.trim().toLowerCase()) || subsystem.trim();
+
+    const project = prompt(`Enter Project to link to (${matchedCode} + ${matchedSub}):\nAvailable: ${projects.join(', ')}`);
+    if (!project) return;
+    const matchedProj = projects.find(p => p.toLowerCase() === project.trim().toLowerCase()) || project.trim();
+
+    if (!objectLists.dependencies.project_links) objectLists.dependencies.project_links = {};
+    objectLists.dependencies.project_links[matchedProj] = { codename: matchedCode, subsystem: matchedSub };
+
+    saveObjectLists();
+    renderListsSheet();
+};
+
+window.inlineRemoveProjectLink = function(projectName) {
+    if (!confirm(`Are you sure you want to unlink Project "${projectName}"?`)) return;
+    if (objectLists.dependencies.project_links) {
+        delete objectLists.dependencies.project_links[projectName];
+    }
     saveObjectLists();
     renderListsSheet();
 };
@@ -14219,7 +14360,7 @@ window.clearAllDependenciesConfirm = function() {
         codename_parents: {},
         deployment_parents: {},
         subsystem_parents: {},
-        project_parents: {}
+        project_links: {}
     };
     saveObjectLists();
     renderListsSheet();
@@ -14500,32 +14641,45 @@ function showAutocomplete(inputEl, type, onSelect) {
         const deps = objectLists.dependencies;
         const n = findNode(selectedId);
         if (n) {
-            // System -> Codename (custom_zbal2zx) -> Deployment (custom_aar1e85) -> Subsystem -> Project
             const checkMatch = (dict, child, parent) => {
                 if (!dict || !child || !parent) return true;
                 const childParent = dict[Object.keys(dict).find(k => k.toLowerCase() === child.toLowerCase())];
                 return childParent ? childParent.toLowerCase() === parent.toLowerCase() : true;
             };
 
-            if (type === 'custom_zbal2zx') { // Codename
+            // 1. Codename (custom_zbal2zx) filtered by System
+            if (type === 'custom_zbal2zx') {
                 const activeSystem = n.system || '';
-                if (activeSystem) {
+                if (activeSystem && deps.codename_parents) {
                     list = list.filter(item => checkMatch(deps.codename_parents, item, activeSystem));
                 }
-            } else if (type === 'custom_aar1e85') { // Deployment
+            }
+            // 2. Deployment (custom_aar1e85) filtered by Codename
+            else if (type === 'custom_aar1e85') {
                 const activeCodename = n.custom_zbal2zx || '';
-                if (activeCodename) {
+                if (activeCodename && deps.deployment_parents) {
                     list = list.filter(item => checkMatch(deps.deployment_parents, item, activeCodename));
                 }
-            } else if (type === 'subsystems') { // Subsystem
-                const activeDeployment = n.custom_aar1e85 || '';
-                if (activeDeployment) {
-                    list = list.filter(item => checkMatch(deps.subsystem_parents, item, activeDeployment));
+            }
+            // 3. Subsystem filtered by System
+            else if (type === 'subsystems') {
+                const activeSystem = n.system || '';
+                if (activeSystem && deps.subsystem_parents) {
+                    list = list.filter(item => checkMatch(deps.subsystem_parents, item, activeSystem));
                 }
-            } else if (type === 'projects') { // Project
-                const activeSubsystem = n.subsystem || '';
-                if (activeSubsystem) {
-                    list = list.filter(item => checkMatch(deps.project_parents, item, activeSubsystem));
+            }
+            // 4. Project filtered by (Codename and/or Subsystem)
+            else if (type === 'projects') {
+                const activeCodename = (n.custom_zbal2zx || '').toLowerCase();
+                const activeSubsystem = (n.subsystem || '').toLowerCase();
+                if ((activeCodename || activeSubsystem) && deps.project_links) {
+                    list = list.filter(proj => {
+                        const link = deps.project_links[Object.keys(deps.project_links).find(k => k.toLowerCase() === proj.toLowerCase())];
+                        if (!link) return true; // allow unlinked projects
+                        if (activeCodename && link.codename && link.codename.toLowerCase() !== activeCodename) return false;
+                        if (activeSubsystem && link.subsystem && link.subsystem.toLowerCase() !== activeSubsystem) return false;
+                        return true;
+                    });
                 }
             }
         }
@@ -15922,34 +16076,39 @@ function updateProp(prop,val) {
             }
         };
 
-        // Bottom-up cascade:
-        // Project (n.project/n.title) -> Subsystem -> Deployment (custom_aar1e85) -> Codename (custom_zbal2zx) -> System
+        // Bottom-up cascade matching the 3-table dependency graph:
+        // 1. If Project is set, auto-fill Codename and Subsystem from Table 3 (deps.project_links)
         let currentProject = prop === 'project' ? sanitizedVal : (n.project || n.title || '');
-        if (currentProject) {
-            const resolvedSubsystem = getParent(deps.project_parents, currentProject);
-            if (resolvedSubsystem) {
-                updatePropField('subsystem', resolvedSubsystem);
+        if (currentProject && deps.project_links) {
+            const projKey = Object.keys(deps.project_links).find(k => k.toLowerCase() === currentProject.toLowerCase());
+            const link = projKey ? deps.project_links[projKey] : null;
+            if (link) {
+                if (link.codename) updatePropField('custom_zbal2zx', link.codename);
+                if (link.subsystem) updatePropField('subsystem', link.subsystem);
             }
         }
 
+        // 2. If Subsystem is set, auto-fill System from Table 2 (deps.subsystem_parents: Subsystem -> System)
         let currentSubsystem = n.subsystem || '';
-        if (currentSubsystem) {
-            const resolvedDeployment = getParent(deps.subsystem_parents, currentSubsystem);
-            if (resolvedDeployment) {
-                updatePropField('custom_aar1e85', resolvedDeployment);
+        if (currentSubsystem && deps.subsystem_parents) {
+            const resolvedSystem = getParent(deps.subsystem_parents, currentSubsystem);
+            if (resolvedSystem) {
+                updatePropField('system', resolvedSystem);
             }
         }
 
+        // 3. If Deployment is set, auto-fill Codename from Table 1 (deps.deployment_parents: Deployment -> Codename)
         let currentDeployment = n.custom_aar1e85 || '';
-        if (currentDeployment) {
+        if (currentDeployment && deps.deployment_parents) {
             const resolvedCodename = getParent(deps.deployment_parents, currentDeployment);
             if (resolvedCodename) {
                 updatePropField('custom_zbal2zx', resolvedCodename);
             }
         }
 
+        // 4. If Codename is set, auto-fill System from Table 1 (deps.codename_parents: Codename -> System)
         let currentCodename = n.custom_zbal2zx || '';
-        if (currentCodename) {
+        if (currentCodename && deps.codename_parents) {
             const resolvedSystem = getParent(deps.codename_parents, currentCodename);
             if (resolvedSystem) {
                 updatePropField('system', resolvedSystem);
