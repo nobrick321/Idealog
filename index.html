@@ -1421,7 +1421,7 @@
         <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; align-items: center;">
             <div style="display: flex; gap: 6px;">
                 <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force upload local storage data to Supabase cloud? This will overwrite the cloud database state.')) { try { await pushStateToSupabase(); alert('State forced up to Supabase successfully!'); } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); color: #34d399;">Force Push</button>
-                <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force download data from Supabase cloud? This will overwrite your local browser storage state.')) { try { const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state'); const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null; if(error) throw error; if(dbRows && dbRows.data && dbRows.data.idealog) { data = dbRows.data.idealog; localStorage.setItem('idealog', JSON.stringify(data)); if (dbRows.data.sheetColumns) { sheetColumns = dbRows.data.sheetColumns; localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns)); } if (dbRows.data.objectLists) { objectLists = dbRows.data.objectLists; localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists)); } redraw(); alert('State forced down from Supabase successfully!'); } else { alert('No remote state found to pull.'); } } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
+                <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force download data from Supabase cloud? This will overwrite your local browser storage state.')) { try { const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state'); const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null; if(error) throw error; if(dbRows && dbRows.data && dbRows.data.idealog) { data = dbRows.data.idealog; localStorage.setItem('idealog', JSON.stringify(data)); if (dbRows.data.sheetColumns) { sheetColumns = dbRows.data.sheetColumns; localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns)); } if (dbRows.data.objectLists) { objectLists = dbRows.data.objectLists; sanitizeObjectLists(); localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists)); } redraw(); alert('State forced down from Supabase successfully!'); } else { alert('No remote state found to pull.'); } } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
             </div>
             <button class="btn-sm btn-secondary" onclick="closeSupabaseSettingsModal()" style="max-width:80px;">Close</button>
         </div>
@@ -11050,6 +11050,31 @@ function toggleAutoSyncState(enabled) {
     }
 }
 
+// Global strict deduplication sanitizer for Object Lists (trims and enforces unique case-insensitive entries)
+function sanitizeObjectLists() {
+    if (!objectLists || typeof objectLists !== 'object') return;
+    Object.keys(objectLists).forEach(key => {
+        if (key === 'dependencies') return;
+        const arr = objectLists[key];
+        if (Array.isArray(arr)) {
+            const seen = new Set();
+            const unique = [];
+            arr.forEach(item => {
+                if (item === undefined || item === null) return;
+                const trimmed = String(item).trim();
+                if (!trimmed) return;
+                const lower = trimmed.toLowerCase();
+                if (!seen.has(lower)) {
+                    seen.add(lower);
+                    unique.push(trimmed);
+                }
+            });
+            unique.sort((a,b) => a.localeCompare(b));
+            objectLists[key] = unique;
+        }
+    });
+}
+
 let realtimeSyncChannel = null;
 
 // Download full remote state and update local state
@@ -11068,6 +11093,7 @@ async function applyRemoteStateUpdate(remoteData) {
         }
         if (remoteData.objectLists) {
             objectLists = remoteData.objectLists;
+            sanitizeObjectLists();
             localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
         }
         if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
@@ -11243,6 +11269,7 @@ async function loadStartupData() {
     const localLists = localStorage.getItem('idealog_object_lists');
     if (localLists) {
         objectLists = JSON.parse(localLists);
+        sanitizeObjectLists();
     }
     
     // Auto-populate codenames and deployments list arrays dynamically from task tree fields
@@ -11364,6 +11391,7 @@ async function loadStartupData() {
                                     }
                                     if (remoteData.objectLists) {
                                         objectLists = remoteData.objectLists;
+                                        sanitizeObjectLists();
                                         localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
                                     }
                                     if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
@@ -12374,6 +12402,7 @@ function saveSheetColumns() {
 }
 
 function saveObjectLists() {
+    sanitizeObjectLists();
     localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
     if (supabaseClient) {
         pushStateToSupabase().catch(err => {
@@ -13183,8 +13212,8 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
         task.updatedAt = new Date().toISOString();
 
         // Ensure new project is registered in Object Lists for autocompletion
-        if (!objectLists.projects.includes(newProj.title)) {
-            objectLists.projects.push(newProj.title);
+        if (!objectLists.projects.some(p => p.trim().toLowerCase() === newProj.title.trim().toLowerCase())) {
+            objectLists.projects.push(newProj.title.trim());
             saveObjectLists();
         }
         
@@ -13477,7 +13506,10 @@ function processImportedData() {
             if (backup && backup.data && backup.objectLists) {
                 data = backup.data;
                 if (backup.sheetColumns) sheetColumns = backup.sheetColumns;
-                if (backup.objectLists) objectLists = backup.objectLists;
+                if (backup.objectLists) {
+                    objectLists = backup.objectLists;
+                    sanitizeObjectLists();
+                }
                 if (backup.pivotHierarchy) pivotHierarchy = backup.pivotHierarchy;
                 if (backup.enabledPivotDims) enabledPivotDims = backup.enabledPivotDims;
 
@@ -13692,17 +13724,29 @@ function processImportedData() {
         });
 
         // Automatically collect and insert unique names to dynamic autocompletion lists
-        if (taskObj.assignee && !objectLists.assignees.includes(taskObj.assignee)) {
-            objectLists.assignees.push(taskObj.assignee);
+        if (taskObj.assignee) {
+            const trimmed = taskObj.assignee.trim();
+            if (trimmed && !objectLists.assignees.some(x => x.trim().toLowerCase() === trimmed.toLowerCase())) {
+                objectLists.assignees.push(trimmed);
+            }
         }
-        if (systemNode.title && !objectLists.systems.includes(systemNode.title)) {
-            objectLists.systems.push(systemNode.title);
+        if (systemNode.title) {
+            const trimmed = systemNode.title.trim();
+            if (trimmed && !objectLists.systems.some(x => x.trim().toLowerCase() === trimmed.toLowerCase())) {
+                objectLists.systems.push(trimmed);
+            }
         }
-        if (subsystemNode.title && !objectLists.subsystems.includes(subsystemNode.title)) {
-            objectLists.subsystems.push(subsystemNode.title);
+        if (subsystemNode.title) {
+            const trimmed = subsystemNode.title.trim();
+            if (trimmed && !objectLists.subsystems.some(x => x.trim().toLowerCase() === trimmed.toLowerCase())) {
+                objectLists.subsystems.push(trimmed);
+            }
         }
-        if (targetProj.title && !objectLists.projects.includes(targetProj.title)) {
-            objectLists.projects.push(targetProj.title);
+        if (targetProj.title) {
+            const trimmed = targetProj.title.trim();
+            if (trimmed && !objectLists.projects.some(x => x.trim().toLowerCase() === trimmed.toLowerCase())) {
+                objectLists.projects.push(trimmed);
+            }
         }
 
         importedCount++;
@@ -14661,7 +14705,8 @@ function addListItem(type) {
     const input = document.getElementById(`list-input-${type}`);
     const val = input.value.trim();
     if (!val) return;
-    if (objectLists[type].includes(val)) {
+    if (!objectLists[type]) objectLists[type] = [];
+    if (objectLists[type].some(x => x.trim().toLowerCase() === val.toLowerCase())) {
         alert("This item already exists in the list.");
         return;
     }
@@ -14679,7 +14724,7 @@ function editListItem(type, idx, newVal) {
         return;
     }
     const oldVal = objectLists[type][idx];
-    if (objectLists[type].includes(trimmed) && objectLists[type].indexOf(trimmed) !== idx) {
+    if (objectLists[type].some((item, i) => i !== idx && item.trim().toLowerCase() === trimmed.toLowerCase())) {
         alert("This item already exists in the list.");
         renderListsSheet();
         return;
@@ -14834,8 +14879,8 @@ function executeBulkMerge() {
         });
         
         // Ensure destination item is still present in the list (unique entry)
-        if (!objectLists[activeBulkMergeType].includes(destVal)) {
-            objectLists[activeBulkMergeType].push(destVal);
+        if (!objectLists[activeBulkMergeType].some(x => x.trim().toLowerCase() === destVal.trim().toLowerCase())) {
+            objectLists[activeBulkMergeType].push(destVal.trim());
         }
         objectLists[activeBulkMergeType].sort((a,b) => a.localeCompare(b));
         
@@ -14896,9 +14941,11 @@ function processListsImportedData() {
     // Merge unique extracted items into current object list stores
     let addedCount = 0;
     Object.keys(newItems).forEach(type => {
+        if (!objectLists[type]) objectLists[type] = [];
         newItems[type].forEach(item => {
-            if (item && !objectLists[type].includes(item)) {
-                objectLists[type].push(item);
+            const trimmed = item ? item.trim() : '';
+            if (trimmed && !objectLists[type].some(x => x.trim().toLowerCase() === trimmed.toLowerCase())) {
+                objectLists[type].push(trimmed);
                 addedCount++;
             }
         });
@@ -15041,7 +15088,7 @@ function showAutocomplete(inputEl, type, onSelect) {
                 objectLists[type] = [];
             }
             // Check case-insensitive existence before adding
-            if (!objectLists[type].map(x => x.toLowerCase()).includes(originalVal.toLowerCase())) {
+            if (!objectLists[type].some(x => x.trim().toLowerCase() === originalVal.toLowerCase())) {
                 objectLists[type].push(originalVal);
                 objectLists[type].sort((a,b) => a.localeCompare(b));
                 saveObjectLists();
@@ -16614,8 +16661,9 @@ function importBackupData(event) {
                 localStorage.setItem('idealog_sheet_cols', JSON.stringify(importedState.sheetColumns));
             }
             if (importedState.objectLists) {
-                localStorage.setItem('idealog_object_lists', JSON.stringify(importedState.objectLists));
                 objectLists = importedState.objectLists;
+                sanitizeObjectLists();
+                localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
             }
             
             // Update in-memory workspace variables
