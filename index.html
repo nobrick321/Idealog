@@ -11181,6 +11181,12 @@ function toggleAutoSyncState(enabled) {
     }
 }
 
+function isPlaceholderValue(str) {
+    if (!str || typeof str !== 'string') return true;
+    const l = str.trim().toLowerCase();
+    return l === '' || l === 'general' || l === 'default system' || l === 'default subsystem' || l === 'default project' || l === '--' || l === 'new node';
+}
+
 // Global strict deduplication sanitizer for Object Lists (trims and enforces unique case-insensitive entries)
 function sanitizeObjectLists() {
     if (!objectLists || typeof objectLists !== 'object') return;
@@ -11193,9 +11199,8 @@ function sanitizeObjectLists() {
             arr.forEach(item => {
                 if (item === undefined || item === null) return;
                 const trimmed = String(item).trim();
-                if (!trimmed) return;
+                if (!trimmed || isPlaceholderValue(trimmed)) return;
                 const lower = trimmed.toLowerCase();
-                if (lower === 'default system' || lower === 'default subsystem' || lower === 'default project') return;
                 if (!seen.has(lower)) {
                     seen.add(lower);
                     unique.push(trimmed);
@@ -11216,29 +11221,29 @@ function sanitizeObjectLists() {
         if (!deps.project_system_map) deps.project_system_map = {};
         if (!deps.co_occurrences) deps.co_occurrences = {};
 
-        // Clean out any default placeholders from dependencies
+        // Clean out any default or placeholder keys from project_system_map
         Object.keys(deps.project_system_map).forEach(p => {
-            if (p.toLowerCase() === 'default project' || deps.project_system_map[p].toLowerCase() === 'default system') {
+            if (isPlaceholderValue(p) || isPlaceholderValue(deps.project_system_map[p])) {
                 delete deps.project_system_map[p];
             }
         });
 
         // Normalize subsystem_parents so every subsystem maps to an array of parent systems
         Object.keys(deps.subsystem_parents).forEach(sub => {
-            if (sub.toLowerCase() === 'default subsystem') {
+            if (isPlaceholderValue(sub)) {
                 delete deps.subsystem_parents[sub];
                 return;
             }
             const val = deps.subsystem_parents[sub];
             if (typeof val === 'string') {
                 const s = val.trim();
-                deps.subsystem_parents[sub] = (s && s.toLowerCase() !== 'default system') ? [s] : [];
+                deps.subsystem_parents[sub] = (!isPlaceholderValue(s)) ? [s] : [];
             } else if (Array.isArray(val)) {
                 const uniqueParents = [];
                 const seen = new Set();
                 val.forEach(p => {
                     const pTrim = String(p).trim();
-                    if (pTrim && pTrim.toLowerCase() !== 'default system' && !seen.has(pTrim.toLowerCase())) {
+                    if (!isPlaceholderValue(pTrim) && !seen.has(pTrim.toLowerCase())) {
                         seen.add(pTrim.toLowerCase());
                         uniqueParents.push(pTrim);
                     }
@@ -11248,7 +11253,168 @@ function sanitizeObjectLists() {
                 deps.subsystem_parents[sub] = [];
             }
         });
+
+        // Clean project_links
+        Object.keys(deps.project_links).forEach(p => {
+            if (isPlaceholderValue(p)) {
+                delete deps.project_links[p];
+            } else {
+                const link = deps.project_links[p];
+                if (link) {
+                    if (link.subsystem && isPlaceholderValue(link.subsystem)) delete link.subsystem;
+                    if (link.codename && isPlaceholderValue(link.codename)) delete link.codename;
+                }
+            }
+        });
+
+        // Clean codename_parents & deployment_parents
+        Object.keys(deps.codename_parents).forEach(c => {
+            if (isPlaceholderValue(c) || isPlaceholderValue(deps.codename_parents[c])) delete deps.codename_parents[c];
+        });
+        Object.keys(deps.deployment_parents).forEach(d => {
+            if (isPlaceholderValue(d) || isPlaceholderValue(deps.deployment_parents[d])) delete deps.deployment_parents[d];
+        });
+
+        // Clean co_occurrences
+        Object.keys(deps.co_occurrences).forEach(k => {
+            if (k.includes(':::general') || k.includes(':::default') || k.includes(':::--')) {
+                delete deps.co_occurrences[k];
+            }
+        });
     }
+}
+
+// Tree rehoming migration to rescue misplaced tasks from placeholder branches (e.g. "General" or "Default System")
+function migrateTreeAndCleanPlaceholders() {
+    if (!data || !data.children) return;
+    rebuildPerformanceCaches();
+
+    const deps = objectLists?.dependencies || {};
+
+    // 1. Gather all leaf tasks at level 4
+    const allTasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    
+    // 2. Re-home tasks if their parent system/subsystem in tree is a placeholder
+    allTasks.forEach(task => {
+        if (task.subsystem && isPlaceholderValue(task.subsystem)) {
+            task.subsystem = '';
+        }
+        if (task.system && isPlaceholderValue(task.system)) {
+            task.system = '';
+        }
+        if (task.project && isPlaceholderValue(task.project)) {
+            task.project = '';
+        }
+
+        const taskProj = (task.project || '').trim();
+        const taskSys = (task.system || '').trim();
+        const taskSub = (task.subsystem || '').trim();
+
+        const parentProj = findParent(task.id);
+        if (parentProj) {
+            const parentSub = findParent(parentProj.id);
+            const parentSys = parentSub ? findParent(parentSub.id) : null;
+
+            const sysIsDummy = !parentSys || isPlaceholderValue(parentSys.title);
+            const subIsDummy = !parentSub || isPlaceholderValue(parentSub.title);
+
+            if (sysIsDummy || subIsDummy) {
+                const targetProjTitle = taskProj || parentProj.title;
+                
+                // Determine target system
+                const knownSys = deps?.project_system_map?.[targetProjTitle];
+                const fallbackSysNode = data.children.find(s => !isPlaceholderValue(s.title));
+                let targetSys = taskSys || knownSys || (parentSys && !sysIsDummy ? parentSys.title : (fallbackSysNode ? fallbackSysNode.title : 'RTM General'));
+                if (isPlaceholderValue(targetSys)) targetSys = 'RTM General';
+
+                // Determine target subsystem
+                const knownSub = deps?.project_links?.[targetProjTitle]?.subsystem;
+                let targetSub = taskSub || knownSub || (parentSub && !subIsDummy ? parentSub.title : 'Internals');
+                if (isPlaceholderValue(targetSub)) targetSub = 'Internals';
+
+                // Detach task from old parent project
+                parentProj.children = parentProj.children.filter(c => c.id !== task.id);
+
+                // Find or create targetSys node
+                let sNode = data.children.find(s => s.title.toLowerCase() === targetSys.toLowerCase() && !isPlaceholderValue(s.title));
+                if (!sNode) {
+                    sNode = { id: uid(), title: targetSys, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                    data.children.push(sNode);
+                }
+                if (!sNode.children) sNode.children = [];
+
+                // Find or create targetSub node
+                let subNode = sNode.children.find(s => s.title.toLowerCase() === targetSub.toLowerCase() && !isPlaceholderValue(s.title));
+                if (!subNode) {
+                    subNode = { id: uid(), title: targetSub, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                    sNode.children.push(subNode);
+                }
+                if (!subNode.children) subNode.children = [];
+
+                // Find or create targetProj node
+                let pNode = subNode.children.find(p => p.title.toLowerCase() === targetProjTitle.toLowerCase());
+                if (!pNode) {
+                    pNode = { id: uid(), title: targetProjTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                    subNode.children.push(pNode);
+                }
+                if (!pNode.children) pNode.children = [];
+
+                // Attach task
+                pNode.children.push(task);
+                task.project = pNode.title;
+                task.system = sNode.title;
+                task.subsystem = subNode.title;
+            }
+        }
+    });
+
+    // 3. Consolidate duplicate empty project branches and prune placeholder branches
+    data.children.forEach(sys => {
+        if (sys.children) {
+            sys.children.forEach(sub => {
+                if (sub.children) {
+                    // Remove empty duplicate project nodes if a populated project node exists elsewhere
+                    sub.children = sub.children.filter(proj => {
+                        if (isPlaceholderValue(proj.title)) {
+                            return proj.children && proj.children.length > 0;
+                        }
+                        if (!proj.children || proj.children.length === 0) {
+                            const existsPopulated = allNodes(data).some(n => 
+                                getDepth(n.id) === 3 && 
+                                n.id !== proj.id && 
+                                n.title.toLowerCase() === proj.title.toLowerCase() && 
+                                n.children && n.children.length > 0
+                            );
+                            if (existsPopulated) return false;
+                        }
+                        return true;
+                    });
+                }
+            });
+
+            // Remove placeholder or empty subsystems
+            sys.children = sys.children.filter(sub => {
+                if (isPlaceholderValue(sub.title)) {
+                    const hasTasks = allNodes(sub).some(n => getDepth(n.id) === 4);
+                    return hasTasks;
+                }
+                return true;
+            });
+        }
+    });
+
+    // Remove placeholder systems with no tasks
+    data.children = data.children.filter(sys => {
+        if (isPlaceholderValue(sys.title)) {
+            const hasTasks = allNodes(sys).some(n => getDepth(n.id) === 4);
+            return hasTasks;
+        }
+        return true;
+    });
+
+    sanitizeObjectLists();
+    rebuildPerformanceCaches();
+    rebuildDependencyContextFromTasks();
 }
 
 // Global helper to retrieve array of parent systems for a given subsystem
@@ -11305,9 +11471,11 @@ function rebuildDependencyContextFromTasks() {
         let code = (t.custom_zbal2zx || '').trim();
         let dep = (t.custom_aar1e85 || '').trim();
 
-        if (proj.toLowerCase() === 'default project') proj = '';
-        if (sys.toLowerCase() === 'default system') sys = '';
-        if (sub.toLowerCase() === 'default subsystem') sub = '';
+        if (isPlaceholderValue(proj)) proj = '';
+        if (isPlaceholderValue(sys)) sys = '';
+        if (isPlaceholderValue(sub)) sub = '';
+        if (isPlaceholderValue(code)) code = '';
+        if (isPlaceholderValue(dep)) dep = '';
 
         if (proj && sys) {
             if (!projSysCounts[proj]) projSysCounts[proj] = {};
@@ -11429,9 +11597,11 @@ function learnTaskRelationship(t) {
     let code = (t.custom_zbal2zx || '').trim();
     let dep = (t.custom_aar1e85 || '').trim();
 
-    if (proj.toLowerCase() === 'default project') proj = '';
-    if (sys.toLowerCase() === 'default system') sys = '';
-    if (sub.toLowerCase() === 'default subsystem') sub = '';
+    if (isPlaceholderValue(proj)) proj = '';
+    if (isPlaceholderValue(sys)) sys = '';
+    if (isPlaceholderValue(sub)) sub = '';
+    if (isPlaceholderValue(code)) code = '';
+    if (isPlaceholderValue(dep)) dep = '';
 
     if (!deps.project_system_map) deps.project_system_map = {};
     if (!deps.codename_parents) deps.codename_parents = {};
@@ -11652,6 +11822,7 @@ async function applyRemoteStateUpdate(remoteData) {
             collapsed.clear();
             remoteData.collapsed.forEach(id => collapsed.add(id));
         }
+        migrateTreeAndCleanPlaceholders();
         pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
         enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
         rebuildPerformanceCaches();
@@ -11844,26 +12015,7 @@ async function loadStartupData() {
     if (!objectLists.dependencies.project_links) objectLists.dependencies.project_links = {};
     if (!objectLists.dependencies.co_occurrences) objectLists.dependencies.co_occurrences = {};
     
-    // Clean up any legacy placeholder systems/subsystems in task tree
-    const allTreeNodes = allNodes(data);
-    allTreeNodes.forEach(n => {
-        if (n.title && n.title.toLowerCase() === 'default system') n.title = 'General';
-        if (n.title && n.title.toLowerCase() === 'default subsystem') n.title = 'General';
-        if (n.title && n.title.toLowerCase() === 'default project') n.title = 'General Project';
-    });
-    const allTaskNodes = allTreeNodes.filter(n => getDepth(n.id) === 4);
-    allTaskNodes.forEach(t => {
-        if (t.system && t.system.toLowerCase() === 'default system') t.system = '';
-        if (t.subsystem && t.subsystem.toLowerCase() === 'default subsystem') t.subsystem = '';
-        if (t.project && t.project.toLowerCase() === 'default project') t.project = '';
-    });
-
-    // Auto-train self-learning frequency graph from raw tasks on startup if uninitialized
-    if (Object.keys(objectLists.dependencies.co_occurrences).length === 0) {
-        rebuildDependencyContextFromTasks();
-    }
-    
-    rebuildPerformanceCaches();
+    migrateTreeAndCleanPlaceholders();
     
     // Recalculate hierarchy parameters dynamically with newly validated sheetColumns
     pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
@@ -11973,6 +12125,7 @@ async function loadStartupData() {
                                         collapsed.clear();
                                         remoteData.collapsed.forEach(id => collapsed.add(id));
                                     }
+                                    migrateTreeAndCleanPlaceholders();
                                     // Recalculate hierarchy parameters dynamically on remote pull override
                                     pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
                                     enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
@@ -13847,10 +14000,10 @@ function moveTaskProject(taskId, newProjId) {
         }
         
         task.project = newParent.title;
-        if (systemNode && systemNode.title.toLowerCase() !== 'default system') {
+        if (systemNode && !isPlaceholderValue(systemNode.title)) {
             task.system = systemNode.title;
         }
-        if (subsystemNode && subsystemNode.title.toLowerCase() !== 'default subsystem') {
+        if (subsystemNode && !isPlaceholderValue(subsystemNode.title)) {
             task.subsystem = subsystemNode.title;
         }
         
@@ -13879,7 +14032,7 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
     const projName = newProjTitle.trim();
     if (!projName) return;
 
-    // Find project node at depth 3
+    // Find project node at depth 3 (preferring non-placeholder branches)
     let matchedProj = null;
     let subsystemNode = null;
     let systemNode = null;
@@ -13891,9 +14044,12 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
                     if (sub.children) {
                         const proj = sub.children.find(p => p.title.toLowerCase() === projName.toLowerCase());
                         if (proj) {
-                            matchedProj = proj;
-                            subsystemNode = sub;
-                            systemNode = sys;
+                            const isDummy = isPlaceholderValue(sys.title) || isPlaceholderValue(sub.title);
+                            if (!matchedProj || !isDummy) {
+                                matchedProj = proj;
+                                subsystemNode = sub;
+                                systemNode = sys;
+                            }
                         }
                     }
                 });
@@ -13908,10 +14064,10 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
             oldParent.children = oldParent.children.filter(c => c.id !== taskId);
             matchedProj.children.push(task);
             
-            if (systemNode && systemNode.title.toLowerCase() !== 'default system') {
+            if (systemNode && !isPlaceholderValue(systemNode.title)) {
                 task.system = systemNode.title;
             }
-            if (subsystemNode && subsystemNode.title.toLowerCase() !== 'default subsystem') {
+            if (subsystemNode && !isPlaceholderValue(subsystemNode.title)) {
                 task.subsystem = subsystemNode.title;
             }
             task.updatedAt = new Date().toISOString();
@@ -13922,7 +14078,8 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
         const targetSysTitle = (deps?.project_system_map?.[projName] || '').trim();
         const targetSubTitle = (deps?.project_links?.[projName]?.subsystem || '').trim();
         
-        const hostSysTitle = targetSysTitle || (data.children && data.children.length > 0 ? data.children[0].title : 'General');
+        const hostSysNode = data.children.find(s => !isPlaceholderValue(s.title));
+        const hostSysTitle = targetSysTitle || (hostSysNode ? hostSysNode.title : 'RTM General');
         
         // 1. Find or create host system node in mindmap tree
         if (!data.children) data.children = [];
@@ -13934,7 +14091,8 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
         
         // 2. Find or create host subsystem node in mindmap tree
         if (!sysNode.children) sysNode.children = [];
-        const hostSubTitle = targetSubTitle || (sysNode.children.length > 0 ? sysNode.children[0].title : 'General');
+        const hostSubNode = sysNode.children.find(s => !isPlaceholderValue(s.title));
+        const hostSubTitle = targetSubTitle || (hostSubNode ? hostSubNode.title : 'Internals');
         let subNode = sysNode.children.find(sub => sub.title.toLowerCase() === hostSubTitle.toLowerCase());
         if (!subNode) {
             subNode = { id: uid(), title: hostSubTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
@@ -14103,7 +14261,7 @@ function deleteAllSheetTasks() {
 }
 
 function addSheetTaskRow() {
-    const projects = getProjectsList();
+    const projects = getProjectsList().filter(p => !isPlaceholderValue(p.title));
     if (projects.length === 0) return;
     const projectNode = projects[0];
     
@@ -14130,8 +14288,8 @@ function addSheetTaskRow() {
         title: 'New Task',
         status: 'todo',
         assignee: '',
-        system: systemNode ? systemNode.title : '',
-        subsystem: subsystemNode ? subsystemNode.title : '',
+        system: (systemNode && !isPlaceholderValue(systemNode.title)) ? systemNode.title : '',
+        subsystem: (subsystemNode && !isPlaceholderValue(subsystemNode.title)) ? subsystemNode.title : '',
         project: projectNode.title,
         tags: [],
         notes: '',
