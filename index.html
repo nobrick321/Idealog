@@ -1344,9 +1344,45 @@
                 </select>
             </div>
         </div>
-        <div class="modal-footer" style="padding: 12px 15px;">
-            <button class="btn-sm btn-secondary" onclick="closeBulkMergeModal()" style="max-width:80px;">Cancel</button>
-            <button class="btn-sm" id="bulk-merge-execute-btn" style="max-width:160px;background:var(--accent);color:white;font-weight:bold;">Execute Merge</button>
+    </div>
+</div>
+
+<!-- Multi-Select Dependency Association Modal -->
+<div class="modal-overlay" id="multi-dep-modal" style="display: none;">
+    <div class="modal-box" style="width: 520px; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+            <h3 id="multi-dep-modal-title">Link Items to Parent</h3>
+            <button class="panel-close" onclick="closeMultiDepModal()">×</button>
+        </div>
+        <div class="modal-body" style="overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 15px;">
+            <p id="multi-dep-modal-subtitle" style="font-size:12px; color:var(--text-dim); line-height:1.4;">
+                Select all items you wish to associate. You can search, click individual items, or create a brand new one.
+            </p>
+            
+            <!-- Search & Quick Add -->
+            <div style="display: flex; gap: 8px;">
+                <input id="multi-dep-search-input" type="text" placeholder="Search or type new item name…" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 7px 10px; font-size: 12px; outline: none;" oninput="filterMultiDepItems(this.value)">
+                <button onclick="quickAddNewMultiDepItem()" style="background: var(--surface-hover); border: 1px solid var(--border-bright); color: var(--text); border-radius: 8px; padding: 7px 12px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;">+ Create New</button>
+            </div>
+
+            <!-- Selection toolbar: Select All / Deselect All -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 2px;">
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" onclick="toggleAllMultiDepCheckboxes(true)" style="background: none; border: none; color: var(--accent); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">Select All</button>
+                    <span style="color: var(--border);">|</span>
+                    <button type="button" onclick="toggleAllMultiDepCheckboxes(false)" style="background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">Deselect All</button>
+                </div>
+                <span id="multi-dep-selected-count" style="font-size: 11px; color: var(--text-dim);">0 selected</span>
+            </div>
+
+            <!-- Items Checkbox Container -->
+            <div id="multi-dep-items-container" style="background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; max-height: 260px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px;">
+                <!-- Dynamically rendered checkbox list -->
+            </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 15px; display: flex; justify-content: space-between; align-items: center;">
+            <button class="btn-sm btn-secondary" onclick="closeMultiDepModal()" style="max-width:80px;">Cancel</button>
+            <button class="btn-sm" id="multi-dep-save-btn" onclick="saveMultiDepSelection()" style="max-width:160px; background:var(--accent); color:white; font-weight:bold;">Save Associations</button>
         </div>
     </div>
 </div>
@@ -14332,39 +14368,240 @@ function renderListsSheet() {
     area.appendChild(mainLayout);
 }
 
-// Inline input handler for Table 1 (System -> Codename -> Deployment) and Table 2 (System -> Subsystem)
-window.inlineAddDependencyChild = function(childType, parentVal) {
-    const listKey = childType === 'codename' ? 'custom_zbal2zx' : (childType === 'deployment' ? 'custom_aar1e85' : (childType === 'subsystem' ? 'subsystems' : 'projects'));
-    const options = objectLists[listKey] || [];
-    
-    if (options.length === 0) {
-        alert(`Please add some flat items to the "${listKey}" list first before associating them.`);
+// --- MULTI-SELECT DEPENDENCY MODAL CONTROLLER ---
+let activeMultiDepConfig = null; // { mode: 'table1_code' | 'table1_dep' | 'table2_sub' | 'table3_proj' | 'table3_pair', parentVal, parentVal2, childType, listKey }
+
+window.openMultiSelectDependencyModal = function(mode, parentVal, parentVal2 = null) {
+    let listKey = '';
+    let childType = '';
+    let title = '';
+    let subtitle = '';
+
+    if (mode === 'table1_code') {
+        listKey = 'custom_zbal2zx';
+        childType = 'Codename';
+        title = `Link Codenames to System "${parentVal}"`;
+        subtitle = `Select all Codenames that belong to System <strong style="color:var(--text);">${parentVal}</strong>:`;
+    } else if (mode === 'table1_dep') {
+        listKey = 'custom_aar1e85';
+        childType = 'Deployment';
+        title = `Link Deployments to Codename "${parentVal}"`;
+        subtitle = `Select all Deployments that belong to Codename <strong style="color:var(--text);">${parentVal}</strong>:`;
+    } else if (mode === 'table2_sub') {
+        listKey = 'subsystems';
+        childType = 'Subsystem';
+        title = `Link Subsystems to System "${parentVal}"`;
+        subtitle = `Select all Subsystems that belong to System <strong style="color:var(--text);">${parentVal}</strong>:`;
+    } else if (mode === 'table3_proj') {
+        listKey = 'projects';
+        childType = 'Project';
+        title = `Link Projects to (${parentVal} + ${parentVal2})`;
+        subtitle = `Select all Projects that belong to Codename <strong style="color:var(--text);">${parentVal}</strong> and Subsystem <strong style="color:var(--text);">${parentVal2}</strong>:`;
+    }
+
+    const availableItems = objectLists[listKey] || [];
+    activeMultiDepConfig = {
+        mode,
+        parentVal,
+        parentVal2,
+        childType,
+        listKey,
+        items: [...availableItems]
+    };
+
+    document.getElementById('multi-dep-modal-title').textContent = title;
+    document.getElementById('multi-dep-modal-subtitle').innerHTML = subtitle;
+    document.getElementById('multi-dep-search-input').value = '';
+
+    renderMultiDepCheckboxes(availableItems);
+    document.getElementById('multi-dep-modal').style.display = 'flex';
+};
+
+window.closeMultiDepModal = function() {
+    document.getElementById('multi-dep-modal').style.display = 'none';
+    activeMultiDepConfig = null;
+};
+
+// Check if an item is currently associated with this parent
+function isItemCurrentlyAssociated(item) {
+    if (!activeMultiDepConfig || !objectLists.dependencies) return false;
+    const deps = objectLists.dependencies;
+    const { mode, parentVal, parentVal2 } = activeMultiDepConfig;
+    const iLower = item.toLowerCase();
+
+    if (mode === 'table1_code' && deps.codename_parents) {
+        const key = Object.keys(deps.codename_parents).find(k => k.toLowerCase() === iLower);
+        return key && deps.codename_parents[key].toLowerCase() === parentVal.toLowerCase();
+    } else if (mode === 'table1_dep' && deps.deployment_parents) {
+        const key = Object.keys(deps.deployment_parents).find(k => k.toLowerCase() === iLower);
+        return key && deps.deployment_parents[key].toLowerCase() === parentVal.toLowerCase();
+    } else if (mode === 'table2_sub' && deps.subsystem_parents) {
+        const key = Object.keys(deps.subsystem_parents).find(k => k.toLowerCase() === iLower);
+        return key && deps.subsystem_parents[key].toLowerCase() === parentVal.toLowerCase();
+    } else if (mode === 'table3_proj' && deps.project_links) {
+        const key = Object.keys(deps.project_links).find(k => k.toLowerCase() === iLower);
+        if (key && deps.project_links[key]) {
+            const link = deps.project_links[key];
+            return (link.codename || '').toLowerCase() === parentVal.toLowerCase() &&
+                   (link.subsystem || '').toLowerCase() === parentVal2.toLowerCase();
+        }
+    }
+    return false;
+}
+
+function renderMultiDepCheckboxes(itemsToRender) {
+    const container = document.getElementById('multi-dep-items-container');
+    container.innerHTML = '';
+
+    if (itemsToRender.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 11px; padding: 16px;">No items found. Click "+ Create New" above to add one.</div>`;
+        updateMultiDepSelectedCount();
         return;
     }
 
-    const val = prompt(`Select or type a ${childType} to associate with "${parentVal}":\n\nAvailable options:\n${options.join(', ')}`);
-    if (!val || !val.trim()) return;
-    
-    const trimmedVal = val.trim();
-    const matchedOption = options.find(opt => opt.toLowerCase() === trimmedVal.toLowerCase());
-    if (!matchedOption) {
-        if (confirm(`"${trimmedVal}" does not exist in the base list. Add it first?`)) {
-            options.push(trimmedVal);
-            options.sort((a,b) => a.localeCompare(b));
-        } else {
-            return;
+    itemsToRender.forEach(item => {
+        const isChecked = isItemCurrentlyAssociated(item);
+        const label = document.createElement('label');
+        label.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text); font-size: 12px; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; transition: background 0.1s ease;';
+        label.onmouseenter = () => label.style.background = 'rgba(255,255,255,0.05)';
+        label.onmouseleave = () => label.style.background = 'rgba(255,255,255,0.02)';
+
+        const leftWrap = document.createElement('div');
+        leftWrap.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = item;
+        cb.checked = isChecked;
+        cb.style.cursor = 'pointer';
+        cb.onchange = updateMultiDepSelectedCount;
+
+        const textSpan = document.createElement('span');
+        textSpan.textContent = item;
+
+        leftWrap.appendChild(cb);
+        leftWrap.appendChild(textSpan);
+        label.appendChild(leftWrap);
+
+        if (isChecked) {
+            const badge = document.createElement('span');
+            badge.style.cssText = 'font-size: 10px; color: var(--accent); background: rgba(99,102,241,0.15); padding: 1px 6px; border-radius: 4px;';
+            badge.textContent = 'Linked';
+            label.appendChild(badge);
         }
+
+        container.appendChild(label);
+    });
+
+    updateMultiDepSelectedCount();
+}
+
+function updateMultiDepSelectedCount() {
+    const checked = document.querySelectorAll('#multi-dep-items-container input[type="checkbox"]:checked');
+    const countEl = document.getElementById('multi-dep-selected-count');
+    if (countEl) countEl.textContent = `${checked.length} selected`;
+}
+
+window.filterMultiDepItems = function(query) {
+    if (!activeMultiDepConfig) return;
+    const q = (query || '').trim().toLowerCase();
+    const filtered = activeMultiDepConfig.items.filter(item => item.toLowerCase().includes(q));
+    renderMultiDepCheckboxes(filtered);
+};
+
+window.toggleAllMultiDepCheckboxes = function(select) {
+    const checkboxes = document.querySelectorAll('#multi-dep-items-container input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = select);
+    updateMultiDepSelectedCount();
+};
+
+window.quickAddNewMultiDepItem = function() {
+    if (!activeMultiDepConfig) return;
+    const searchInp = document.getElementById('multi-dep-search-input');
+    const candidate = (searchInp.value || '').trim();
+
+    const name = candidate || prompt(`Enter new ${activeMultiDepConfig.childType} name:`);
+    if (!name || !name.trim()) return;
+
+    const trimmed = name.trim();
+    if (!objectLists[activeMultiDepConfig.listKey]) objectLists[activeMultiDepConfig.listKey] = [];
+    
+    // Check if item already exists
+    if (!objectLists[activeMultiDepConfig.listKey].some(i => i.toLowerCase() === trimmed.toLowerCase())) {
+        objectLists[activeMultiDepConfig.listKey].push(trimmed);
+        objectLists[activeMultiDepConfig.listKey].sort((a,b) => a.localeCompare(b));
+        activeMultiDepConfig.items.push(trimmed);
+        activeMultiDepConfig.items.sort((a,b) => a.localeCompare(b));
+        saveObjectLists();
     }
-    
-    const finalVal = matchedOption || trimmedVal;
+
+    searchInp.value = '';
+    renderMultiDepCheckboxes(activeMultiDepConfig.items);
+
+    // Auto-check newly created item
+    const checkboxes = document.querySelectorAll('#multi-dep-items-container input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        if (cb.value.toLowerCase() === trimmed.toLowerCase()) {
+            cb.checked = true;
+        }
+    });
+    updateMultiDepSelectedCount();
+};
+
+window.saveMultiDepSelection = function() {
+    if (!activeMultiDepConfig) return;
+    const { mode, parentVal, parentVal2 } = activeMultiDepConfig;
     const deps = objectLists.dependencies;
-    
-    if (childType === 'codename') deps.codename_parents[finalVal] = parentVal;
-    else if (childType === 'deployment') deps.deployment_parents[finalVal] = parentVal;
-    else if (childType === 'subsystem') deps.subsystem_parents[finalVal] = parentVal;
-    
+    const checkboxes = document.querySelectorAll('#multi-dep-items-container input[type="checkbox"]');
+
+    checkboxes.forEach(cb => {
+        const itemVal = cb.value;
+        const isChecked = cb.checked;
+
+        if (mode === 'table1_code') {
+            if (isChecked) {
+                deps.codename_parents[itemVal] = parentVal;
+            } else if (deps.codename_parents[itemVal] === parentVal) {
+                delete deps.codename_parents[itemVal];
+            }
+        } else if (mode === 'table1_dep') {
+            if (isChecked) {
+                deps.deployment_parents[itemVal] = parentVal;
+            } else if (deps.deployment_parents[itemVal] === parentVal) {
+                delete deps.deployment_parents[itemVal];
+            }
+        } else if (mode === 'table2_sub') {
+            if (isChecked) {
+                deps.subsystem_parents[itemVal] = parentVal;
+            } else if (deps.subsystem_parents[itemVal] === parentVal) {
+                delete deps.subsystem_parents[itemVal];
+            }
+        } else if (mode === 'table3_proj') {
+            if (!deps.project_links) deps.project_links = {};
+            if (isChecked) {
+                deps.project_links[itemVal] = { codename: parentVal, subsystem: parentVal2 };
+            } else if (deps.project_links[itemVal] && 
+                       deps.project_links[itemVal].codename === parentVal && 
+                       deps.project_links[itemVal].subsystem === parentVal2) {
+                delete deps.project_links[itemVal];
+            }
+        }
+    });
+
     saveObjectLists();
+    closeMultiDepModal();
     renderListsSheet();
+};
+
+// Aliases for inline triggers
+window.inlineAddDependencyChild = function(childType, parentVal) {
+    if (childType === 'codename') openMultiSelectDependencyModal('table1_code', parentVal);
+    else if (childType === 'deployment') openMultiSelectDependencyModal('table1_dep', parentVal);
+    else if (childType === 'subsystem') openMultiSelectDependencyModal('table2_sub', parentVal);
+};
+
+window.inlineAddProjectToSpecificPair = function(codename, subsystem) {
+    openMultiSelectDependencyModal('table3_proj', codename, subsystem);
 };
 
 window.inlineRemoveDependency = function(childType, childVal) {
@@ -14379,63 +14616,24 @@ window.inlineRemoveDependency = function(childType, childVal) {
     renderListsSheet();
 };
 
-// Table 3: Add project to a specific (Codename + Subsystem) pair
-window.inlineAddProjectToSpecificPair = function(codename, subsystem) {
-    const projects = objectLists.projects || [];
-    if (projects.length === 0) {
-        alert("Please add some projects to the Projects list first.");
-        return;
-    }
-
-    const val = prompt(`Select or type a Project to link to [Codename: ${codename}, Subsystem: ${subsystem}]:\n\nAvailable Projects:\n${projects.join(', ')}`);
-    if (!val || !val.trim()) return;
-
-    const trimmedVal = val.trim();
-    const matchedOption = projects.find(opt => opt.toLowerCase() === trimmedVal.toLowerCase());
-    if (!matchedOption) {
-        if (confirm(`"${trimmedVal}" does not exist in the Projects list. Add it first?`)) {
-            projects.push(trimmedVal);
-            projects.sort((a,b) => a.localeCompare(b));
-        } else {
-            return;
-        }
-    }
-
-    const finalVal = matchedOption || trimmedVal;
-    if (!objectLists.dependencies.project_links) objectLists.dependencies.project_links = {};
-    objectLists.dependencies.project_links[finalVal] = { codename, subsystem };
-
-    saveObjectLists();
-    renderListsSheet();
-};
-
 window.inlineAddProjectPairLink = function() {
     const codenames = objectLists.custom_zbal2zx || [];
     const subsystems = objectLists.subsystems || [];
-    const projects = objectLists.projects || [];
 
-    if (codenames.length === 0 || subsystems.length === 0 || projects.length === 0) {
-        alert("Please ensure you have items in Codenames, Subsystems, and Projects first.");
+    if (codenames.length === 0 || subsystems.length === 0) {
+        alert("Please ensure you have items in Codenames and Subsystems first.");
         return;
     }
 
-    const codename = prompt(`Enter Codename:\nAvailable: ${codenames.join(', ')}`);
+    const codename = prompt(`Enter Codename for the pair:\nAvailable: ${codenames.join(', ')}`);
     if (!codename) return;
     const matchedCode = codenames.find(c => c.toLowerCase() === codename.trim().toLowerCase()) || codename.trim();
 
-    const subsystem = prompt(`Enter Subsystem:\nAvailable: ${subsystems.join(', ')}`);
+    const subsystem = prompt(`Enter Subsystem for the pair:\nAvailable: ${subsystems.join(', ')}`);
     if (!subsystem) return;
     const matchedSub = subsystems.find(s => s.toLowerCase() === subsystem.trim().toLowerCase()) || subsystem.trim();
 
-    const project = prompt(`Enter Project to link to (${matchedCode} + ${matchedSub}):\nAvailable: ${projects.join(', ')}`);
-    if (!project) return;
-    const matchedProj = projects.find(p => p.toLowerCase() === project.trim().toLowerCase()) || project.trim();
-
-    if (!objectLists.dependencies.project_links) objectLists.dependencies.project_links = {};
-    objectLists.dependencies.project_links[matchedProj] = { codename: matchedCode, subsystem: matchedSub };
-
-    saveObjectLists();
-    renderListsSheet();
+    openMultiSelectDependencyModal('table3_proj', matchedCode, matchedSub);
 };
 
 window.inlineRemoveProjectLink = function(projectName) {
