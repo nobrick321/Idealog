@@ -14131,10 +14131,14 @@ function renderListsSheet() {
             row.dataset.itemValue = item.toLowerCase();
             row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.015); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; gap: 4px; transition: background 0.15s;';
             row.innerHTML = `
-                <input type="text" value="${item}" onchange="editListItem('${col.type}', ${idx}, this.value)" style="background: transparent; border: none; color: var(--text); font-size: 11px; outline: none; flex: 1; min-width: 50px;">
-                <button onclick="openObjectMergeModal('${col.type}', '${item.replace(/'/g, "\\'")}')" title="Merge this item" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px; transition: color 0.15s; padding: 0 3px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">⎘</button>
+                <input type="text" value="${item.replace(/"/g, '&quot;')}" onchange="editListItem('${col.type}', ${idx}, this.value)" style="background: transparent; border: none; color: var(--text); font-size: 11px; outline: none; flex: 1; min-width: 50px;">
+                <button class="object-merge-btn" title="Merge other items into this item" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px; transition: color 0.15s; padding: 0 3px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">⎘</button>
                 <button onclick="deleteListItem('${col.type}', ${idx})" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; transition: color 0.15s; padding: 0 3px;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='var(--text-muted)'">×</button>
             `;
+            const mergeBtn = row.querySelector('.object-merge-btn');
+            if (mergeBtn) {
+                mergeBtn.onclick = () => openObjectMergeModal(col.type, item);
+            }
             listContainer.appendChild(row);
         });
 
@@ -14827,9 +14831,9 @@ function deleteListItem(type, idx) {
 }
 
 // --- INTERACTIVE OBJECT MERGE CONTROLLER (MULTI-SELECT & CLICK-TO-MERGE) ---
-let activeObjectMergeConfig = null; // { type, label, items: [], preselectedItem: null }
+let activeObjectMergeConfig = null; // { type, label, items: [], targetDestination: null }
 
-window.openObjectMergeModal = function(type, preselectItem = null) {
+window.openObjectMergeModal = function(type, targetDestination = null) {
     if (!objectLists || !objectLists[type]) return;
     const items = objectLists[type] || [];
     if (items.length < 2) {
@@ -14850,7 +14854,7 @@ window.openObjectMergeModal = function(type, preselectItem = null) {
         type,
         label,
         items: [...items],
-        preselectedItem: preselectItem
+        targetDestination: targetDestination
     };
 
     document.getElementById('object-merge-modal-title').textContent = `⎘ Merge ${label}`;
@@ -14860,20 +14864,12 @@ window.openObjectMergeModal = function(type, preselectItem = null) {
     const destSelect = document.getElementById('object-merge-destination-select');
     destSelect.innerHTML = '';
     
-    // If preselectItem is provided, default the destination to either the closest match or the first other item
-    let defaultDest = items[0];
-    if (preselectItem) {
-        // Look for same-named item with different case if any, otherwise first other item
-        const altMatch = items.find(it => it.toLowerCase() === preselectItem.toLowerCase() && it !== preselectItem);
-        if (altMatch) {
-            defaultDest = altMatch;
-        } else {
-            const firstOther = items.find(it => it !== preselectItem);
-            if (firstOther) defaultDest = firstOther;
-        }
-    }
+    // Autoselect the clicked item as destination, or default to first item
+    let defaultDest = (targetDestination && items.includes(targetDestination)) ? targetDestination : items[0];
 
-    items.forEach(item => {
+    // Populate unique items in destination dropdown
+    const distinctItems = Array.from(new Set(items));
+    distinctItems.forEach(item => {
         const opt = document.createElement('option');
         opt.value = item;
         opt.textContent = item;
@@ -14901,17 +14897,17 @@ function renderObjectMergeSourcesList() {
     const container = document.getElementById('object-merge-items-container');
     container.innerHTML = '';
 
-    const availableSources = activeObjectMergeConfig.items.filter(item => item !== destVal);
-    const filtered = q ? availableSources.filter(item => item.toLowerCase().includes(q)) : availableSources;
+    // Filter out the chosen destination so it cannot be merged into itself
+    const distinctSources = Array.from(new Set(activeObjectMergeConfig.items)).filter(item => item !== destVal);
+    const filtered = q ? distinctSources.filter(item => item.toLowerCase().includes(q)) : distinctSources;
 
     if (filtered.length === 0) {
-        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 11.5px; padding: 16px;">No matching items to merge.</div>`;
+        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 11.5px; padding: 16px;">No other items available to merge into "${destVal}".</div>`;
         updateObjectMergeSelectedCount();
         return;
     }
 
     filtered.forEach(item => {
-        const isPreselected = activeObjectMergeConfig.preselectedItem && item === activeObjectMergeConfig.preselectedItem;
         const isSameText = item.toLowerCase() === destVal.toLowerCase();
 
         const label = document.createElement('label');
@@ -14926,7 +14922,7 @@ function renderObjectMergeSourcesList() {
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.value = item;
-        cb.checked = isPreselected;
+        cb.checked = false;
         cb.style.cursor = 'pointer';
         cb.onchange = updateObjectMergeSelectedCount;
 
