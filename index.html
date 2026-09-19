@@ -6036,7 +6036,7 @@ const DEFAULT = {
         },
         {
             "id": "n04xdmm4",
-            "title": "Default System",
+            "title": "General",
             "status": "inprogress",
             "assignee": "",
             "tags": [],
@@ -6044,7 +6044,7 @@ const DEFAULT = {
             "children": [
                 {
                     "id": "n4qkp2n4",
-                    "title": "Default Subsystem",
+                    "title": "General",
                     "status": "inprogress",
                     "assignee": "",
                     "tags": [],
@@ -9228,7 +9228,7 @@ const EMPTY_PROJECT = {
         },
         {
             "id": "n04xdmm4",
-            "title": "Default System",
+            "title": "General",
             "status": "inprogress",
             "assignee": "",
             "tags": [],
@@ -9236,7 +9236,7 @@ const EMPTY_PROJECT = {
             "children": [
                 {
                     "id": "n4qkp2n4",
-                    "title": "Default Subsystem",
+                    "title": "General",
                     "status": "inprogress",
                     "assignee": "",
                     "tags": [],
@@ -11195,6 +11195,7 @@ function sanitizeObjectLists() {
                 const trimmed = String(item).trim();
                 if (!trimmed) return;
                 const lower = trimmed.toLowerCase();
+                if (lower === 'default system' || lower === 'default subsystem' || lower === 'default project') return;
                 if (!seen.has(lower)) {
                     seen.add(lower);
                     unique.push(trimmed);
@@ -11212,18 +11213,32 @@ function sanitizeObjectLists() {
         if (!deps.deployment_parents) deps.deployment_parents = {};
         if (!deps.subsystem_parents) deps.subsystem_parents = {};
         if (!deps.project_links) deps.project_links = {};
+        if (!deps.project_system_map) deps.project_system_map = {};
+        if (!deps.co_occurrences) deps.co_occurrences = {};
+
+        // Clean out any default placeholders from dependencies
+        Object.keys(deps.project_system_map).forEach(p => {
+            if (p.toLowerCase() === 'default project' || deps.project_system_map[p].toLowerCase() === 'default system') {
+                delete deps.project_system_map[p];
+            }
+        });
 
         // Normalize subsystem_parents so every subsystem maps to an array of parent systems
         Object.keys(deps.subsystem_parents).forEach(sub => {
+            if (sub.toLowerCase() === 'default subsystem') {
+                delete deps.subsystem_parents[sub];
+                return;
+            }
             const val = deps.subsystem_parents[sub];
             if (typeof val === 'string') {
-                deps.subsystem_parents[sub] = val.trim() ? [val.trim()] : [];
+                const s = val.trim();
+                deps.subsystem_parents[sub] = (s && s.toLowerCase() !== 'default system') ? [s] : [];
             } else if (Array.isArray(val)) {
                 const uniqueParents = [];
                 const seen = new Set();
                 val.forEach(p => {
                     const pTrim = String(p).trim();
-                    if (pTrim && !seen.has(pTrim.toLowerCase())) {
+                    if (pTrim && pTrim.toLowerCase() !== 'default system' && !seen.has(pTrim.toLowerCase())) {
                         seen.add(pTrim.toLowerCase());
                         uniqueParents.push(pTrim);
                     }
@@ -11266,12 +11281,12 @@ function rebuildDependencyContextFromTasks() {
     }
 
     const deps = objectLists.dependencies;
-    if (!deps.project_system_map) deps.project_system_map = {};
-    if (!deps.codename_parents) deps.codename_parents = {};
-    if (!deps.deployment_parents) deps.deployment_parents = {};
-    if (!deps.subsystem_parents) deps.subsystem_parents = {};
-    if (!deps.project_links) deps.project_links = {};
-    if (!deps.co_occurrences) deps.co_occurrences = {};
+    deps.project_system_map = {};
+    deps.codename_parents = {};
+    deps.deployment_parents = {};
+    deps.subsystem_parents = {};
+    deps.project_links = {};
+    deps.co_occurrences = {};
 
     // Frequency accumulators from tasks
     const projSysCounts = {};   // { [proj]: { [sys]: count } }
@@ -11284,11 +11299,15 @@ function rebuildDependencyContextFromTasks() {
 
     const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
     tasks.forEach(t => {
-        const proj = (t.project || '').trim();
-        const sys = (t.system || '').trim();
-        const sub = (t.subsystem || '').trim();
-        const code = (t.custom_zbal2zx || '').trim();
-        const dep = (t.custom_aar1e85 || '').trim();
+        let proj = (t.project || '').trim();
+        let sys = (t.system || '').trim();
+        let sub = (t.subsystem || '').trim();
+        let code = (t.custom_zbal2zx || '').trim();
+        let dep = (t.custom_aar1e85 || '').trim();
+
+        if (proj.toLowerCase() === 'default project') proj = '';
+        if (sys.toLowerCase() === 'default system') sys = '';
+        if (sub.toLowerCase() === 'default subsystem') sub = '';
 
         if (proj && sys) {
             if (!projSysCounts[proj]) projSysCounts[proj] = {};
@@ -11404,11 +11423,15 @@ function learnTaskRelationship(t) {
         return;
     }
     const deps = objectLists.dependencies;
-    const proj = (t.project || '').trim();
-    const sys = (t.system || '').trim();
-    const sub = (t.subsystem || '').trim();
-    const code = (t.custom_zbal2zx || '').trim();
-    const dep = (t.custom_aar1e85 || '').trim();
+    let proj = (t.project || '').trim();
+    let sys = (t.system || '').trim();
+    let sub = (t.subsystem || '').trim();
+    let code = (t.custom_zbal2zx || '').trim();
+    let dep = (t.custom_aar1e85 || '').trim();
+
+    if (proj.toLowerCase() === 'default project') proj = '';
+    if (sys.toLowerCase() === 'default system') sys = '';
+    if (sub.toLowerCase() === 'default subsystem') sub = '';
 
     if (!deps.project_system_map) deps.project_system_map = {};
     if (!deps.codename_parents) deps.codename_parents = {};
@@ -11821,6 +11844,20 @@ async function loadStartupData() {
     if (!objectLists.dependencies.project_links) objectLists.dependencies.project_links = {};
     if (!objectLists.dependencies.co_occurrences) objectLists.dependencies.co_occurrences = {};
     
+    // Clean up any legacy placeholder systems/subsystems in task tree
+    const allTreeNodes = allNodes(data);
+    allTreeNodes.forEach(n => {
+        if (n.title && n.title.toLowerCase() === 'default system') n.title = 'General';
+        if (n.title && n.title.toLowerCase() === 'default subsystem') n.title = 'General';
+        if (n.title && n.title.toLowerCase() === 'default project') n.title = 'General Project';
+    });
+    const allTaskNodes = allTreeNodes.filter(n => getDepth(n.id) === 4);
+    allTaskNodes.forEach(t => {
+        if (t.system && t.system.toLowerCase() === 'default system') t.system = '';
+        if (t.subsystem && t.subsystem.toLowerCase() === 'default subsystem') t.subsystem = '';
+        if (t.project && t.project.toLowerCase() === 'default project') t.project = '';
+    });
+
     // Auto-train self-learning frequency graph from raw tasks on startup if uninitialized
     if (Object.keys(objectLists.dependencies.co_occurrences).length === 0) {
         rebuildDependencyContextFromTasks();
@@ -13755,11 +13792,25 @@ function updateTaskPropFromSheet(id, prop, val) {
 
         if (objectLists && objectLists.dependencies) {
             const deps = objectLists.dependencies;
-            if (prop === 'project' || colDef?.label?.toLowerCase() === 'project') {
+            // Only auto-fill when editing the Project field
+            if ((prop === 'project' || colDef?.label?.toLowerCase() === 'project') && val) {
                 if (deps.project_system_map && deps.project_system_map[val]) {
                     n.system = deps.project_system_map[val];
                     const sysCol = sheetColumns.find(c => c.label.toLowerCase() === 'system');
                     if (sysCol) n[sysCol.key] = n.system;
+                }
+                if (deps.project_links && deps.project_links[val]) {
+                    const link = deps.project_links[val];
+                    if (link.codename && !n.custom_zbal2zx) {
+                        n.custom_zbal2zx = link.codename;
+                        const codeCol = sheetColumns.find(c => c.label.toLowerCase() === 'codename');
+                        if (codeCol) n[codeCol.key] = link.codename;
+                    }
+                    if (link.subsystem && !n.subsystem) {
+                        n.subsystem = link.subsystem;
+                        const subCol = sheetColumns.find(c => c.label.toLowerCase() === 'subsystem');
+                        if (subCol) n[subCol.key] = link.subsystem;
+                    }
                 }
             }
             learnTaskRelationship(n);
@@ -13796,8 +13847,12 @@ function moveTaskProject(taskId, newProjId) {
         }
         
         task.project = newParent.title;
-        task.system = systemNode ? systemNode.title : '';
-        task.subsystem = subsystemNode ? subsystemNode.title : '';
+        if (systemNode && systemNode.title.toLowerCase() !== 'default system') {
+            task.system = systemNode.title;
+        }
+        if (subsystemNode && subsystemNode.title.toLowerCase() !== 'default subsystem') {
+            task.subsystem = subsystemNode.title;
+        }
         
         const deps = objectLists?.dependencies;
         if (deps) {
@@ -13821,6 +13876,9 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
     const task = findNode(taskId);
     if (!task || !newProjTitle) return;
     
+    const projName = newProjTitle.trim();
+    if (!projName) return;
+
     // Find project node at depth 3
     let matchedProj = null;
     let subsystemNode = null;
@@ -13831,7 +13889,7 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
             if (sys.children) {
                 sys.children.forEach(sub => {
                     if (sub.children) {
-                        const proj = sub.children.find(p => p.title.toLowerCase() === newProjTitle.trim().toLowerCase());
+                        const proj = sub.children.find(p => p.title.toLowerCase() === projName.toLowerCase());
                         if (proj) {
                             matchedProj = proj;
                             subsystemNode = sub;
@@ -13844,47 +13902,59 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
     }
     
     if (matchedProj) {
+        task.project = matchedProj.title;
         const oldParent = findParent(taskId);
         if (oldParent && oldParent.id !== matchedProj.id) {
             oldParent.children = oldParent.children.filter(c => c.id !== taskId);
             matchedProj.children.push(task);
             
-            task.project = matchedProj.title;
-            if (systemNode) task.system = systemNode.title;
-            if (subsystemNode) task.subsystem = subsystemNode.title;
+            if (systemNode && systemNode.title.toLowerCase() !== 'default system') {
+                task.system = systemNode.title;
+            }
+            if (subsystemNode && subsystemNode.title.toLowerCase() !== 'default subsystem') {
+                task.subsystem = subsystemNode.title;
+            }
             task.updatedAt = new Date().toISOString();
         }
     } else {
-        // If Project doesn't exist, create it inside the current task's system & subsystem
-        const currentSystemTitle = task.system || 'Default System';
-        const currentSubsystemTitle = task.subsystem || 'Default Subsystem';
+        // If Project doesn't exist in tree, create it inside a valid system & subsystem branch
+        const deps = objectLists?.dependencies;
+        const targetSysTitle = (deps?.project_system_map?.[projName] || '').trim();
+        const targetSubTitle = (deps?.project_links?.[projName]?.subsystem || '').trim();
         
-        // 1. Find/create system
-        let sysNode = data.children.find(sys => sys.title.toLowerCase() === currentSystemTitle.toLowerCase());
+        const hostSysTitle = targetSysTitle || (data.children && data.children.length > 0 ? data.children[0].title : 'General');
+        
+        // 1. Find or create host system node in mindmap tree
+        if (!data.children) data.children = [];
+        let sysNode = data.children.find(sys => sys.title.toLowerCase() === hostSysTitle.toLowerCase());
         if (!sysNode) {
-            sysNode = { id: uid(), title: currentSystemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+            sysNode = { id: uid(), title: hostSysTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
             data.children.push(sysNode);
         }
-        // 2. Find/create subsystem
-        let subNode = sysNode.children.find(sub => sub.title.toLowerCase() === currentSubsystemTitle.toLowerCase());
+        
+        // 2. Find or create host subsystem node in mindmap tree
+        if (!sysNode.children) sysNode.children = [];
+        const hostSubTitle = targetSubTitle || (sysNode.children.length > 0 ? sysNode.children[0].title : 'General');
+        let subNode = sysNode.children.find(sub => sub.title.toLowerCase() === hostSubTitle.toLowerCase());
         if (!subNode) {
-            subNode = { id: uid(), title: currentSubsystemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+            subNode = { id: uid(), title: hostSubTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
             sysNode.children.push(subNode);
         }
         
-        // 3. Create Project
-        const newProj = { id: uid(), title: newProjTitle.trim(), status: 'inprogress', assignee: '', tags: [], notes: '', children: [task] };
-        subNode.children.push(newProj);
-        
-        // Remove task from old parent
+        // Detach task from old parent first
         const oldParent = findParent(taskId);
         if (oldParent) {
             oldParent.children = oldParent.children.filter(c => c.id !== taskId);
         }
+
+        // 3. Create Project node
+        if (!subNode.children) subNode.children = [];
+        const newProj = { id: uid(), title: projName, status: 'inprogress', assignee: '', tags: [], notes: '', children: [task] };
+        subNode.children.push(newProj);
         
         task.project = newProj.title;
-        task.system = currentSystemTitle;
-        task.subsystem = currentSubsystemTitle;
+        task.system = targetSysTitle;
+        task.subsystem = targetSubTitle;
         task.updatedAt = new Date().toISOString();
 
         // Ensure new project is registered in Object Lists for autocompletion
@@ -13894,7 +13964,7 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
         }
     }
 
-    // Apply Project Anchor Invariant: single system auto-filled from learned graph if available
+    // Apply Project Anchor Invariant & smart defaults ONLY if found
     const deps = objectLists?.dependencies;
     if (deps) {
         if (deps.project_system_map && deps.project_system_map[task.project]) {
@@ -13911,9 +13981,9 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
     // Mirror to sheet columns
     sheetColumns.forEach(col => {
         const l = col.label.toLowerCase();
-        if (l === 'system') task[col.key] = task.system;
-        else if (l === 'subsystem') task[col.key] = task.subsystem;
-        else if (l === 'codename' && task.custom_zbal2zx) task[col.key] = task.custom_zbal2zx;
+        if (l === 'system') task[col.key] = task.system || '';
+        else if (l === 'subsystem') task[col.key] = task.subsystem || '';
+        else if (l === 'codename' && task.custom_zbal2zx) task[col.key] = task.custom_zbal2zx || '';
     });
 
     // Update sidebar inputs if this node is currently selected
@@ -13924,6 +13994,8 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
         if (pSub) pSub.value = task.subsystem || '';
         const pProj = document.getElementById('prop-project');
         if (pProj) pProj.value = task.project || '';
+        const pCode = document.querySelector(`input[placeholder="CODENAME"], input[placeholder="Codename"]`);
+        if (pCode && task.custom_zbal2zx) pCode.value = task.custom_zbal2zx || '';
     }
 
     save();
@@ -14365,23 +14437,27 @@ function processImportedData() {
         let targetProj = null;
         // Determine correct parent project branch node. Find existing or create a new branch.
         // We must construct System (Level 1) -> Subsystem (Level 2) -> Project (Level 3) -> Task (Level 4)
-        const systemTitle = taskObj.system || 'Default System';
-        const subsystemTitle = taskObj.subsystem || 'Default Subsystem';
-        const projectTitle = rowProjectName || 'Default Project';
+        const deps = objectLists?.dependencies;
+        const projectTitle = (rowProjectName || '').trim() || 'General Project';
+        const targetSysTitle = (deps?.project_system_map?.[projectTitle] || taskObj.system || '').trim();
+        const targetSubTitle = (deps?.project_links?.[projectTitle]?.subsystem || taskObj.subsystem || '').trim();
+
+        const hostSysTitle = targetSysTitle || (data.children && data.children.length > 0 ? data.children[0].title : 'General');
 
         // 1. Find or create System (Level 1)
         if (!data.children) data.children = [];
-        let systemNode = data.children.find(sys => sys.title.toLowerCase() === systemTitle.toLowerCase());
+        let systemNode = data.children.find(sys => sys.title.toLowerCase() === hostSysTitle.toLowerCase());
         if (!systemNode) {
-            systemNode = { id: uid(), title: systemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+            systemNode = { id: uid(), title: hostSysTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
             data.children.push(systemNode);
         }
 
         // 2. Find or create Subsystem (Level 2)
         if (!systemNode.children) systemNode.children = [];
-        let subsystemNode = systemNode.children.find(sub => sub.title.toLowerCase() === subsystemTitle.toLowerCase());
+        const hostSubTitle = targetSubTitle || (systemNode.children.length > 0 ? systemNode.children[0].title : 'General');
+        let subsystemNode = systemNode.children.find(sub => sub.title.toLowerCase() === hostSubTitle.toLowerCase());
         if (!subsystemNode) {
-            subsystemNode = { id: uid(), title: subsystemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+            subsystemNode = { id: uid(), title: hostSubTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
             systemNode.children.push(subsystemNode);
         }
 
@@ -14394,8 +14470,8 @@ function processImportedData() {
         }
 
         // Populate task fields to match the hierarchy path
-        taskObj.system = systemNode.title;
-        taskObj.subsystem = subsystemNode.title;
+        taskObj.system = targetSysTitle;
+        taskObj.subsystem = targetSubTitle;
         taskObj.project = targetProj.title;
 
         // Ensure dynamic column matching keys are also populated on the task object
@@ -14595,43 +14671,7 @@ async function pullFromGoogleSheets() {
                 if (row.Project) {
                     const currentParent = findParent(taskNode.id);
                     if (!currentParent || currentParent.title.toLowerCase() !== row.Project.toLowerCase()) {
-                        const systemTitle = taskNode.system || 'Default System';
-                        const subsystemTitle = taskNode.subsystem || 'Default Subsystem';
-                        const projectTitle = row.Project;
-
-                        // 1. Find or create System (Level 1)
-                        if (!data.children) data.children = [];
-                        let systemNode = data.children.find(sys => sys.title.toLowerCase() === systemTitle.toLowerCase());
-                        if (!systemNode) {
-                            systemNode = { id: uid(), title: systemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
-                            data.children.push(systemNode);
-                        }
-
-                        // 2. Find or create Subsystem (Level 2)
-                        if (!systemNode.children) systemNode.children = [];
-                        let subsystemNode = systemNode.children.find(sub => sub.title.toLowerCase() === subsystemTitle.toLowerCase());
-                        if (!subsystemNode) {
-                            subsystemNode = { id: uid(), title: subsystemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
-                            systemNode.children.push(subsystemNode);
-                        }
-
-                        // 3. Find or create Project (Level 3)
-                        if (!subsystemNode.children) subsystemNode.children = [];
-                        let targetProj = subsystemNode.children.find(proj => proj.title.toLowerCase() === projectTitle.toLowerCase());
-                        if (!targetProj) {
-                            targetProj = { id: uid(), title: projectTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
-                            subsystemNode.children.push(targetProj);
-                        }
-
-                        taskNode.system = systemNode.title;
-                        taskNode.subsystem = subsystemNode.title;
-                        taskNode.project = targetProj.title;
-
-                        if (currentParent) {
-                            currentParent.children = currentParent.children.filter(c => c.id !== taskNode.id);
-                        }
-                        if (!targetProj.children) targetProj.children = [];
-                        targetProj.children.push(taskNode);
+                        moveTaskProjectByTitle(taskNode.id, row.Project);
                     }
                 }
                 updatedCount++;
@@ -14663,23 +14703,27 @@ async function pullFromGoogleSheets() {
                 });
 
                 // Find or create parent project (guaranteeing System -> Subsystem -> Project structure)
-                const systemTitle = newTask.system || 'Default System';
-                const subsystemTitle = newTask.subsystem || 'Default Subsystem';
-                const projectTitle = row.Project || 'Default Project';
+                const deps = objectLists?.dependencies;
+                const projectTitle = (row.Project || '').trim() || 'General Project';
+                const targetSysTitle = (deps?.project_system_map?.[projectTitle] || newTask.system || '').trim();
+                const targetSubTitle = (deps?.project_links?.[projectTitle]?.subsystem || newTask.subsystem || '').trim();
+
+                const hostSysTitle = targetSysTitle || (data.children && data.children.length > 0 ? data.children[0].title : 'General');
 
                 // 1. Find or create System (Level 1)
                 if (!data.children) data.children = [];
-                let systemNode = data.children.find(sys => sys.title.toLowerCase() === systemTitle.toLowerCase());
+                let systemNode = data.children.find(sys => sys.title.toLowerCase() === hostSysTitle.toLowerCase());
                 if (!systemNode) {
-                    systemNode = { id: uid(), title: systemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                    systemNode = { id: uid(), title: hostSysTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
                     data.children.push(systemNode);
                 }
 
                 // 2. Find or create Subsystem (Level 2)
                 if (!systemNode.children) systemNode.children = [];
-                let subsystemNode = systemNode.children.find(sub => sub.title.toLowerCase() === subsystemTitle.toLowerCase());
+                const hostSubTitle = targetSubTitle || (systemNode.children.length > 0 ? systemNode.children[0].title : 'General');
+                let subsystemNode = systemNode.children.find(sub => sub.title.toLowerCase() === hostSubTitle.toLowerCase());
                 if (!subsystemNode) {
-                    subsystemNode = { id: uid(), title: subsystemTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
+                    subsystemNode = { id: uid(), title: hostSubTitle, status: 'inprogress', assignee: '', tags: [], notes: '', children: [] };
                     systemNode.children.push(subsystemNode);
                 }
 
@@ -14692,17 +14736,17 @@ async function pullFromGoogleSheets() {
                 }
 
                 // Populate task fields to match the hierarchy path
-                newTask.system = systemNode.title;
-                newTask.subsystem = subsystemNode.title;
+                newTask.system = targetSysTitle;
+                newTask.subsystem = targetSubTitle;
                 newTask.project = targetProj.title;
 
                 // Ensure dynamic column matching keys are also populated on the task object
                 sheetColumns.forEach(col => {
                     const lowerL = col.label.toLowerCase();
                     if (lowerL === 'system') {
-                        newTask[col.key] = systemNode.title;
+                        newTask[col.key] = targetSysTitle;
                     } else if (lowerL === 'subsystem') {
-                        newTask[col.key] = subsystemNode.title;
+                        newTask[col.key] = targetSubTitle;
                     } else if (lowerL === 'project') {
                         newTask[col.key] = targetProj.title;
                     }
@@ -17464,43 +17508,17 @@ function updateProp(prop,val) {
             }
         };
 
-        // 1. Project Anchor Invariant: A Project strictly maps to a single System
-        let currentProject = prop === 'project' ? sanitizedVal : (n.project || '');
-        if (currentProject) {
-            if (deps.project_system_map && deps.project_system_map[currentProject]) {
-                updatePropField('system', deps.project_system_map[currentProject]);
+        // ONLY perform auto-fill when editing the Project field
+        if (prop === 'project' && sanitizedVal) {
+            // 1. Project Anchor Invariant: A Project strictly maps to a single System
+            if (deps.project_system_map && deps.project_system_map[sanitizedVal]) {
+                updatePropField('system', deps.project_system_map[sanitizedVal]);
             }
-            if (deps.project_links && deps.project_links[currentProject]) {
-                const link = deps.project_links[currentProject];
+            // 2. Default Codename / Subsystem if blank and defined for this project
+            if (deps.project_links && deps.project_links[sanitizedVal]) {
+                const link = deps.project_links[sanitizedVal];
                 if (link.codename && !n.custom_zbal2zx) updatePropField('custom_zbal2zx', link.codename);
                 if (link.subsystem && !n.subsystem) updatePropField('subsystem', link.subsystem);
-            }
-        }
-
-        // 2. If Subsystem is set, auto-fill System if unambiguous and system is empty
-        let currentSubsystem = n.subsystem || '';
-        if (currentSubsystem && deps.subsystem_parents && !n.system) {
-            const validSystems = getSubsystemParentSystems(currentSubsystem);
-            if (validSystems.length === 1) {
-                updatePropField('system', validSystems[0]);
-            }
-        }
-
-        // 3. If Deployment is set, auto-fill Codename from Table 1 if blank
-        let currentDeployment = n.custom_aar1e85 || '';
-        if (currentDeployment && deps.deployment_parents && !n.custom_zbal2zx) {
-            const resolvedCodename = getParent(deps.deployment_parents, currentDeployment);
-            if (resolvedCodename) {
-                updatePropField('custom_zbal2zx', resolvedCodename);
-            }
-        }
-
-        // 4. If Codename is set, auto-fill System from Table 1 if blank
-        let currentCodename = n.custom_zbal2zx || '';
-        if (currentCodename && deps.codename_parents && !n.system) {
-            const resolvedSystem = getParent(deps.codename_parents, currentCodename);
-            if (resolvedSystem) {
-                updatePropField('system', resolvedSystem);
             }
         }
 
