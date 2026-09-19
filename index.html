@@ -1187,6 +1187,7 @@
                     <button class="sheet-tab active" id="stab-pivot" onclick="switchSheetTab('pivot')">Pivot Table</button>
                     <button class="sheet-tab" id="stab-tasks" onclick="switchSheetTab('tasks')">Raw Tasks</button>
                     <button class="sheet-tab" id="stab-lists" onclick="switchSheetTab('lists')">Object Lists</button>
+                    <button class="sheet-tab" id="stab-structure" onclick="switchSheetTab('structure')">Structure</button>
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
                     <button class="btn-secondary btn-sm" id="btn-toggle-sidebar" onclick="toggleSidebarDrawer()" style="max-width: 130px; height: 28px; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 6px; padding: 0 10px; margin-bottom: 8px;">
@@ -12508,8 +12509,8 @@ function updateActiveSheetControlsVisibility() {
     const toggleBtn = document.getElementById('btn-toggle-controls');
     if (!toggleBtn) return;
     
-    // Hide controls button is irrelevant on lists sheet tab
-    if (currentSheetTab === 'lists') {
+    // Hide controls button is irrelevant on lists and structure sheet tabs
+    if (currentSheetTab === 'lists' || currentSheetTab === 'structure') {
         toggleBtn.style.display = 'none';
         return;
     } else {
@@ -12592,7 +12593,8 @@ function togglePivotDim(dimKey) {
 function switchSheetTab(tab) {
     currentSheetTab = tab;
     document.querySelectorAll('.sheet-tab').forEach(b => b.classList.remove('active'));
-    document.getElementById('stab-' + tab).classList.add('active');
+    const tabEl = document.getElementById('stab-' + tab);
+    if (tabEl) tabEl.classList.add('active');
     updateActiveSheetControlsVisibility();
     renderSheet();
 }
@@ -12603,7 +12605,7 @@ function renderSheet() {
     // Toggle + Add Task Row visibility based on RBAC permissions levels (Only admin & manager can add tasks)
     const addRowBtn = document.getElementById('btn-add-task-row-top');
     if (addRowBtn) {
-        if (currentUserRole === 'admin' || currentUserRole === 'manager') {
+        if ((currentUserRole === 'admin' || currentUserRole === 'manager') && (currentSheetTab === 'tasks' || currentSheetTab === 'pivot')) {
             addRowBtn.style.display = 'block';
         } else {
             addRowBtn.style.display = 'none';
@@ -12614,6 +12616,8 @@ function renderSheet() {
         renderTaskSheet();
     } else if (currentSheetTab === 'pivot') {
         renderPivotTable();
+    } else if (currentSheetTab === 'structure') {
+        renderStructureSheet();
     } else {
         renderListsSheet();
     }
@@ -14023,19 +14027,139 @@ function renderListsSheet() {
     // Lists Header Toolbar
     const toolbar = document.createElement('div');
     toolbar.className = 'sheet-toolbar';
-    toolbar.style.cssText = 'padding: 0 0 12px 0; margin-bottom: 8px; display: flex; gap: 8px; border-bottom: 1px solid var(--border);';
+    toolbar.style.cssText = 'padding: 0 0 12px 0; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);';
     toolbar.innerHTML = `
-        <button class="btn-secondary btn-sm" onclick="openListsImportModal()" style="max-width:180px;height:32px;background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.2);">📥 Bulk Import Lists Data</button>
-        <button class="btn-secondary btn-sm" onclick="clearAllDependenciesConfirm()" style="max-width:180px;height:32px;background:rgba(239,68,68,0.1);color:#ef4444;border-color:rgba(239,68,68,0.2);">⚠️ Reset All Dependencies</button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn-secondary btn-sm" onclick="openListsImportModal()" style="max-width:200px;height:32px;background:rgba(99,102,241,0.1);color:#818cf8;border-color:rgba(99,102,241,0.2);">📥 Bulk Import Lists Data</button>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <input id="object-lists-search-input" type="text" placeholder="🔍 Filter list items…" oninput="filterObjectListsGrid(this.value)" style="width: 220px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 5px 10px; font-size: 11px; outline: none;">
+        </div>
     `;
     area.appendChild(toolbar);
 
-    const mainLayout = document.createElement('div');
-    mainLayout.style.cssText = 'display: flex; gap: 20px; width: 100%; height: calc(100% - 60px); overflow: hidden;';
+    // Multi-Column Responsive Grid Layout for Flat Lists
+    const grid = document.createElement('div');
+    grid.id = 'object-lists-grid-container';
+    grid.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; width: 100%; height: calc(100% - 50px); overflow-y: auto; padding-right: 4px; padding-bottom: 30px; align-content: start;';
 
-    // Left Panel: Multi-Table Dependency Graph Container
-    const matrixPanel = document.createElement('div');
-    matrixPanel.style.cssText = 'flex: 2; background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto;';
+    const columns = [
+        { type: 'assignees', label: 'Assignees', icon: '👤' },
+        { type: 'systems', label: 'Systems', icon: '🏢' },
+        { type: 'custom_zbal2zx', label: 'Codenames', icon: '🏷️' },
+        { type: 'custom_aar1e85', label: 'Deployments', icon: '🚀' },
+        { type: 'subsystems', label: 'Subsystems', icon: '⚙️' },
+        { type: 'projects', label: 'Projects', icon: '📁' }
+    ];
+
+    // Append dynamic custom columns
+    sheetColumns.forEach(col => {
+        const lowerL = col.label.toLowerCase();
+        if (lowerL !== 'system' && lowerL !== 'subsystem' && lowerL !== 'project' && lowerL !== 'assignee' && col.key !== 'custom_zbal2zx' && col.key !== 'custom_aar1e85') {
+            if (!objectLists[col.key]) {
+                objectLists[col.key] = [];
+            }
+            columns.push({ type: col.key, label: col.label, icon: '📋' });
+        }
+    });
+
+    columns.forEach(col => {
+        if (!objectLists[col.type]) objectLists[col.type] = [];
+        const colDiv = document.createElement('div');
+        colDiv.className = 'object-list-card';
+        colDiv.dataset.listType = col.type;
+        colDiv.style.cssText = 'background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px; max-height: 520px;';
+
+        const titleDiv = document.createElement('div');
+        titleDiv.style.cssText = 'font-size: 11px; font-weight: bold; color: var(--text-dim); text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center;';
+        titleDiv.innerHTML = `
+            <span style="display:flex; align-items:center; gap:5px;"><span>${col.icon || '📋'}</span> <span>${col.label}</span></span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <button onclick="openBulkMergeModal('${col.type}')" title="Bulk Merge items" style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); border-radius: 4px; color: #818cf8; font-size: 9px; padding: 2px 6px; cursor: pointer; font-weight: bold;">⎘ Merge</button>
+                <span class="list-count-badge" style="font-size: 10px; color: var(--text-muted); font-weight: normal; background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 10px;">${objectLists[col.type].length}</span>
+            </div>
+        `;
+        colDiv.appendChild(titleDiv);
+
+        // Input Add Form
+        const form = document.createElement('div');
+        form.style.cssText = 'display: flex; gap: 6px;';
+        form.innerHTML = `
+            <input id="list-input-${col.type}" type="text" placeholder="Add to ${col.label.toLowerCase()}…" onkeydown="if(event.key==='Enter'){event.preventDefault(); addListItem('${col.type}');}" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 6px 10px; font-size: 11px; outline: none;">
+            <button onclick="addListItem('${col.type}')" style="background: var(--accent); color: white; border: none; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: bold; cursor: pointer;">+</button>
+        `;
+        colDiv.appendChild(form);
+
+        // Render List items inside container
+        const listContainer = document.createElement('div');
+        listContainer.className = 'object-list-items-container';
+        listContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex: 1; padding-right: 2px;';
+
+        objectLists[col.type].forEach((item, idx) => {
+            const row = document.createElement('div');
+            row.className = 'object-list-item-row';
+            row.dataset.itemValue = item.toLowerCase();
+            row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.015); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; gap: 4px; transition: background 0.15s;';
+            row.innerHTML = `
+                <input type="text" value="${item}" onchange="editListItem('${col.type}', ${idx}, this.value)" style="background: transparent; border: none; color: var(--text); font-size: 11px; outline: none; flex: 1; min-width: 50px;">
+                <button onclick="mergeListItem('${col.type}', ${idx})" title="Merge item" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px; transition: color 0.15s; padding: 0 3px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">⎘</button>
+                <button onclick="deleteListItem('${col.type}', ${idx})" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; transition: color 0.15s; padding: 0 3px;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='var(--text-muted)'">×</button>
+            `;
+            listContainer.appendChild(row);
+        });
+
+        colDiv.appendChild(listContainer);
+        grid.appendChild(colDiv);
+    });
+
+    area.appendChild(grid);
+}
+
+// Client-side quick filter for Object Lists cards
+window.filterObjectListsGrid = function(query) {
+    const q = (query || '').trim().toLowerCase();
+    const cards = document.querySelectorAll('.object-list-card');
+    cards.forEach(card => {
+        const rows = card.querySelectorAll('.object-list-item-row');
+        let visibleCount = 0;
+        rows.forEach(row => {
+            const val = row.dataset.itemValue || '';
+            if (!q || val.includes(q)) {
+                row.style.display = 'flex';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        if (q && visibleCount === 0) {
+            card.style.opacity = '0.35';
+        } else {
+            card.style.opacity = '1';
+        }
+    });
+};
+
+// --- HIERARCHICAL STRUCTURE SHEET VIEW ---
+function renderStructureSheet() {
+    const area = document.getElementById('sheet-content-area');
+    area.innerHTML = '';
+
+    // Structure Header Toolbar
+    const toolbar = document.createElement('div');
+    toolbar.className = 'sheet-toolbar';
+    toolbar.style.cssText = 'padding: 0 0 12px 0; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);';
+    toolbar.innerHTML = `
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn-secondary btn-sm" onclick="clearAllDependenciesConfirm()" style="max-width:200px;height:32px;background:rgba(239,68,68,0.1);color:#ef4444;border-color:rgba(239,68,68,0.2);">⚠️ Reset All Dependencies</button>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted);">
+            Manage multi-tier entity relationships & task filters across systems, codenames, deployments, subsystems, and projects.
+        </div>
+    `;
+    area.appendChild(toolbar);
+
+    const mainContainer = document.createElement('div');
+    mainContainer.style.cssText = 'width: 100%; height: calc(100% - 50px); overflow-y: auto; display: flex; flex-direction: column; gap: 24px; padding-right: 6px; padding-bottom: 30px;';
 
     // Extract current definitions
     const deps = objectLists.dependencies || { codename_parents: {}, deployment_parents: {}, subsystem_parents: {}, project_links: {} };
@@ -14079,23 +14203,23 @@ function renderListsSheet() {
     });
 
     let t1Html = `
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="font-size: 12px; font-weight: bold; color: var(--accent); display: flex; justify-content: space-between; align-items: center;">
+        <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-size: 13px; font-weight: bold; color: var(--accent); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
                 <span>📊 Table 1: System ➔ Codename ➔ Deployment</span>
             </div>
-            <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:11px;">
+            <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:12px;">
                 <thead>
                     <tr>
-                        <th style="padding: 6px; width: 33%;">System</th>
-                        <th style="padding: 6px; width: 33%;">Codename</th>
-                        <th style="padding: 6px; width: 34%;">Deployment</th>
+                        <th style="padding: 8px; width: 33%;">System</th>
+                        <th style="padding: 8px; width: 33%;">Codename</th>
+                        <th style="padding: 8px; width: 34%;">Deployment</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
 
     if (t1Rows.length === 0) {
-        t1Html += `<tr><td colspan="3" style="text-align:center; padding:10px; color:var(--text-muted);">No systems defined.</td></tr>`;
+        t1Html += `<tr><td colspan="3" style="text-align:center; padding:12px; color:var(--text-muted);">No systems defined.</td></tr>`;
     } else {
         let i = 0;
         while (i < t1Rows.length) {
@@ -14118,10 +14242,10 @@ function renderListsSheet() {
 
                 if (rIdx === 0) {
                     t1Html += `
-                        <td rowspan="${sysSpan}" style="vertical-align:top; padding: 6px; font-weight:600; border-right:1px solid var(--border);">
-                            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                        <td rowspan="${sysSpan}" style="vertical-align:top; padding: 8px; font-weight:600; border-right:1px solid var(--border);">
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
                                 <span>${currentRow[0]}</span>
-                                <button onclick="event.stopPropagation(); inlineAddDependencyChild('codename', '${currentRow[0].replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Codename under ${currentRow[0]}">+</button>
+                                <button onclick="event.stopPropagation(); inlineAddDependencyChild('codename', '${currentRow[0].replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:13px;" title="Add Codename under ${currentRow[0]}">+</button>
                             </div>
                         </td>
                     `;
@@ -14130,13 +14254,13 @@ function renderListsSheet() {
                 if (rIdx % codeSpan === 0) {
                     const codeVal = currentRow[1] || '';
                     t1Html += `
-                        <td rowspan="${codeSpan}" style="vertical-align:top; padding: 6px; border-right:1px solid var(--border); background:rgba(255,255,255,0.005);">
+                        <td rowspan="${codeSpan}" style="vertical-align:top; padding: 8px; border-right:1px solid var(--border); background:rgba(255,255,255,0.005);">
                             ${codeVal ? `
-                            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
                                 <span>${codeVal}</span>
-                                <div style="display:flex; gap:2px;">
-                                    <button onclick="inlineAddDependencyChild('deployment', '${codeVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Deployment under ${codeVal}">+</button>
-                                    <button onclick="inlineRemoveDependency('codename', '${codeVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove Codename association">×</button>
+                                <div style="display:flex; gap:3px;">
+                                    <button onclick="inlineAddDependencyChild('deployment', '${codeVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:13px;" title="Add Deployment under ${codeVal}">+</button>
+                                    <button onclick="inlineRemoveDependency('codename', '${codeVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:13px;" title="Remove Codename association">×</button>
                                 </div>
                             </div>
                             ` : ''}
@@ -14146,11 +14270,11 @@ function renderListsSheet() {
 
                 const depVal = currentRow[2] || '';
                 t1Html += `
-                    <td style="vertical-align:top; padding: 6px;">
+                    <td style="vertical-align:top; padding: 8px;">
                         ${depVal ? `
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
                             <span>${depVal}</span>
-                            <button onclick="inlineRemoveDependency('deployment', '${depVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove Deployment association">×</button>
+                            <button onclick="inlineRemoveDependency('deployment', '${depVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:13px;" title="Remove Deployment association">×</button>
                         </div>
                         ` : ''}
                     </td>
@@ -14184,22 +14308,22 @@ function renderListsSheet() {
     });
 
     let t2Html = `
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="font-size: 12px; font-weight: bold; color: #38bdf8; display: flex; justify-content: space-between; align-items: center;">
+        <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-size: 13px; font-weight: bold; color: #38bdf8; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
                 <span>⚙️ Table 2: System ➔ Subsystem</span>
             </div>
-            <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:11px;">
+            <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:12px;">
                 <thead>
                     <tr>
-                        <th style="padding: 6px; width: 50%;">System</th>
-                        <th style="padding: 6px; width: 50%;">Subsystem</th>
+                        <th style="padding: 8px; width: 50%;">System</th>
+                        <th style="padding: 8px; width: 50%;">Subsystem</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
 
     if (t2Rows.length === 0) {
-        t2Html += `<tr><td colspan="2" style="text-align:center; padding:10px; color:var(--text-muted);">No subsystems mapped.</td></tr>`;
+        t2Html += `<tr><td colspan="2" style="text-align:center; padding:12px; color:var(--text-muted);">No subsystems mapped.</td></tr>`;
     } else {
         let i = 0;
         while (i < t2Rows.length) {
@@ -14215,10 +14339,10 @@ function renderListsSheet() {
 
                 if (rIdx === 0) {
                     t2Html += `
-                        <td rowspan="${sysSpan}" style="vertical-align:top; padding: 6px; font-weight:600; border-right:1px solid var(--border);">
-                            <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                        <td rowspan="${sysSpan}" style="vertical-align:top; padding: 8px; font-weight:600; border-right:1px solid var(--border);">
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
                                 <span>${currentRow[0]}</span>
-                                <button onclick="event.stopPropagation(); inlineAddDependencyChild('subsystem', '${currentRow[0].replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px;" title="Add Subsystem under ${currentRow[0]}">+</button>
+                                <button onclick="event.stopPropagation(); inlineAddDependencyChild('subsystem', '${currentRow[0].replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:13px;" title="Add Subsystem under ${currentRow[0]}">+</button>
                             </div>
                         </td>
                     `;
@@ -14226,11 +14350,11 @@ function renderListsSheet() {
 
                 const subVal = currentRow[1] || '';
                 t2Html += `
-                    <td style="vertical-align:top; padding: 6px;">
+                    <td style="vertical-align:top; padding: 8px;">
                         ${subVal ? `
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
                             <span>${subVal}</span>
-                            <button onclick="inlineRemoveDependency('subsystem', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px;" title="Remove Subsystem association">×</button>
+                            <button onclick="inlineRemoveDependency('subsystem', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:13px;" title="Remove Subsystem association">×</button>
                         </div>
                         ` : ''}
                     </td>
@@ -14251,10 +14375,8 @@ function renderListsSheet() {
     // ====================================================
     // TABLE 3: (Codename + Subsystem) -> Project
     // ====================================================
-    // Build unique pairings of (Codename, Subsystem) that have projects assigned or can have projects assigned
-    const projectPairsMap = {}; // "codename:::subsystem" -> [project1, project2, ...]
+    const projectPairsMap = {};
     
-    // Scan project_links
     Object.keys(deps.project_links).forEach(proj => {
         const link = deps.project_links[proj];
         if (link && (link.codename || link.subsystem)) {
@@ -14264,7 +14386,6 @@ function renderListsSheet() {
         }
     });
 
-    // Also include pairs that share common systems from Table 1 & Table 2
     systems.forEach(sys => {
         const sysCodes = getChildren(deps.codename_parents, sys);
         const sysSubs = getChildren(deps.subsystem_parents, sys);
@@ -14279,24 +14400,24 @@ function renderListsSheet() {
     const t3Keys = Object.keys(projectPairsMap).sort((a, b) => a.localeCompare(b));
 
     let t3Html = `
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="font-size: 12px; font-weight: bold; color: #34d399; display: flex; justify-content: space-between; align-items: center;">
+        <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="font-size: 13px; font-weight: bold; color: #34d399; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
                 <span>🎯 Table 3: (Codename + Subsystem) ➔ Projects</span>
-                <button onclick="inlineAddProjectPairLink()" class="btn-secondary btn-sm" style="height: 24px; font-size: 10px; padding: 0 8px; background: rgba(52,211,153,0.1); color: #34d399; border-color: rgba(52,211,153,0.3);">+ Link Project to Pair</button>
+                <button onclick="inlineAddProjectPairLink()" class="btn-secondary btn-sm" style="height: 26px; font-size: 11px; padding: 0 10px; background: rgba(52,211,153,0.1); color: #34d399; border-color: rgba(52,211,153,0.3);">+ Link Project to Pair</button>
             </div>
-            <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:11px;">
+            <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:12px;">
                 <thead>
                     <tr>
-                        <th style="padding: 6px; width: 30%;">Codename</th>
-                        <th style="padding: 6px; width: 30%;">Subsystem</th>
-                        <th style="padding: 6px; width: 40%;">Projects</th>
+                        <th style="padding: 8px; width: 30%;">Codename</th>
+                        <th style="padding: 8px; width: 30%;">Subsystem</th>
+                        <th style="padding: 8px; width: 40%;">Projects</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
 
     if (t3Keys.length === 0) {
-        t3Html += `<tr><td colspan="3" style="text-align:center; padding:10px; color:var(--text-muted);">No codename & subsystem pairs defined yet. Create associations in Table 1 & Table 2 first.</td></tr>`;
+        t3Html += `<tr><td colspan="3" style="text-align:center; padding:12px; color:var(--text-muted);">No codename & subsystem pairs defined yet. Create associations in Table 1 & Table 2 first.</td></tr>`;
     } else {
         t3Keys.forEach(key => {
             const [codeVal, subVal] = key.split(':::');
@@ -14307,23 +14428,23 @@ function renderListsSheet() {
                 projsHtml = `<span style="color:var(--text-muted); font-style:italic;">No projects linked</span>`;
             } else {
                 projsHtml = projs.map(p => `
-                    <div style="display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:4px; padding:2px 6px; margin:2px;">
+                    <div style="display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:4px; padding:3px 8px; margin:2px;">
                         <span>${p}</span>
-                        <button onclick="inlineRemoveProjectLink('${p.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:11px; padding:0 2px;" title="Unlink Project">×</button>
+                        <button onclick="inlineRemoveProjectLink('${p.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px; padding:0 2px;" title="Unlink Project">×</button>
                     </div>
                 `).join('');
             }
 
             t3Html += `
                 <tr style="border-bottom: 1px solid var(--border);">
-                    <td style="padding: 6px; font-weight: 600; border-right: 1px solid var(--border);">${codeVal}</td>
-                    <td style="padding: 6px; border-right: 1px solid var(--border);">${subVal}</td>
-                    <td style="padding: 6px;">
+                    <td style="padding: 8px; font-weight: 600; border-right: 1px solid var(--border);">${codeVal}</td>
+                    <td style="padding: 8px; border-right: 1px solid var(--border);">${subVal}</td>
+                    <td style="padding: 8px;">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap;">
                             <div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
                                 ${projsHtml}
                             </div>
-                            <button onclick="inlineAddProjectToSpecificPair('${codeVal.replace(/'/g, "\\'")}', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:12px; margin-left:auto;" title="Add Project to this pair">+</button>
+                            <button onclick="inlineAddProjectToSpecificPair('${codeVal.replace(/'/g, "\\'")}', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:13px; margin-left:auto;" title="Add Project to this pair">+</button>
                         </div>
                     </td>
                 </tr>
@@ -14337,79 +14458,8 @@ function renderListsSheet() {
         </div>
     `;
 
-    matrixPanel.innerHTML += t1Html + t2Html + t3Html;
-    mainLayout.appendChild(matrixPanel);
-
-    // Right Panel: Traditional column-by-column list manager (for flat definitions)
-    const rightPanel = document.createElement('div');
-    rightPanel.style.cssText = 'flex: 1; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; padding-right: 4px;';
-    
-    const columns = [
-        { type: 'assignees', label: 'Assignees' },
-        { type: 'systems', label: 'Systems' },
-        { type: 'custom_zbal2zx', label: 'Codenames' },
-        { type: 'custom_aar1e85', label: 'Deployments' },
-        { type: 'subsystems', label: 'Subsystems' },
-        { type: 'projects', label: 'Projects' }
-    ];
-
-    // Append dynamic custom columns
-    sheetColumns.forEach(col => {
-        const lowerL = col.label.toLowerCase();
-        if (lowerL !== 'system' && lowerL !== 'subsystem' && lowerL !== 'project' && lowerL !== 'assignee' && col.key !== 'custom_zbal2zx' && col.key !== 'custom_aar1e85') {
-            if (!objectLists[col.key]) {
-                objectLists[col.key] = [];
-            }
-            columns.push({ type: col.key, label: col.label });
-        }
-    });
-
-    columns.forEach(col => {
-        if (!objectLists[col.type]) objectLists[col.type] = [];
-        const colDiv = document.createElement('div');
-        colDiv.style.cssText = 'background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px;';
-
-        const titleDiv = document.createElement('div');
-        titleDiv.style.cssText = 'font-size: 11px; font-weight: bold; color: var(--text-dim); text-transform: uppercase; border-bottom: 1px solid var(--border); padding-bottom: 6px; display: flex; justify-content: space-between; align-items: center;';
-        titleDiv.innerHTML = `
-            <span>${col.label}</span>
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <button onclick="openBulkMergeModal('${col.type}')" title="Bulk Merge items" style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); border-radius: 4px; color: #818cf8; font-size: 8px; padding: 2px 4px; cursor: pointer; font-weight: bold;">⎘ Merge</button>
-                <span style="font-size: 10px; color: var(--text-muted); font-weight: normal;">${objectLists[col.type].length}</span>
-            </div>
-        `;
-        colDiv.appendChild(titleDiv);
-
-        // Input Add Form
-        const form = document.createElement('div');
-        form.style.cssText = 'display: flex; gap: 6px;';
-        form.innerHTML = `
-            <input id="list-input-${col.type}" type="text" placeholder="Add to ${col.label.toLowerCase()}…" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 4px 8px; font-size: 11px; outline: none;">
-            <button onclick="addListItem('${col.type}')" style="background: var(--accent); color: white; border: none; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold; cursor: pointer;">+</button>
-        `;
-        colDiv.appendChild(form);
-
-        // Render List items inside container
-        const listContainer = document.createElement('div');
-        listContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto;';
-
-        objectLists[col.type].forEach((item, idx) => {
-            const row = document.createElement('div');
-            row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; gap: 4px;';
-            row.innerHTML = `
-                <input type="text" value="${item}" onchange="editListItem('${col.type}', ${idx}, this.value)" style="background: transparent; border: none; color: var(--text); font-size: 11px; outline: none; flex: 1; min-width: 50px;">
-                <button onclick="mergeListItem('${col.type}', ${idx})" title="Merge items" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px; transition: color 0.15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">⎘</button>
-                <button onclick="deleteListItem('${col.type}', ${idx})" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; transition: color 0.15s;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='var(--text-muted)'">×</button>
-            `;
-            listContainer.appendChild(row);
-        });
-
-        colDiv.appendChild(listContainer);
-        rightPanel.appendChild(colDiv);
-    });
-
-    mainLayout.appendChild(rightPanel);
-    area.appendChild(mainLayout);
+    mainContainer.innerHTML = t1Html + t2Html + t3Html;
+    area.appendChild(mainContainer);
 }
 
 // --- MULTI-SELECT DEPENDENCY MODAL CONTROLLER ---
@@ -14634,7 +14684,7 @@ window.saveMultiDepSelection = function() {
 
     saveObjectLists();
     closeMultiDepModal();
-    renderListsSheet();
+    renderSheet();
 };
 
 // Aliases for inline triggers
@@ -14657,7 +14707,7 @@ window.inlineRemoveDependency = function(childType, childVal) {
     else if (childType === 'subsystem') delete deps.subsystem_parents[childVal];
     
     saveObjectLists();
-    renderListsSheet();
+    renderSheet();
 };
 
 window.inlineAddProjectPairLink = function() {
@@ -14686,7 +14736,7 @@ window.inlineRemoveProjectLink = function(projectName) {
         delete objectLists.dependencies.project_links[projectName];
     }
     saveObjectLists();
-    renderListsSheet();
+    renderSheet();
 };
 
 window.clearAllDependenciesConfirm = function() {
@@ -14698,7 +14748,7 @@ window.clearAllDependenciesConfirm = function() {
         project_links: {}
     };
     saveObjectLists();
-    renderListsSheet();
+    renderSheet();
 };
 
 function addListItem(type) {
@@ -14714,7 +14764,7 @@ function addListItem(type) {
     objectLists[type].sort((a,b) => a.localeCompare(b));
     saveObjectLists();
     input.value = '';
-    renderListsSheet();
+    renderSheet();
 }
 
 function editListItem(type, idx, newVal) {
@@ -14726,7 +14776,7 @@ function editListItem(type, idx, newVal) {
     const oldVal = objectLists[type][idx];
     if (objectLists[type].some((item, i) => i !== idx && item.trim().toLowerCase() === trimmed.toLowerCase())) {
         alert("This item already exists in the list.");
-        renderListsSheet();
+        renderSheet();
         return;
     }
     objectLists[type][idx] = trimmed;
@@ -14736,14 +14786,14 @@ function editListItem(type, idx, newVal) {
     // Cascade update reference in all tasks automatically!
     updateCascadeRef(type, oldVal, trimmed);
     
-    renderListsSheet();
+    renderSheet();
 }
 
 function deleteListItem(type, idx) {
     if (!confirm("Are you sure you want to delete this option? Deleted options will remain in existing tasks unless updated manually.")) return;
     objectLists[type].splice(idx, 1);
     saveObjectLists();
-    renderListsSheet();
+    renderSheet();
 }
 
 function mergeListItem(type, idx) {
@@ -14763,7 +14813,7 @@ function mergeListItem(type, idx) {
                 const minIdx = Math.min(idx, duplicateIdx);
                 objectLists[type].splice(maxIdx, 1);
                 saveObjectLists();
-                renderListsSheet();
+                renderSheet();
             }
             return;
         }
@@ -14788,7 +14838,7 @@ function mergeListItem(type, idx) {
         objectLists[type] = objectLists[type].filter((item, i) => i !== idx && item.toLowerCase() !== oldVal.toLowerCase());
         saveObjectLists();
         
-        renderListsSheet();
+        renderSheet();
     }
 }
 
@@ -14886,7 +14936,7 @@ function executeBulkMerge() {
         
         saveObjectLists();
         closeBulkMergeModal();
-        renderListsSheet();
+        renderSheet();
     }
 }
 
@@ -14954,7 +15004,7 @@ function processListsImportedData() {
 
     saveObjectLists();
     closeListsImportModal();
-    renderListsSheet();
+    renderSheet();
     alert(`Successfully imported ${addedCount} new unique items to your Object Lists!`);
 }
 
