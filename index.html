@@ -12779,23 +12779,26 @@ function getProjectsList() {
 
 function updateCascadeRef(type, oldVal, newVal) {
     if (!oldVal || oldVal === newVal) return;
+    const oldLower = String(oldVal).trim().toLowerCase();
+    const newTrim = String(newVal).trim();
     
-    // Traverses all nodes and updates matching fields dynamically to reflect edits
-    const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    // 1. Traverses all nodes and updates matching fields dynamically to reflect edits
+    const all = allNodes(data);
+    const tasks = all.filter(n => getDepth(n.id) === 4);
     
     if (type === 'assignees') {
         tasks.forEach(t => {
-            if (t.assignee === oldVal) t.assignee = newVal;
+            if (t.assignee && t.assignee.toLowerCase() === oldLower) t.assignee = newTrim;
         });
     } else if (type === 'systems') {
         // Systems are Level 1 nodes under root
         if (data.children) {
             data.children.forEach(sys => {
-                if (sys.title === oldVal) sys.title = newVal;
+                if (sys.title && sys.title.toLowerCase() === oldLower) sys.title = newTrim;
             });
         }
         tasks.forEach(t => {
-            if (t.system === oldVal) t.system = newVal;
+            if (t.system && t.system.toLowerCase() === oldLower) t.system = newTrim;
         });
     } else if (type === 'subsystems') {
         // Subsystems are Level 2 nodes under Systems
@@ -12803,13 +12806,13 @@ function updateCascadeRef(type, oldVal, newVal) {
             data.children.forEach(sys => {
                 if (sys.children) {
                     sys.children.forEach(sub => {
-                        if (sub.title === oldVal) sub.title = newVal;
+                        if (sub.title && sub.title.toLowerCase() === oldLower) sub.title = newTrim;
                     });
                 }
             });
         }
         tasks.forEach(t => {
-            if (t.subsystem === oldVal) t.subsystem = newVal;
+            if (t.subsystem && t.subsystem.toLowerCase() === oldLower) t.subsystem = newTrim;
         });
     } else if (type === 'projects') {
         // Projects are Level 3 nodes under Subsystems
@@ -12819,7 +12822,7 @@ function updateCascadeRef(type, oldVal, newVal) {
                     sys.children.forEach(sub => {
                         if (sub.children) {
                             sub.children.forEach(proj => {
-                                if (proj.title === oldVal) proj.title = newVal;
+                                if (proj.title && proj.title.toLowerCase() === oldLower) proj.title = newTrim;
                             });
                         }
                     });
@@ -12827,9 +12830,115 @@ function updateCascadeRef(type, oldVal, newVal) {
             });
         }
         tasks.forEach(t => {
-            if (t.project === oldVal) t.project = newVal;
+            if (t.project && t.project.toLowerCase() === oldLower) t.project = newTrim;
         });
     }
+
+    // Also update any matching property on all task nodes (for custom columns or custom_xxxx fields)
+    tasks.forEach(t => {
+        if (t[type] && String(t[type]).trim().toLowerCase() === oldLower) {
+            t[type] = newTrim;
+        }
+    });
+
+    // 2. Cascade into objectLists.dependencies
+    if (objectLists && objectLists.dependencies) {
+        const deps = objectLists.dependencies;
+        if (!deps.codename_parents) deps.codename_parents = {};
+        if (!deps.deployment_parents) deps.deployment_parents = {};
+        if (!deps.subsystem_parents) deps.subsystem_parents = {};
+        if (!deps.project_links) deps.project_links = {};
+
+        if (type === 'systems') {
+            // Update codename_parents values (codename -> system)
+            Object.keys(deps.codename_parents).forEach(code => {
+                if (deps.codename_parents[code] && deps.codename_parents[code].trim().toLowerCase() === oldLower) {
+                    deps.codename_parents[code] = newTrim;
+                }
+            });
+
+            // Update subsystem_parents parent system array entries
+            Object.keys(deps.subsystem_parents).forEach(sub => {
+                const parents = getSubsystemParentSystems(sub);
+                if (parents.some(p => p.toLowerCase() === oldLower)) {
+                    const updated = parents.map(p => p.toLowerCase() === oldLower ? newTrim : p);
+                    deps.subsystem_parents[sub] = Array.from(new Set(updated));
+                }
+            });
+        } else if (type === 'subsystems') {
+            // Merge subsystem_parents keys (subsystem -> [systems])
+            const oldKey = Object.keys(deps.subsystem_parents).find(k => k.trim().toLowerCase() === oldLower);
+            const newKey = Object.keys(deps.subsystem_parents).find(k => k.trim().toLowerCase() === newTrim.toLowerCase()) || newTrim;
+            if (oldKey) {
+                const oldParents = getSubsystemParentSystems(oldKey);
+                const newParents = getSubsystemParentSystems(newKey);
+                const merged = Array.from(new Set([...newParents, ...oldParents]));
+                deps.subsystem_parents[newKey] = merged;
+                if (oldKey.toLowerCase() !== newKey.toLowerCase()) {
+                    delete deps.subsystem_parents[oldKey];
+                }
+            }
+
+            // Update project_links (project -> { codename, subsystem })
+            Object.keys(deps.project_links).forEach(proj => {
+                if (deps.project_links[proj] && deps.project_links[proj].subsystem && 
+                    deps.project_links[proj].subsystem.trim().toLowerCase() === oldLower) {
+                    deps.project_links[proj].subsystem = newTrim;
+                }
+            });
+        } else if (type === 'custom_zbal2zx' || type === 'codenames') {
+            // Merge codename_parents keys (codename -> system)
+            const oldKey = Object.keys(deps.codename_parents).find(k => k.trim().toLowerCase() === oldLower);
+            const newKey = Object.keys(deps.codename_parents).find(k => k.trim().toLowerCase() === newTrim.toLowerCase()) || newTrim;
+            if (oldKey) {
+                const parentSys = deps.codename_parents[oldKey];
+                if (!deps.codename_parents[newKey]) deps.codename_parents[newKey] = parentSys;
+                if (oldKey.toLowerCase() !== newKey.toLowerCase()) {
+                    delete deps.codename_parents[oldKey];
+                }
+            }
+
+            // Update deployment_parents values (deployment -> codename)
+            Object.keys(deps.deployment_parents).forEach(dep => {
+                if (deps.deployment_parents[dep] && deps.deployment_parents[dep].trim().toLowerCase() === oldLower) {
+                    deps.deployment_parents[dep] = newTrim;
+                }
+            });
+
+            // Update project_links (project -> { codename, subsystem })
+            Object.keys(deps.project_links).forEach(proj => {
+                if (deps.project_links[proj] && deps.project_links[proj].codename && 
+                    deps.project_links[proj].codename.trim().toLowerCase() === oldLower) {
+                    deps.project_links[proj].codename = newTrim;
+                }
+            });
+        } else if (type === 'custom_aar1e85' || type === 'deployments') {
+            // Merge deployment_parents keys (deployment -> codename)
+            const oldKey = Object.keys(deps.deployment_parents).find(k => k.trim().toLowerCase() === oldLower);
+            const newKey = Object.keys(deps.deployment_parents).find(k => k.trim().toLowerCase() === newTrim.toLowerCase()) || newTrim;
+            if (oldKey) {
+                const parentCode = deps.deployment_parents[oldKey];
+                if (!deps.deployment_parents[newKey]) deps.deployment_parents[newKey] = parentCode;
+                if (oldKey.toLowerCase() !== newKey.toLowerCase()) {
+                    delete deps.deployment_parents[oldKey];
+                }
+            }
+        } else if (type === 'projects') {
+            // Merge project_links keys (project -> { codename, subsystem })
+            const oldKey = Object.keys(deps.project_links).find(k => k.trim().toLowerCase() === oldLower);
+            const newKey = Object.keys(deps.project_links).find(k => k.trim().toLowerCase() === newTrim.toLowerCase()) || newTrim;
+            if (oldKey) {
+                const link = deps.project_links[oldKey];
+                if (!deps.project_links[newKey]) deps.project_links[newKey] = link;
+                if (oldKey.toLowerCase() !== newKey.toLowerCase()) {
+                    delete deps.project_links[oldKey];
+                }
+            }
+        }
+        
+        saveObjectLists();
+    }
+
     save();
 }
 
@@ -15099,7 +15208,54 @@ function editListItem(type, idx, newVal) {
 
 function deleteListItem(type, idx) {
     if (!confirm("Are you sure you want to delete this option? Deleted options will remain in existing tasks unless updated manually.")) return;
+    const removedItem = objectLists[type][idx];
     objectLists[type].splice(idx, 1);
+    
+    // Clean up from dependencies if present
+    if (removedItem && objectLists.dependencies) {
+        const deps = objectLists.dependencies;
+        const rLower = removedItem.trim().toLowerCase();
+        if (type === 'systems') {
+            Object.keys(deps.codename_parents || {}).forEach(code => {
+                if (deps.codename_parents[code] && deps.codename_parents[code].trim().toLowerCase() === rLower) {
+                    delete deps.codename_parents[code];
+                }
+            });
+            Object.keys(deps.subsystem_parents || {}).forEach(sub => {
+                const parents = getSubsystemParentSystems(sub).filter(p => p.toLowerCase() !== rLower);
+                if (parents.length > 0) deps.subsystem_parents[sub] = parents;
+                else delete deps.subsystem_parents[sub];
+            });
+        } else if (type === 'subsystems') {
+            const subKey = Object.keys(deps.subsystem_parents || {}).find(k => k.toLowerCase() === rLower);
+            if (subKey) delete deps.subsystem_parents[subKey];
+            Object.keys(deps.project_links || {}).forEach(proj => {
+                if (deps.project_links[proj] && deps.project_links[proj].subsystem && deps.project_links[proj].subsystem.toLowerCase() === rLower) {
+                    delete deps.project_links[proj];
+                }
+            });
+        } else if (type === 'custom_zbal2zx' || type === 'codenames') {
+            const codeKey = Object.keys(deps.codename_parents || {}).find(k => k.toLowerCase() === rLower);
+            if (codeKey) delete deps.codename_parents[codeKey];
+            Object.keys(deps.deployment_parents || {}).forEach(dep => {
+                if (deps.deployment_parents[dep] && deps.deployment_parents[dep].toLowerCase() === rLower) {
+                    delete deps.deployment_parents[dep];
+                }
+            });
+            Object.keys(deps.project_links || {}).forEach(proj => {
+                if (deps.project_links[proj] && deps.project_links[proj].codename && deps.project_links[proj].codename.toLowerCase() === rLower) {
+                    delete deps.project_links[proj];
+                }
+            });
+        } else if (type === 'custom_aar1e85' || type === 'deployments') {
+            const depKey = Object.keys(deps.deployment_parents || {}).find(k => k.toLowerCase() === rLower);
+            if (depKey) delete deps.deployment_parents[depKey];
+        } else if (type === 'projects') {
+            const projKey = Object.keys(deps.project_links || {}).find(k => k.toLowerCase() === rLower);
+            if (projKey) delete deps.project_links[projKey];
+        }
+    }
+    
     saveObjectLists();
     renderSheet();
 }
