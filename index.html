@@ -1417,6 +1417,66 @@
         </div>
     </div>
 </div>
+
+<!-- Link Project to (Codename + Subsystem) Pair Modal -->
+<div class="modal-overlay" id="project-pair-modal" style="display: none;">
+    <div class="modal-box" style="width: 540px; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="modal-header">
+            <h3 id="project-pair-modal-title">🎯 Link Projects to Codename & Subsystem</h3>
+            <button class="panel-close" onclick="closeProjectPairModal()">×</button>
+        </div>
+        <div class="modal-body" style="overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px;">
+            <p style="font-size:11.5px; color:var(--text-dim); line-height:1.4;">
+                Select the Codename and Subsystem pair, then check which projects belong to this combination.
+            </p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="prop-group">
+                    <label class="prop-label" style="font-size:10.5px; margin-bottom:4px;">Codename</label>
+                    <select id="project-pair-codename-select" onchange="onProjectPairModalDropdownChange()" style="width: 100%; background: #131924; border: 1px solid var(--border-bright); border-radius: 8px; color: var(--text); padding: 7px 10px; font-size: 12px; outline: none; cursor: pointer;">
+                    </select>
+                </div>
+                <div class="prop-group">
+                    <label class="prop-label" style="font-size:10.5px; margin-bottom:4px;">Subsystem</label>
+                    <select id="project-pair-subsystem-select" onchange="onProjectPairModalDropdownChange()" style="width: 100%; background: #131924; border: 1px solid var(--border-bright); border-radius: 8px; color: var(--text); padding: 7px 10px; font-size: 12px; outline: none; cursor: pointer;">
+                    </select>
+                </div>
+            </div>
+
+            <!-- Projects Checklist -->
+            <div class="prop-group" style="display: flex; flex-direction: column; gap: 6px;">
+                <label class="prop-label" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>Projects to Link</span>
+                    <span id="project-pair-selected-count" style="font-size: 11px; color: var(--accent); text-transform: none; font-weight: 600;">0 selected</span>
+                </label>
+
+                <!-- Search & Add new -->
+                <div style="display: flex; gap: 8px;">
+                    <input id="project-pair-search-input" type="text" placeholder="🔍 Search or create new project…" oninput="filterProjectPairItems(this.value)" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 6px 10px; font-size: 11.5px; outline: none;">
+                    <button type="button" onclick="quickAddNewProjectInPairModal()" style="background: var(--surface-hover); border: 1px solid var(--border-bright); color: var(--text); border-radius: 8px; padding: 6px 12px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;">+ Create Project</button>
+                </div>
+
+                <!-- Selection toolbar: Select All / Deselect All -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 2px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" onclick="toggleAllProjectPairCheckboxes(true)" style="background: none; border: none; color: var(--accent); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">Select All</button>
+                        <span style="color: var(--border);">|</span>
+                        <button type="button" onclick="toggleAllProjectPairCheckboxes(false)" style="background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">Deselect All</button>
+                    </div>
+                </div>
+
+                <!-- Clickable Checkbox List -->
+                <div id="project-pair-items-container" style="background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; max-height: 220px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 5px;">
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border);">
+            <button class="btn-sm btn-secondary" onclick="closeProjectPairModal()" style="max-width:80px;">Cancel</button>
+            <button class="btn-sm" id="project-pair-save-btn" onclick="saveProjectPairSelection()" style="max-width:180px; background:var(--accent); color:white; font-weight:bold; padding: 6px 14px;">Save Project Links</button>
+        </div>
+    </div>
+</div>
+
 <!-- Supabase Configuration Modal -->
 <div class="modal-overlay" id="supabase-config-modal">
     <div class="modal-box" style="width: 580px;">
@@ -11104,6 +11164,49 @@ function sanitizeObjectLists() {
             objectLists[key] = unique;
         }
     });
+
+    // Normalize multi-tier dependency associations
+    if (objectLists.dependencies) {
+        const deps = objectLists.dependencies;
+        if (!deps.codename_parents) deps.codename_parents = {};
+        if (!deps.deployment_parents) deps.deployment_parents = {};
+        if (!deps.subsystem_parents) deps.subsystem_parents = {};
+        if (!deps.project_links) deps.project_links = {};
+
+        // Normalize subsystem_parents so every subsystem maps to an array of parent systems
+        Object.keys(deps.subsystem_parents).forEach(sub => {
+            const val = deps.subsystem_parents[sub];
+            if (typeof val === 'string') {
+                deps.subsystem_parents[sub] = val.trim() ? [val.trim()] : [];
+            } else if (Array.isArray(val)) {
+                const uniqueParents = [];
+                const seen = new Set();
+                val.forEach(p => {
+                    const pTrim = String(p).trim();
+                    if (pTrim && !seen.has(pTrim.toLowerCase())) {
+                        seen.add(pTrim.toLowerCase());
+                        uniqueParents.push(pTrim);
+                    }
+                });
+                deps.subsystem_parents[sub] = uniqueParents;
+            } else {
+                deps.subsystem_parents[sub] = [];
+            }
+        });
+    }
+}
+
+// Global helper to retrieve array of parent systems for a given subsystem
+function getSubsystemParentSystems(subsystemName) {
+    if (!subsystemName || !objectLists || !objectLists.dependencies || !objectLists.dependencies.subsystem_parents) return [];
+    const deps = objectLists.dependencies;
+    const subLower = subsystemName.trim().toLowerCase();
+    const key = Object.keys(deps.subsystem_parents).find(k => k.trim().toLowerCase() === subLower);
+    if (!key) return [];
+    const val = deps.subsystem_parents[key];
+    if (Array.isArray(val)) return val.map(s => String(s).trim()).filter(Boolean);
+    if (typeof val === 'string' && val.trim()) return [val.trim()];
+    return [];
 }
 
 let realtimeSyncChannel = null;
@@ -14206,11 +14309,16 @@ function renderStructureSheet() {
     const projects = objectLists.projects || [];
 
     const getChildren = (parentDict, parentVal) => {
-        if (!parentVal) return [];
+        if (!parentVal || !parentDict) return [];
         const pLower = parentVal.trim().toLowerCase();
         return Object.keys(parentDict).filter(child => {
-            const p = parentDict[child];
-            return p && p.trim().toLowerCase() === pLower;
+            const val = parentDict[child];
+            if (Array.isArray(val)) {
+                return val.some(p => p && String(p).trim().toLowerCase() === pLower);
+            } else if (typeof val === 'string') {
+                return val.trim().toLowerCase() === pLower;
+            }
+            return false;
         });
     };
 
@@ -14327,7 +14435,7 @@ function renderStructureSheet() {
     `;
 
     // ==========================================
-    // TABLE 2: System -> Subsystem
+    // TABLE 2: System -> Subsystem (Multi-Parent)
     // ==========================================
     const t2Rows = [];
     systems.forEach(sys => {
@@ -14388,7 +14496,7 @@ function renderStructureSheet() {
                         ${subVal ? `
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
                             <span>${subVal}</span>
-                            <button onclick="inlineRemoveDependency('subsystem', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:13px;" title="Remove Subsystem association">×</button>
+                            <button onclick="inlineRemoveDependency('subsystem', '${subVal.replace(/'/g, "\\'")}', '${currentRow[0].replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:13px;" title="Remove Subsystem association from ${currentRow[0]}">×</button>
                         </div>
                         ` : ''}
                     </td>
@@ -14407,7 +14515,7 @@ function renderStructureSheet() {
     `;
 
     // ====================================================
-    // TABLE 3: (Codename + Subsystem) -> Project
+    // TABLE 3: (Codename + Subsystem) -> Project (Intentional Only)
     // ====================================================
     const projectPairsMap = {};
     
@@ -14420,24 +14528,13 @@ function renderStructureSheet() {
         }
     });
 
-    systems.forEach(sys => {
-        const sysCodes = getChildren(deps.codename_parents, sys);
-        const sysSubs = getChildren(deps.subsystem_parents, sys);
-        sysCodes.forEach(code => {
-            sysSubs.forEach(sub => {
-                const key = `${code}:::${sub}`;
-                if (!projectPairsMap[key]) projectPairsMap[key] = [];
-            });
-        });
-    });
-
     const t3Keys = Object.keys(projectPairsMap).sort((a, b) => a.localeCompare(b));
 
     let t3Html = `
         <div style="background: rgba(255,255,255,0.015); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
             <div style="font-size: 13px; font-weight: bold; color: #34d399; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
                 <span>🎯 Table 3: (Codename + Subsystem) ➔ Projects</span>
-                <button onclick="inlineAddProjectPairLink()" class="btn-secondary btn-sm" style="height: 26px; font-size: 11px; padding: 0 10px; background: rgba(52,211,153,0.1); color: #34d399; border-color: rgba(52,211,153,0.3);">+ Link Project to Pair</button>
+                <button onclick="openLinkProjectPairModal()" class="btn-secondary btn-sm" style="height: 26px; font-size: 11px; padding: 0 10px; background: rgba(52,211,153,0.1); color: #34d399; border-color: rgba(52,211,153,0.3);">+ Link Project to Pair</button>
             </div>
             <table class="excel-table" style="width:100%; border-collapse:collapse; font-size:12px;">
                 <thead>
@@ -14451,7 +14548,7 @@ function renderStructureSheet() {
     `;
 
     if (t3Keys.length === 0) {
-        t3Html += `<tr><td colspan="3" style="text-align:center; padding:12px; color:var(--text-muted);">No codename & subsystem pairs defined yet. Create associations in Table 1 & Table 2 first.</td></tr>`;
+        t3Html += `<tr><td colspan="3" style="text-align:center; padding:16px; color:var(--text-muted);">No project links defined yet. Click "+ Link Project to Pair" above to link a project.</td></tr>`;
     } else {
         t3Keys.forEach(key => {
             const [codeVal, subVal] = key.split(':::');
@@ -14478,7 +14575,7 @@ function renderStructureSheet() {
                             <div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
                                 ${projsHtml}
                             </div>
-                            <button onclick="inlineAddProjectToSpecificPair('${codeVal.replace(/'/g, "\\'")}', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:13px; margin-left:auto;" title="Add Project to this pair">+</button>
+                            <button onclick="openLinkProjectPairModal('${codeVal.replace(/'/g, "\\'")}', '${subVal.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:var(--accent); font-size:13px; margin-left:auto;" title="Add or edit projects for this pair">+</button>
                         </div>
                     </td>
                 </tr>
@@ -14496,8 +14593,199 @@ function renderStructureSheet() {
     area.appendChild(mainContainer);
 }
 
-// --- MULTI-SELECT DEPENDENCY MODAL CONTROLLER ---
-let activeMultiDepConfig = null; // { mode: 'table1_code' | 'table1_dep' | 'table2_sub' | 'table3_proj' | 'table3_pair', parentVal, parentVal2, childType, listKey }
+// --- INTERACTIVE PROJECT PAIR LINKING MODAL CONTROLLER ---
+let activeProjectPairModalConfig = null;
+
+window.openLinkProjectPairModal = function(preselectCodename = null, preselectSubsystem = null) {
+    const codenames = objectLists.custom_zbal2zx || [];
+    const subsystems = objectLists.subsystems || [];
+    const projects = objectLists.projects || [];
+
+    if (codenames.length === 0 || subsystems.length === 0) {
+        alert("Please ensure you have items in Codenames and Subsystems first before linking projects.");
+        return;
+    }
+
+    const codeSelect = document.getElementById('project-pair-codename-select');
+    const subSelect = document.getElementById('project-pair-subsystem-select');
+    codeSelect.innerHTML = '';
+    subSelect.innerHTML = '';
+
+    codenames.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        if (preselectCodename && c.toLowerCase() === preselectCodename.toLowerCase()) opt.selected = true;
+        codeSelect.appendChild(opt);
+    });
+
+    subsystems.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        if (preselectSubsystem && s.toLowerCase() === preselectSubsystem.toLowerCase()) opt.selected = true;
+        subSelect.appendChild(opt);
+    });
+
+    activeProjectPairModalConfig = {
+        projects: [...projects]
+    };
+
+    document.getElementById('project-pair-search-input').value = '';
+    renderProjectPairItemsList();
+    document.getElementById('project-pair-modal').style.display = 'flex';
+};
+
+window.closeProjectPairModal = function() {
+    document.getElementById('project-pair-modal').style.display = 'none';
+    activeProjectPairModalConfig = null;
+};
+
+window.onProjectPairModalDropdownChange = function() {
+    renderProjectPairItemsList();
+};
+
+function renderProjectPairItemsList() {
+    if (!activeProjectPairModalConfig) return;
+    const codename = document.getElementById('project-pair-codename-select').value;
+    const subsystem = document.getElementById('project-pair-subsystem-select').value;
+    const q = (document.getElementById('project-pair-search-input').value || '').trim().toLowerCase();
+    const container = document.getElementById('project-pair-items-container');
+    container.innerHTML = '';
+
+    const deps = objectLists.dependencies || {};
+    const projLinks = deps.project_links || {};
+
+    const filtered = q ? activeProjectPairModalConfig.projects.filter(p => p.toLowerCase().includes(q)) : activeProjectPairModalConfig.projects;
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 11.5px; padding: 16px;">No projects found. Click "+ Create Project" above to add one.</div>`;
+        updateProjectPairSelectedCount();
+        return;
+    }
+
+    filtered.forEach(proj => {
+        const linkKey = Object.keys(projLinks).find(k => k.toLowerCase() === proj.toLowerCase());
+        const link = linkKey ? projLinks[linkKey] : null;
+        const isLinkedToThisPair = link && 
+            (link.codename || '').toLowerCase() === codename.toLowerCase() && 
+            (link.subsystem || '').toLowerCase() === subsystem.toLowerCase();
+        const isLinkedToOtherPair = link && !isLinkedToThisPair && (link.codename || link.subsystem);
+
+        const label = document.createElement('label');
+        label.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text); font-size: 12px; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; transition: background 0.1s ease;';
+        label.onmouseenter = () => label.style.background = 'rgba(255,255,255,0.05)';
+        label.onmouseleave = () => label.style.background = 'rgba(255,255,255,0.02)';
+
+        const leftWrap = document.createElement('div');
+        leftWrap.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = proj;
+        cb.checked = isLinkedToThisPair;
+        cb.style.cursor = 'pointer';
+        cb.onchange = updateProjectPairSelectedCount;
+
+        const textSpan = document.createElement('span');
+        textSpan.textContent = proj;
+
+        leftWrap.appendChild(cb);
+        leftWrap.appendChild(textSpan);
+        label.appendChild(leftWrap);
+
+        if (isLinkedToThisPair) {
+            const badge = document.createElement('span');
+            badge.style.cssText = 'font-size: 9.5px; color: #34d399; background: rgba(16, 185, 129, 0.15); padding: 1px 6px; border-radius: 4px; font-weight: 500;';
+            badge.textContent = 'Linked';
+            label.appendChild(badge);
+        } else if (isLinkedToOtherPair) {
+            const badge = document.createElement('span');
+            badge.style.cssText = 'font-size: 9.5px; color: var(--text-muted); background: rgba(255, 255, 255, 0.05); padding: 1px 6px; border-radius: 4px;';
+            badge.textContent = `(Linked to: ${link.codename || '--'} + ${link.subsystem || '--'})`;
+            label.appendChild(badge);
+        }
+
+        container.appendChild(label);
+    });
+
+    updateProjectPairSelectedCount();
+}
+
+function updateProjectPairSelectedCount() {
+    const checked = document.querySelectorAll('#project-pair-items-container input[type="checkbox"]:checked');
+    const countEl = document.getElementById('project-pair-selected-count');
+    if (countEl) countEl.textContent = `${checked.length} selected`;
+}
+
+window.filterProjectPairItems = function(query) {
+    renderProjectPairItemsList();
+};
+
+window.toggleAllProjectPairCheckboxes = function(select) {
+    const checkboxes = document.querySelectorAll('#project-pair-items-container input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = select);
+    updateProjectPairSelectedCount();
+};
+
+window.quickAddNewProjectInPairModal = function() {
+    const searchInp = document.getElementById('project-pair-search-input');
+    const candidate = (searchInp.value || '').trim();
+    const name = candidate || prompt("Enter new project name:");
+    if (!name || !name.trim()) return;
+
+    const trimmed = name.trim();
+    if (!objectLists.projects) objectLists.projects = [];
+    if (!objectLists.projects.some(p => p.toLowerCase() === trimmed.toLowerCase())) {
+        objectLists.projects.push(trimmed);
+        objectLists.projects.sort((a,b) => a.localeCompare(b));
+        if (activeProjectPairModalConfig) {
+            activeProjectPairModalConfig.projects.push(trimmed);
+            activeProjectPairModalConfig.projects.sort((a,b) => a.localeCompare(b));
+        }
+        saveObjectLists();
+    }
+
+    searchInp.value = '';
+    renderProjectPairItemsList();
+
+    // Auto-check newly created project
+    const checkboxes = document.querySelectorAll('#project-pair-items-container input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        if (cb.value.toLowerCase() === trimmed.toLowerCase()) cb.checked = true;
+    });
+    updateProjectPairSelectedCount();
+};
+
+window.saveProjectPairSelection = function() {
+    const codename = document.getElementById('project-pair-codename-select').value;
+    const subsystem = document.getElementById('project-pair-subsystem-select').value;
+    if (!objectLists.dependencies) objectLists.dependencies = {};
+    if (!objectLists.dependencies.project_links) objectLists.dependencies.project_links = {};
+    const projLinks = objectLists.dependencies.project_links;
+
+    const checkboxes = document.querySelectorAll('#project-pair-items-container input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+        const proj = cb.value;
+        const isChecked = cb.checked;
+        const linkKey = Object.keys(projLinks).find(k => k.toLowerCase() === proj.toLowerCase()) || proj;
+
+        if (isChecked) {
+            projLinks[linkKey] = { codename, subsystem };
+        } else if (projLinks[linkKey] && 
+                   (projLinks[linkKey].codename || '').toLowerCase() === codename.toLowerCase() && 
+                   (projLinks[linkKey].subsystem || '').toLowerCase() === subsystem.toLowerCase()) {
+            delete projLinks[linkKey];
+        }
+    });
+
+    saveObjectLists();
+    closeProjectPairModal();
+    renderSheet();
+};
+
+// --- MULTI-SELECT DEPENDENCY MODAL CONTROLLER (FOR TABLES 1 & 2) ---
+let activeMultiDepConfig = null; // { mode: 'table1_code' | 'table1_dep' | 'table2_sub', parentVal, childType, listKey, items: [] }
 
 window.openMultiSelectDependencyModal = function(mode, parentVal, parentVal2 = null) {
     let listKey = '';
@@ -14519,12 +14807,7 @@ window.openMultiSelectDependencyModal = function(mode, parentVal, parentVal2 = n
         listKey = 'subsystems';
         childType = 'Subsystem';
         title = `Link Subsystems to System "${parentVal}"`;
-        subtitle = `Select all Subsystems that belong to System <strong style="color:var(--text);">${parentVal}</strong>:`;
-    } else if (mode === 'table3_proj') {
-        listKey = 'projects';
-        childType = 'Project';
-        title = `Link Projects to (${parentVal} + ${parentVal2})`;
-        subtitle = `Select all Projects that belong to Codename <strong style="color:var(--text);">${parentVal}</strong> and Subsystem <strong style="color:var(--text);">${parentVal2}</strong>:`;
+        subtitle = `Select all Subsystems that belong to System <strong style="color:var(--text);">${parentVal}</strong> (Subsystems can belong to multiple systems):`;
     }
 
     const availableItems = objectLists[listKey] || [];
@@ -14554,7 +14837,7 @@ window.closeMultiDepModal = function() {
 function isItemCurrentlyAssociated(item) {
     if (!activeMultiDepConfig || !objectLists.dependencies) return false;
     const deps = objectLists.dependencies;
-    const { mode, parentVal, parentVal2 } = activeMultiDepConfig;
+    const { mode, parentVal } = activeMultiDepConfig;
     const iLower = item.toLowerCase();
 
     if (mode === 'table1_code' && deps.codename_parents) {
@@ -14564,15 +14847,8 @@ function isItemCurrentlyAssociated(item) {
         const key = Object.keys(deps.deployment_parents).find(k => k.toLowerCase() === iLower);
         return key && deps.deployment_parents[key].toLowerCase() === parentVal.toLowerCase();
     } else if (mode === 'table2_sub' && deps.subsystem_parents) {
-        const key = Object.keys(deps.subsystem_parents).find(k => k.toLowerCase() === iLower);
-        return key && deps.subsystem_parents[key].toLowerCase() === parentVal.toLowerCase();
-    } else if (mode === 'table3_proj' && deps.project_links) {
-        const key = Object.keys(deps.project_links).find(k => k.toLowerCase() === iLower);
-        if (key && deps.project_links[key]) {
-            const link = deps.project_links[key];
-            return (link.codename || '').toLowerCase() === parentVal.toLowerCase() &&
-                   (link.subsystem || '').toLowerCase() === parentVal2.toLowerCase();
-        }
+        const parents = getSubsystemParentSystems(item);
+        return parents.some(p => p.toLowerCase() === parentVal.toLowerCase());
     }
     return false;
 }
@@ -14616,6 +14892,14 @@ function renderMultiDepCheckboxes(itemsToRender) {
             badge.style.cssText = 'font-size: 10px; color: var(--accent); background: rgba(99,102,241,0.15); padding: 1px 6px; border-radius: 4px;';
             badge.textContent = 'Linked';
             label.appendChild(badge);
+        } else if (activeMultiDepConfig.mode === 'table2_sub') {
+            const otherParents = getSubsystemParentSystems(item);
+            if (otherParents.length > 0) {
+                const badge = document.createElement('span');
+                badge.style.cssText = 'font-size: 9.5px; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 4px;';
+                badge.textContent = `(Also in: ${otherParents.join(', ')})`;
+                label.appendChild(badge);
+            }
         }
 
         container.appendChild(label);
@@ -14654,7 +14938,6 @@ window.quickAddNewMultiDepItem = function() {
     const trimmed = name.trim();
     if (!objectLists[activeMultiDepConfig.listKey]) objectLists[activeMultiDepConfig.listKey] = [];
     
-    // Check if item already exists
     if (!objectLists[activeMultiDepConfig.listKey].some(i => i.toLowerCase() === trimmed.toLowerCase())) {
         objectLists[activeMultiDepConfig.listKey].push(trimmed);
         objectLists[activeMultiDepConfig.listKey].sort((a,b) => a.localeCompare(b));
@@ -14678,7 +14961,7 @@ window.quickAddNewMultiDepItem = function() {
 
 window.saveMultiDepSelection = function() {
     if (!activeMultiDepConfig) return;
-    const { mode, parentVal, parentVal2 } = activeMultiDepConfig;
+    const { mode, parentVal } = activeMultiDepConfig;
     const deps = objectLists.dependencies;
     const checkboxes = document.querySelectorAll('#multi-dep-items-container input[type="checkbox"]');
 
@@ -14699,19 +14982,20 @@ window.saveMultiDepSelection = function() {
                 delete deps.deployment_parents[itemVal];
             }
         } else if (mode === 'table2_sub') {
+            const key = Object.keys(deps.subsystem_parents).find(k => k.toLowerCase() === itemVal.toLowerCase()) || itemVal;
+            let currentParents = getSubsystemParentSystems(key);
             if (isChecked) {
-                deps.subsystem_parents[itemVal] = parentVal;
-            } else if (deps.subsystem_parents[itemVal] === parentVal) {
-                delete deps.subsystem_parents[itemVal];
-            }
-        } else if (mode === 'table3_proj') {
-            if (!deps.project_links) deps.project_links = {};
-            if (isChecked) {
-                deps.project_links[itemVal] = { codename: parentVal, subsystem: parentVal2 };
-            } else if (deps.project_links[itemVal] && 
-                       deps.project_links[itemVal].codename === parentVal && 
-                       deps.project_links[itemVal].subsystem === parentVal2) {
-                delete deps.project_links[itemVal];
+                if (!currentParents.some(p => p.toLowerCase() === parentVal.toLowerCase())) {
+                    currentParents.push(parentVal);
+                }
+                deps.subsystem_parents[key] = currentParents;
+            } else {
+                currentParents = currentParents.filter(p => p.toLowerCase() !== parentVal.toLowerCase());
+                if (currentParents.length > 0) {
+                    deps.subsystem_parents[key] = currentParents;
+                } else {
+                    delete deps.subsystem_parents[key];
+                }
             }
         }
     });
@@ -14728,40 +15012,30 @@ window.inlineAddDependencyChild = function(childType, parentVal) {
     else if (childType === 'subsystem') openMultiSelectDependencyModal('table2_sub', parentVal);
 };
 
-window.inlineAddProjectToSpecificPair = function(codename, subsystem) {
-    openMultiSelectDependencyModal('table3_proj', codename, subsystem);
-};
-
-window.inlineRemoveDependency = function(childType, childVal) {
-    if (!confirm(`Are you sure you want to remove the association for "${childVal}"?`)) return;
+window.inlineRemoveDependency = function(childType, childVal, parentVal = null) {
+    const parentMsg = parentVal ? ` from "${parentVal}"` : '';
+    if (!confirm(`Are you sure you want to remove the association for "${childVal}"${parentMsg}?`)) return;
     const deps = objectLists.dependencies;
     
     if (childType === 'codename') delete deps.codename_parents[childVal];
     else if (childType === 'deployment') delete deps.deployment_parents[childVal];
-    else if (childType === 'subsystem') delete deps.subsystem_parents[childVal];
+    else if (childType === 'subsystem') {
+        const key = Object.keys(deps.subsystem_parents).find(k => k.toLowerCase() === childVal.toLowerCase()) || childVal;
+        if (parentVal && deps.subsystem_parents[key]) {
+            let parents = getSubsystemParentSystems(key);
+            parents = parents.filter(p => p.toLowerCase() !== parentVal.toLowerCase());
+            if (parents.length > 0) {
+                deps.subsystem_parents[key] = parents;
+            } else {
+                delete deps.subsystem_parents[key];
+            }
+        } else {
+            delete deps.subsystem_parents[key];
+        }
+    }
     
     saveObjectLists();
     renderSheet();
-};
-
-window.inlineAddProjectPairLink = function() {
-    const codenames = objectLists.custom_zbal2zx || [];
-    const subsystems = objectLists.subsystems || [];
-
-    if (codenames.length === 0 || subsystems.length === 0) {
-        alert("Please ensure you have items in Codenames and Subsystems first.");
-        return;
-    }
-
-    const codename = prompt(`Enter Codename for the pair:\nAvailable: ${codenames.join(', ')}`);
-    if (!codename) return;
-    const matchedCode = codenames.find(c => c.toLowerCase() === codename.trim().toLowerCase()) || codename.trim();
-
-    const subsystem = prompt(`Enter Subsystem for the pair:\nAvailable: ${subsystems.join(', ')}`);
-    if (!subsystem) return;
-    const matchedSub = subsystems.find(s => s.toLowerCase() === subsystem.trim().toLowerCase()) || subsystem.trim();
-
-    openMultiSelectDependencyModal('table3_proj', matchedCode, matchedSub);
 };
 
 window.inlineRemoveProjectLink = function(projectName) {
@@ -15111,8 +15385,18 @@ function showAutocomplete(inputEl, type, onSelect) {
                 return childParent ? childParent.toLowerCase() === parent.toLowerCase() : true;
             };
 
+            // 0. System filtered by Subsystem (if Subsystem is selected)
+            if (type === 'systems') {
+                const activeSubsystem = n.subsystem || '';
+                if (activeSubsystem && deps.subsystem_parents) {
+                    const validSystems = getSubsystemParentSystems(activeSubsystem);
+                    if (validSystems.length > 0) {
+                        list = list.filter(item => validSystems.some(vs => vs.toLowerCase() === item.toLowerCase()));
+                    }
+                }
+            }
             // 1. Codename (custom_zbal2zx) filtered by System
-            if (type === 'custom_zbal2zx') {
+            else if (type === 'custom_zbal2zx') {
                 const activeSystem = n.system || '';
                 if (activeSystem && deps.codename_parents) {
                     list = list.filter(item => checkMatch(deps.codename_parents, item, activeSystem));
@@ -15125,11 +15409,14 @@ function showAutocomplete(inputEl, type, onSelect) {
                     list = list.filter(item => checkMatch(deps.deployment_parents, item, activeCodename));
                 }
             }
-            // 3. Subsystem filtered by System
+            // 3. Subsystem filtered by System (subsystems can belong to multiple systems)
             else if (type === 'subsystems') {
                 const activeSystem = n.system || '';
                 if (activeSystem && deps.subsystem_parents) {
-                    list = list.filter(item => checkMatch(deps.subsystem_parents, item, activeSystem));
+                    list = list.filter(item => {
+                        const parents = getSubsystemParentSystems(item);
+                        return parents.length === 0 || parents.some(p => p.toLowerCase() === activeSystem.toLowerCase());
+                    });
                 }
             }
             // 4. Project filtered by (Codename and/or Subsystem)
@@ -16552,12 +16839,17 @@ function updateProp(prop,val) {
             }
         }
 
-        // 2. If Subsystem is set, auto-fill System from Table 2 (deps.subsystem_parents: Subsystem -> System)
+        // 2. If Subsystem is set, auto-fill System if unambiguous or validate current system
         let currentSubsystem = n.subsystem || '';
         if (currentSubsystem && deps.subsystem_parents) {
-            const resolvedSystem = getParent(deps.subsystem_parents, currentSubsystem);
-            if (resolvedSystem) {
-                updatePropField('system', resolvedSystem);
+            const validSystems = getSubsystemParentSystems(currentSubsystem);
+            if (validSystems.length === 1) {
+                updatePropField('system', validSystems[0]);
+            } else if (validSystems.length > 1) {
+                // If current system is not among validSystems, clear it so user can pick from the filtered list
+                if (n.system && !validSystems.some(s => s.toLowerCase() === n.system.toLowerCase())) {
+                    updatePropField('system', '');
+                }
             }
         }
 
