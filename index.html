@@ -1321,29 +1321,59 @@
     </div>
 </div>
 
-<!-- Bulk Merge Modal -->
-<div class="modal-overlay" id="bulk-merge-modal">
-    <div class="modal-box" style="width: 500px; max-height: 85vh; display: flex; flex-direction: column;">
+<!-- Interactive Object Merge Modal (Multi-Select & Click-to-Merge) -->
+<div class="modal-overlay" id="object-merge-modal" style="display: none;">
+    <div class="modal-box" style="width: 540px; max-height: 85vh; display: flex; flex-direction: column;">
         <div class="modal-header">
-            <h3>Bulk Merge Options</h3>
-            <button class="panel-close" onclick="closeBulkMergeModal()">×</button>
+            <h3 id="object-merge-modal-title">⎘ Merge Items</h3>
+            <button class="panel-close" onclick="closeObjectMergeModal()">×</button>
         </div>
-        <div class="modal-body" style="overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 15px;">
-            <p style="font-size:11px;color:var(--text-dim);line-height:1.4;">
-                Select multiple source items to merge, then select the final destination item. All tasks referencing any of the checked source items will update to the destination.
+        <div class="modal-body" style="overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px;">
+            <p id="object-merge-modal-subtitle" style="font-size:11.5px; color:var(--text-dim); line-height:1.4;">
+                Select the destination item that should remain, and check all other items to merge into it. All tasks referencing merged items will automatically update to the destination item.
             </p>
+
+            <!-- 1. Destination Selector -->
             <div class="prop-group">
-                <div class="prop-label" style="margin-bottom: 4px;">1. Select Items to Merge (Sources)</div>
-                <div id="bulk-merge-sources-list" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px;">
-                    <!-- Checkboxes generated dynamically -->
-                </div>
-            </div>
-            <div class="prop-group">
-                <div class="prop-label" style="margin-bottom: 4px;">2. Select Destination Item</div>
-                <select id="bulk-merge-destination-select" style="width: 100%; background: #131924; border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 7px; font-size: 13px; outline: none;">
-                    <!-- Options generated dynamically -->
+                <label class="prop-label" style="margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+                    <span>1. Destination Item (Merge Into)</span>
+                    <span style="font-size: 10px; color: var(--accent); text-transform: none; font-weight: normal;">Canonical survivor</span>
+                </label>
+                <select id="object-merge-destination-select" onchange="onObjectMergeDestinationChange()" style="width: 100%; background: #131924; border: 1px solid var(--border-bright); border-radius: 8px; color: var(--text); padding: 8px 10px; font-size: 12px; outline: none; cursor: pointer;">
+                    <!-- Options populated dynamically -->
                 </select>
             </div>
+
+            <!-- 2. Source Items Checklist -->
+            <div class="prop-group" style="display: flex; flex-direction: column; gap: 6px;">
+                <label class="prop-label" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>2. Select Items to Merge (Will be combined & removed)</span>
+                    <span id="object-merge-selected-count" style="font-size: 11px; color: var(--accent); text-transform: none; font-weight: 600;">0 selected</span>
+                </label>
+
+                <!-- Search box -->
+                <div style="display: flex; gap: 8px;">
+                    <input id="object-merge-search-input" type="text" placeholder="🔍 Search items to merge…" oninput="filterObjectMergeItems(this.value)" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 6px 10px; font-size: 11.5px; outline: none;">
+                </div>
+
+                <!-- Selection toolbar: Select All / Deselect All -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 2px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" onclick="toggleAllObjectMergeCheckboxes(true)" style="background: none; border: none; color: var(--accent); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">Select All</button>
+                        <span style="color: var(--border);">|</span>
+                        <button type="button" onclick="toggleAllObjectMergeCheckboxes(false)" style="background: none; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0;">Deselect All</button>
+                    </div>
+                </div>
+
+                <!-- Clickable Checkbox List -->
+                <div id="object-merge-items-container" style="background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; max-height: 220px; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 5px;">
+                    <!-- Items rendered dynamically -->
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer" style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border);">
+            <button class="btn-sm btn-secondary" onclick="closeObjectMergeModal()" style="max-width:80px;">Cancel</button>
+            <button class="btn-sm" id="object-merge-execute-btn" onclick="executeObjectMerge()" style="max-width:180px; background:var(--accent); color:white; font-weight:bold; padding: 6px 14px;">Confirm Merge</button>
         </div>
     </div>
 </div>
@@ -14075,7 +14105,7 @@ function renderListsSheet() {
         titleDiv.innerHTML = `
             <span style="display:flex; align-items:center; gap:5px;"><span>${col.icon || '📋'}</span> <span>${col.label}</span></span>
             <div style="display: flex; align-items: center; gap: 6px;">
-                <button onclick="openBulkMergeModal('${col.type}')" title="Bulk Merge items" style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); border-radius: 4px; color: #818cf8; font-size: 9px; padding: 2px 6px; cursor: pointer; font-weight: bold;">⎘ Merge</button>
+                <button onclick="openObjectMergeModal('${col.type}')" title="Merge items" style="background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); border-radius: 4px; color: #818cf8; font-size: 9px; padding: 2px 6px; cursor: pointer; font-weight: bold;">⎘ Merge</button>
                 <span class="list-count-badge" style="font-size: 10px; color: var(--text-muted); font-weight: normal; background: rgba(255,255,255,0.05); padding: 1px 6px; border-radius: 10px;">${objectLists[col.type].length}</span>
             </div>
         `;
@@ -14102,7 +14132,7 @@ function renderListsSheet() {
             row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.015); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; gap: 4px; transition: background 0.15s;';
             row.innerHTML = `
                 <input type="text" value="${item}" onchange="editListItem('${col.type}', ${idx}, this.value)" style="background: transparent; border: none; color: var(--text); font-size: 11px; outline: none; flex: 1; min-width: 50px;">
-                <button onclick="mergeListItem('${col.type}', ${idx})" title="Merge item" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px; transition: color 0.15s; padding: 0 3px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">⎘</button>
+                <button onclick="openObjectMergeModal('${col.type}', '${item.replace(/'/g, "\\'")}')" title="Merge this item" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px; transition: color 0.15s; padding: 0 3px;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">⎘</button>
                 <button onclick="deleteListItem('${col.type}', ${idx})" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; transition: color 0.15s; padding: 0 3px;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='var(--text-muted)'">×</button>
             `;
             listContainer.appendChild(row);
@@ -14796,149 +14826,199 @@ function deleteListItem(type, idx) {
     renderSheet();
 }
 
-function mergeListItem(type, idx) {
-    const oldVal = objectLists[type][idx];
-    
-    // Filter options case-insensitively and filter out the current selected index value
-    const options = objectLists[type].filter((item, i) => i !== idx && item.toLowerCase() !== oldVal.toLowerCase());
-    if (options.length === 0) {
-        // If there are duplicate items in the list with same text, merge them directly without prompt target
-        const duplicateIdx = objectLists[type].findIndex((item, i) => i !== idx && item.toLowerCase() === oldVal.toLowerCase());
-        if (duplicateIdx !== -1) {
-            const matchedTarget = objectLists[type][duplicateIdx];
-            if (confirm(`Duplicate items found. Merge "${oldVal}" into "${matchedTarget}" to remove the duplicate entry?`)) {
-                updateCascadeRef(type, oldVal, matchedTarget);
-                // Splice whichever is later in the index to avoid shifting issues
-                const maxIdx = Math.max(idx, duplicateIdx);
-                const minIdx = Math.min(idx, duplicateIdx);
-                objectLists[type].splice(maxIdx, 1);
-                saveObjectLists();
-                renderSheet();
-            }
-            return;
-        }
-        alert("There are no other items to merge into.");
-        return;
-    }
+// --- INTERACTIVE OBJECT MERGE CONTROLLER (MULTI-SELECT & CLICK-TO-MERGE) ---
+let activeObjectMergeConfig = null; // { type, label, items: [], preselectedItem: null }
 
-    const mergeTarget = prompt(`Enter the name of the existing option to merge "${oldVal}" into:\n\nAvailable targets:\n${options.join(', ')}`);
-    if (!mergeTarget) return;
-
-    const matchedTarget = options.find(opt => opt.toLowerCase() === mergeTarget.trim().toLowerCase());
-    if (!matchedTarget) {
-        alert("Target option not found in the list. Merge cancelled.");
-        return;
-    }
-
-    if (confirm(`Are you sure you want to merge "${oldVal}" into "${matchedTarget}"? All tasks referencing "${oldVal}" will be updated to "${matchedTarget}".`)) {
-        // Update cascade reference in all tasks automatically
-        updateCascadeRef(type, oldVal, matchedTarget);
-        
-        // Remove all instances of old merged item from the list (including same-named duplicates)
-        objectLists[type] = objectLists[type].filter((item, i) => i !== idx && item.toLowerCase() !== oldVal.toLowerCase());
-        saveObjectLists();
-        
-        renderSheet();
-    }
-}
-
-// Bulk Merge Dialog Functionality
-let activeBulkMergeType = null;
-function openBulkMergeModal(type) {
-    activeBulkMergeType = type;
-    const modal = document.getElementById('bulk-merge-modal');
-    const sourcesContainer = document.getElementById('bulk-merge-sources-list');
-    const destSelect = document.getElementById('bulk-merge-destination-select');
-    
-    sourcesContainer.innerHTML = '';
-    destSelect.innerHTML = '';
-    
+window.openObjectMergeModal = function(type, preselectItem = null) {
+    if (!objectLists || !objectLists[type]) return;
     const items = objectLists[type] || [];
     if (items.length < 2) {
-        alert("At least two items are required in the list to merge.");
+        alert("At least two items are required in this list to perform a merge.");
         return;
     }
+
+    // Determine category friendly name
+    const colMeta = sheetColumns.find(c => c.key === type);
+    const label = type === 'assignees' ? 'Assignees' :
+                 (type === 'systems' ? 'Systems' :
+                 (type === 'custom_zbal2zx' ? 'Codenames' :
+                 (type === 'custom_aar1e85' ? 'Deployments' :
+                 (type === 'subsystems' ? 'Subsystems' :
+                 (type === 'projects' ? 'Projects' : (colMeta ? colMeta.label : type))))));
+
+    activeObjectMergeConfig = {
+        type,
+        label,
+        items: [...items],
+        preselectedItem: preselectItem
+    };
+
+    document.getElementById('object-merge-modal-title').textContent = `⎘ Merge ${label}`;
+    document.getElementById('object-merge-search-input').value = '';
+
+    // Populate Destination Select dropdown
+    const destSelect = document.getElementById('object-merge-destination-select');
+    destSelect.innerHTML = '';
     
-    // Render list of sources
-    items.forEach((item, idx) => {
-        const itemWrap = document.createElement('label');
-        itemWrap.style.cssText = 'display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 12px; cursor: pointer; user-select: none;';
-        
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.value = item;
-        cb.dataset.index = idx;
-        cb.style.cursor = 'pointer';
-        
-        const labelText = document.createElement('span');
-        labelText.textContent = item;
-        
-        itemWrap.appendChild(cb);
-        itemWrap.appendChild(labelText);
-        sourcesContainer.appendChild(itemWrap);
-        
-        // Render corresponding option in destination select
+    // If preselectItem is provided, default the destination to either the closest match or the first other item
+    let defaultDest = items[0];
+    if (preselectItem) {
+        // Look for same-named item with different case if any, otherwise first other item
+        const altMatch = items.find(it => it.toLowerCase() === preselectItem.toLowerCase() && it !== preselectItem);
+        if (altMatch) {
+            defaultDest = altMatch;
+        } else {
+            const firstOther = items.find(it => it !== preselectItem);
+            if (firstOther) defaultDest = firstOther;
+        }
+    }
+
+    items.forEach(item => {
         const opt = document.createElement('option');
         opt.value = item;
         opt.textContent = item;
-        opt.style.background = '#131924';
-        opt.style.color = 'var(--text)';
+        if (item === defaultDest) opt.selected = true;
         destSelect.appendChild(opt);
     });
-    
-    // Bind Execute button action
-    const executeBtn = document.getElementById('bulk-merge-execute-btn');
-    executeBtn.onclick = executeBulkMerge;
-    
-    modal.style.display = 'flex';
+
+    renderObjectMergeSourcesList();
+    document.getElementById('object-merge-modal').style.display = 'flex';
+};
+
+window.closeObjectMergeModal = function() {
+    document.getElementById('object-merge-modal').style.display = 'none';
+    activeObjectMergeConfig = null;
+};
+
+window.onObjectMergeDestinationChange = function() {
+    renderObjectMergeSourcesList();
+};
+
+function renderObjectMergeSourcesList() {
+    if (!activeObjectMergeConfig) return;
+    const destVal = document.getElementById('object-merge-destination-select').value;
+    const q = (document.getElementById('object-merge-search-input').value || '').trim().toLowerCase();
+    const container = document.getElementById('object-merge-items-container');
+    container.innerHTML = '';
+
+    const availableSources = activeObjectMergeConfig.items.filter(item => item !== destVal);
+    const filtered = q ? availableSources.filter(item => item.toLowerCase().includes(q)) : availableSources;
+
+    if (filtered.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 11.5px; padding: 16px;">No matching items to merge.</div>`;
+        updateObjectMergeSelectedCount();
+        return;
+    }
+
+    filtered.forEach(item => {
+        const isPreselected = activeObjectMergeConfig.preselectedItem && item === activeObjectMergeConfig.preselectedItem;
+        const isSameText = item.toLowerCase() === destVal.toLowerCase();
+
+        const label = document.createElement('label');
+        label.className = 'object-merge-item-label';
+        label.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text); font-size: 12px; cursor: pointer; user-select: none; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; transition: background 0.1s ease;';
+        label.onmouseenter = () => label.style.background = 'rgba(255,255,255,0.05)';
+        label.onmouseleave = () => label.style.background = 'rgba(255,255,255,0.02)';
+
+        const leftWrap = document.createElement('div');
+        leftWrap.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = item;
+        cb.checked = isPreselected;
+        cb.style.cursor = 'pointer';
+        cb.onchange = updateObjectMergeSelectedCount;
+
+        const textSpan = document.createElement('span');
+        textSpan.textContent = item;
+
+        leftWrap.appendChild(cb);
+        leftWrap.appendChild(textSpan);
+        label.appendChild(leftWrap);
+
+        if (isSameText) {
+            const dupBadge = document.createElement('span');
+            dupBadge.style.cssText = 'font-size: 9.5px; color: #fbbf24; background: rgba(245, 158, 11, 0.15); padding: 1px 6px; border-radius: 4px; font-weight: 500;';
+            dupBadge.textContent = 'Exact Duplicate';
+            label.appendChild(dupBadge);
+        }
+
+        container.appendChild(label);
+    });
+
+    updateObjectMergeSelectedCount();
 }
 
-function closeBulkMergeModal() {
-    document.getElementById('bulk-merge-modal').style.display = 'none';
-    activeBulkMergeType = null;
+function updateObjectMergeSelectedCount() {
+    const checked = document.querySelectorAll('#object-merge-items-container input[type="checkbox"]:checked');
+    const countEl = document.getElementById('object-merge-selected-count');
+    const executeBtn = document.getElementById('object-merge-execute-btn');
+    const count = checked.length;
+    
+    if (countEl) countEl.textContent = `${count} selected to merge`;
+    if (executeBtn) {
+        executeBtn.disabled = (count === 0);
+        executeBtn.style.opacity = (count === 0) ? '0.5' : '1';
+        executeBtn.style.cursor = (count === 0) ? 'not-allowed' : 'pointer';
+        executeBtn.textContent = count > 1 ? `Merge ${count} Items` : (count === 1 ? 'Merge Item' : 'Select Items');
+    }
 }
 
-function executeBulkMerge() {
-    if (!activeBulkMergeType) return;
-    
-    const checkboxes = document.querySelectorAll('#bulk-merge-sources-list input[type="checkbox"]:checked');
-    const destVal = document.getElementById('bulk-merge-destination-select').value;
-    
+window.filterObjectMergeItems = function(query) {
+    renderObjectMergeSourcesList();
+};
+
+window.toggleAllObjectMergeCheckboxes = function(select) {
+    const checkboxes = document.querySelectorAll('#object-merge-items-container input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = select);
+    updateObjectMergeSelectedCount();
+};
+
+window.executeObjectMerge = function() {
+    if (!activeObjectMergeConfig) return;
+    const { type, label } = activeObjectMergeConfig;
+    const destVal = document.getElementById('object-merge-destination-select').value;
+    const checkboxes = document.querySelectorAll('#object-merge-items-container input[type="checkbox"]:checked');
     const sources = Array.from(checkboxes).map(cb => cb.value);
-    
+
     if (sources.length === 0) {
-        alert("Please select at least one source item to merge.");
+        alert("Please select at least one item to merge.");
         return;
     }
-    
+
     if (sources.includes(destVal)) {
-        alert("The destination item cannot be checked as a source item to merge. Uncheck it first.");
+        alert("The destination item cannot be merged into itself. Uncheck it first.");
         return;
     }
-    
-    if (confirm(`Are you sure you want to merge these ${sources.length} items into "${destVal}"?\n\nItems to be merged:\n- ${sources.join('\n- ')}\n\nThis will update all referencing tasks and clean up the list.`)) {
+
+    const confirmMsg = sources.length === 1 
+        ? `Are you sure you want to merge "${sources[0]}" into "${destVal}"?\n\nAll tasks referencing "${sources[0]}" will be updated to "${destVal}", and "${sources[0]}" will be removed from the list.`
+        : `Are you sure you want to merge these ${sources.length} items into "${destVal}"?\n\nItems to be merged:\n- ${sources.join('\n- ')}\n\nAll tasks referencing any of these items will be updated to "${destVal}".`;
+
+    if (confirm(confirmMsg)) {
         // Cascade update all sources into destination
         sources.forEach(src => {
-            updateCascadeRef(activeBulkMergeType, src, destVal);
+            updateCascadeRef(type, src, destVal);
         });
-        
-        // Purge merged sources from the main array (case-insensitively to delete duplicate entries)
+
+        // Purge merged sources from the main array (case-insensitively to remove all duplicate variations)
         const sourcesLower = sources.map(s => s.toLowerCase());
-        objectLists[activeBulkMergeType] = objectLists[activeBulkMergeType].filter(item => {
+        objectLists[type] = objectLists[type].filter(item => {
             return !sourcesLower.includes(item.toLowerCase());
         });
-        
-        // Ensure destination item is still present in the list (unique entry)
-        if (!objectLists[activeBulkMergeType].some(x => x.trim().toLowerCase() === destVal.trim().toLowerCase())) {
-            objectLists[activeBulkMergeType].push(destVal.trim());
+
+        // Ensure destination item is still present in the list
+        if (!objectLists[type].some(x => x.trim().toLowerCase() === destVal.trim().toLowerCase())) {
+            objectLists[type].push(destVal.trim());
         }
-        objectLists[activeBulkMergeType].sort((a,b) => a.localeCompare(b));
-        
+        objectLists[type].sort((a,b) => a.localeCompare(b));
+
         saveObjectLists();
-        closeBulkMergeModal();
+        closeObjectMergeModal();
         renderSheet();
     }
-}
+};
 
 // Bulk list import modal controls
 function openListsImportModal() {
