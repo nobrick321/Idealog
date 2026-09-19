@@ -303,20 +303,60 @@
             background: #0d131f;
             border: 1px solid var(--border-bright);
             border-radius: 6px;
-            max-height: 150px;
+            max-height: 220px;
             overflow-y: auto;
             z-index: 10000;
             box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5);
+            min-width: 180px;
+        }
+        .autocomplete-section-header {
+            padding: 5px 8px 3px 8px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--accent);
+            background: rgba(99, 102, 241, 0.08);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .autocomplete-section-header:first-child {
+            border-top: none;
         }
         .autocomplete-suggestion-item {
             padding: 6px 10px;
             font-size: 11px;
             cursor: pointer;
             color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
         }
         .autocomplete-suggestion-item:hover {
             background: var(--accent);
             color: white;
+        }
+        .autocomplete-suggestion-item:hover .autocomplete-badge {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+        .autocomplete-badge {
+            font-size: 9px;
+            padding: 1px 5px;
+            border-radius: 4px;
+            background: rgba(99, 102, 241, 0.15);
+            color: #818cf8;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            white-space: nowrap;
+            max-width: 130px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .autocomplete-suggestion-add {
             border-top: 1px solid var(--border);
@@ -11209,6 +11249,361 @@ function getSubsystemParentSystems(subsystemName) {
     return [];
 }
 
+// --- SELF-LEARNING FREQUENCY-WEIGHTED DEPENDENCY ENGINE ---
+
+// Scans all existing task nodes and rebuilds the dependency graph & co-occurrence weights
+function rebuildDependencyContextFromTasks() {
+    if (!objectLists) objectLists = {};
+    if (!objectLists.dependencies) {
+        objectLists.dependencies = {
+            project_system_map: {},   // project -> system (strictly 1:1)
+            codename_parents: {},     // codename -> system
+            deployment_parents: {},   // deployment -> codename
+            subsystem_parents: {},    // subsystem -> [systems]
+            project_links: {},        // project -> { codename, subsystem }
+            co_occurrences: {}        // counters: 'proj_sys:::proj:::sys', etc.
+        };
+    }
+
+    const deps = objectLists.dependencies;
+    if (!deps.project_system_map) deps.project_system_map = {};
+    if (!deps.codename_parents) deps.codename_parents = {};
+    if (!deps.deployment_parents) deps.deployment_parents = {};
+    if (!deps.subsystem_parents) deps.subsystem_parents = {};
+    if (!deps.project_links) deps.project_links = {};
+    if (!deps.co_occurrences) deps.co_occurrences = {};
+
+    // Frequency accumulators from tasks
+    const projSysCounts = {};   // { [proj]: { [sys]: count } }
+    const sysCodeCounts = {};   // { [code]: { [sys]: count } }
+    const codeDepCounts = {};   // { [dep]: { [code]: count } }
+    const sysSubCounts = {};    // { [sub]: { [sys]: count } }
+    const projCodeCounts = {};  // { [proj]: { [code]: count } }
+    const projSubCounts = {};   // { [proj]: { [sub]: count } }
+    const pairProjCounts = {};  // { [code:::sub]: { [proj]: count } }
+
+    const tasks = allNodes(data).filter(n => getDepth(n.id) === 4);
+    tasks.forEach(t => {
+        const proj = (t.project || '').trim();
+        const sys = (t.system || '').trim();
+        const sub = (t.subsystem || '').trim();
+        const code = (t.custom_zbal2zx || '').trim();
+        const dep = (t.custom_aar1e85 || '').trim();
+
+        if (proj && sys) {
+            if (!projSysCounts[proj]) projSysCounts[proj] = {};
+            projSysCounts[proj][sys] = (projSysCounts[proj][sys] || 0) + 1;
+            deps.co_occurrences[`proj_sys:::${proj.toLowerCase()}:::${sys.toLowerCase()}`] = (deps.co_occurrences[`proj_sys:::${proj.toLowerCase()}:::${sys.toLowerCase()}`] || 0) + 1;
+        }
+
+        if (sys && code) {
+            if (!sysCodeCounts[code]) sysCodeCounts[code] = {};
+            sysCodeCounts[code][sys] = (sysCodeCounts[code][sys] || 0) + 1;
+            deps.co_occurrences[`sys_code:::${sys.toLowerCase()}:::${code.toLowerCase()}`] = (deps.co_occurrences[`sys_code:::${sys.toLowerCase()}:::${code.toLowerCase()}`] || 0) + 1;
+        }
+
+        if (code && dep) {
+            if (!codeDepCounts[dep]) codeDepCounts[dep] = {};
+            codeDepCounts[dep][code] = (codeDepCounts[dep][code] || 0) + 1;
+            deps.co_occurrences[`code_dep:::${code.toLowerCase()}:::${dep.toLowerCase()}`] = (deps.co_occurrences[`code_dep:::${code.toLowerCase()}:::${dep.toLowerCase()}`] || 0) + 1;
+        }
+
+        if (sys && sub) {
+            if (!sysSubCounts[sub]) sysSubCounts[sub] = {};
+            sysSubCounts[sub][sys] = (sysSubCounts[sub][sys] || 0) + 1;
+            deps.co_occurrences[`sys_sub:::${sys.toLowerCase()}:::${sub.toLowerCase()}`] = (deps.co_occurrences[`sys_sub:::${sys.toLowerCase()}:::${sub.toLowerCase()}`] || 0) + 1;
+        }
+
+        if (proj && code) {
+            if (!projCodeCounts[proj]) projCodeCounts[proj] = {};
+            projCodeCounts[proj][code] = (projCodeCounts[proj][code] || 0) + 1;
+            deps.co_occurrences[`proj_code:::${proj.toLowerCase()}:::${code.toLowerCase()}`] = (deps.co_occurrences[`proj_code:::${proj.toLowerCase()}:::${code.toLowerCase()}`] || 0) + 1;
+        }
+
+        if (proj && sub) {
+            if (!projSubCounts[proj]) projSubCounts[proj] = {};
+            projSubCounts[proj][sub] = (projSubCounts[proj][sub] || 0) + 1;
+            deps.co_occurrences[`proj_sub:::${proj.toLowerCase()}:::${sub.toLowerCase()}`] = (deps.co_occurrences[`proj_sub:::${proj.toLowerCase()}:::${sub.toLowerCase()}`] || 0) + 1;
+        }
+
+        if (code && sub && proj) {
+            const pairKey = `${code.toLowerCase()}:::${sub.toLowerCase()}`;
+            if (!pairProjCounts[pairKey]) pairProjCounts[pairKey] = {};
+            pairProjCounts[pairKey][proj] = (pairProjCounts[pairKey][proj] || 0) + 1;
+        }
+    });
+
+    // 1. Determine canonical single System per Project (highest frequency)
+    Object.keys(projSysCounts).forEach(proj => {
+        const sysMap = projSysCounts[proj];
+        let bestSys = '';
+        let maxCount = -1;
+        Object.keys(sysMap).forEach(sys => {
+            if (sysMap[sys] > maxCount) {
+                maxCount = sysMap[sys];
+                bestSys = sys;
+            }
+        });
+        if (bestSys) deps.project_system_map[proj] = bestSys;
+    });
+
+    // 2. Determine Codename -> System (highest frequency)
+    Object.keys(sysCodeCounts).forEach(code => {
+        const sysMap = sysCodeCounts[code];
+        let bestSys = '';
+        let maxCount = -1;
+        Object.keys(sysMap).forEach(sys => {
+            if (sysMap[sys] > maxCount) {
+                maxCount = sysMap[sys];
+                bestSys = sys;
+            }
+        });
+        if (bestSys) deps.codename_parents[code] = bestSys;
+    });
+
+    // 3. Determine Deployment -> Codename
+    Object.keys(codeDepCounts).forEach(dep => {
+        const codeMap = codeDepCounts[dep];
+        let bestCode = '';
+        let maxCount = -1;
+        Object.keys(codeMap).forEach(c => {
+            if (codeMap[c] > maxCount) {
+                maxCount = codeMap[c];
+                bestCode = c;
+            }
+        });
+        if (bestCode) deps.deployment_parents[dep] = bestCode;
+    });
+
+    // 4. Determine Subsystem -> [Systems] (ordered by frequency)
+    Object.keys(sysSubCounts).forEach(sub => {
+        const sysMap = sysSubCounts[sub];
+        const sortedSystems = Object.keys(sysMap).sort((a, b) => sysMap[b] - sysMap[a]);
+        deps.subsystem_parents[sub] = sortedSystems;
+    });
+
+    // 5. Determine Project -> { codename, subsystem } (most frequent pair for the project)
+    (objectLists.projects || []).forEach(proj => {
+        const codeMap = projCodeCounts[proj] || {};
+        const subMap = projSubCounts[proj] || {};
+        const topCode = Object.keys(codeMap).sort((a, b) => codeMap[b] - codeMap[a])[0] || '';
+        const topSub = Object.keys(subMap).sort((a, b) => subMap[b] - subMap[a])[0] || '';
+        if (topCode || topSub) {
+            deps.project_links[proj] = { codename: topCode, subsystem: topSub };
+        }
+    });
+
+    saveObjectLists();
+}
+
+// Incrementally learns relationship weights from a single task mutation
+function learnTaskRelationship(t) {
+    if (!t || !objectLists) return;
+    if (!objectLists.dependencies) {
+        rebuildDependencyContextFromTasks();
+        return;
+    }
+    const deps = objectLists.dependencies;
+    const proj = (t.project || '').trim();
+    const sys = (t.system || '').trim();
+    const sub = (t.subsystem || '').trim();
+    const code = (t.custom_zbal2zx || '').trim();
+    const dep = (t.custom_aar1e85 || '').trim();
+
+    if (!deps.project_system_map) deps.project_system_map = {};
+    if (!deps.codename_parents) deps.codename_parents = {};
+    if (!deps.deployment_parents) deps.deployment_parents = {};
+    if (!deps.subsystem_parents) deps.subsystem_parents = {};
+    if (!deps.project_links) deps.project_links = {};
+    if (!deps.co_occurrences) deps.co_occurrences = {};
+
+    if (proj && sys) {
+        deps.project_system_map[proj] = sys; // Project strictly bounded to this system
+        const key = `proj_sys:::${proj.toLowerCase()}:::${sys.toLowerCase()}`;
+        deps.co_occurrences[key] = (deps.co_occurrences[key] || 0) + 1;
+    }
+
+    if (sys && code) {
+        deps.codename_parents[code] = sys;
+        const key = `sys_code:::${sys.toLowerCase()}:::${code.toLowerCase()}`;
+        deps.co_occurrences[key] = (deps.co_occurrences[key] || 0) + 1;
+    }
+
+    if (code && dep) {
+        deps.deployment_parents[dep] = code;
+        const key = `code_dep:::${code.toLowerCase()}:::${dep.toLowerCase()}`;
+        deps.co_occurrences[key] = (deps.co_occurrences[key] || 0) + 1;
+    }
+
+    if (sys && sub) {
+        let parents = getSubsystemParentSystems(sub);
+        if (!parents.some(p => p.toLowerCase() === sys.toLowerCase())) {
+            parents.push(sys);
+        }
+        deps.subsystem_parents[sub] = parents;
+        const key = `sys_sub:::${sys.toLowerCase()}:::${sub.toLowerCase()}`;
+        deps.co_occurrences[key] = (deps.co_occurrences[key] || 0) + 1;
+    }
+
+    if (proj && (code || sub)) {
+        if (!deps.project_links[proj]) deps.project_links[proj] = { codename: '', subsystem: '' };
+        if (code) deps.project_links[proj].codename = code;
+        if (sub) deps.project_links[proj].subsystem = sub;
+        if (code) {
+            const key = `proj_code:::${proj.toLowerCase()}:::${code.toLowerCase()}`;
+            deps.co_occurrences[key] = (deps.co_occurrences[key] || 0) + 1;
+        }
+        if (sub) {
+            const key = `proj_sub:::${proj.toLowerCase()}:::${sub.toLowerCase()}`;
+            deps.co_occurrences[key] = (deps.co_occurrences[key] || 0) + 1;
+        }
+    }
+
+    saveObjectLists();
+}
+
+// Retrieves partitioned options: { recommended: [{ item, score, hint }], others: string[] }
+function getContextRankedOptions(type, n) {
+    const list = objectLists[type] || [];
+    const deps = objectLists?.dependencies || {};
+    const co = deps.co_occurrences || {};
+
+    if (!n) {
+        return { recommended: [], others: [...list] };
+    }
+
+    const curProj = (n.project || '').trim().toLowerCase();
+    const curSys = (n.system || '').trim().toLowerCase();
+    const curSub = (n.subsystem || '').trim().toLowerCase();
+    const curCode = (n.custom_zbal2zx || '').trim().toLowerCase();
+
+    const scores = new Map();
+
+    list.forEach(item => {
+        const itemLower = item.toLowerCase();
+        let score = 0;
+        let hint = '';
+
+        if (type === 'projects') {
+            // Project score based on System (must match system if project is mapped)
+            const projSys = (deps.project_system_map?.[item] || '').toLowerCase();
+            if (curSys && projSys && projSys === curSys) {
+                score += 50;
+                hint = `System: ${deps.project_system_map[item]}`;
+            }
+            // Co-occurrence with subsystem
+            if (curSub) {
+                const count = co[`proj_sub:::${itemLower}:::${curSub}`] || 0;
+                if (count > 0) {
+                    score += count * 5;
+                    hint = hint ? `${hint} • ${count} tasks with ${n.subsystem}` : `${count} tasks with ${n.subsystem}`;
+                }
+            }
+            // Co-occurrence with codename
+            if (curCode) {
+                const count = co[`proj_code:::${itemLower}:::${curCode}`] || 0;
+                if (count > 0) {
+                    score += count * 5;
+                    hint = hint ? `${hint} • ${count} tasks with ${n.custom_zbal2zx}` : `${count} tasks with ${n.custom_zbal2zx}`;
+                }
+            }
+        } else if (type === 'systems') {
+            // If project is set, project's mapped system has massive score
+            if (curProj && deps.project_system_map) {
+                const mappedSys = (deps.project_system_map[n.project] || '').toLowerCase();
+                if (mappedSys && mappedSys === itemLower) {
+                    score += 100;
+                    hint = `Project: ${n.project}`;
+                }
+            }
+            // If subsystem is set, check subsystem parent systems
+            if (curSub && deps.subsystem_parents) {
+                const parents = getSubsystemParentSystems(n.subsystem);
+                if (parents.some(p => p.toLowerCase() === itemLower)) {
+                    const count = co[`sys_sub:::${itemLower}:::${curSub}`] || 0;
+                    score += (count > 0 ? count * 5 : 20);
+                    hint = hint ? `${hint} • Subsystem: ${n.subsystem}` : `Subsystem: ${n.subsystem}${count > 0 ? ` (${count} tasks)` : ''}`;
+                }
+            }
+            // If codename is set, check codename parent system
+            if (curCode && deps.codename_parents) {
+                const parentSys = (deps.codename_parents[n.custom_zbal2zx] || '').toLowerCase();
+                if (parentSys && parentSys === itemLower) {
+                    const count = co[`sys_code:::${itemLower}:::${curCode}`] || 0;
+                    score += (count > 0 ? count * 5 : 20);
+                    hint = hint ? `${hint} • Codename: ${n.custom_zbal2zx}` : `Codename: ${n.custom_zbal2zx}`;
+                }
+            }
+        } else if (type === 'subsystems') {
+            // If project is set, check project co-occurrence
+            if (curProj) {
+                const count = co[`proj_sub:::${curProj}:::${itemLower}`] || 0;
+                if (count > 0) {
+                    score += count * 10;
+                    hint = `${count} tasks in ${n.project}`;
+                }
+            }
+            // If system is set, check if item's parents include system
+            if (curSys) {
+                const parents = getSubsystemParentSystems(item);
+                if (parents.some(p => p.toLowerCase() === curSys)) {
+                    const count = co[`sys_sub:::${curSys}:::${itemLower}`] || 0;
+                    score += (count > 0 ? count * 5 : 15);
+                    if (!hint) hint = `In System: ${n.system}${count > 0 ? ` (${count} tasks)` : ''}`;
+                }
+            }
+        } else if (type === 'custom_zbal2zx' || type === 'codenames') {
+            // If project is set, check project co-occurrence
+            if (curProj) {
+                const count = co[`proj_code:::${curProj}:::${itemLower}`] || 0;
+                if (count > 0) {
+                    score += count * 10;
+                    hint = `${count} tasks in ${n.project}`;
+                }
+            }
+            // If system is set, check codename's parent system
+            if (curSys && deps.codename_parents) {
+                const pSys = (deps.codename_parents[item] || '').toLowerCase();
+                if (pSys && pSys === curSys) {
+                    const count = co[`sys_code:::${curSys}:::${itemLower}`] || 0;
+                    score += (count > 0 ? count * 5 : 15);
+                    if (!hint) hint = `System: ${n.system}`;
+                }
+            }
+        } else if (type === 'custom_aar1e85' || type === 'deployments') {
+            if (curCode && deps.deployment_parents) {
+                const pCode = (deps.deployment_parents[item] || '').toLowerCase();
+                if (pCode && pCode === curCode) {
+                    const count = co[`code_dep:::${curCode}:::${itemLower}`] || 0;
+                    score += (count > 0 ? count * 5 : 20);
+                    hint = `Codename: ${n.custom_zbal2zx}`;
+                }
+            }
+        }
+
+        if (score > 0) {
+            scores.set(item, { score, hint });
+        }
+    });
+
+    const recommended = [];
+    const others = [];
+
+    list.forEach(item => {
+        if (scores.has(item)) {
+            const { score, hint } = scores.get(item);
+            recommended.push({ item, score, hint });
+        } else {
+            others.push(item);
+        }
+    });
+
+    // Sort recommended by highest score first
+    recommended.sort((a, b) => b.score - a.score);
+
+    return { recommended, others };
+}
+
 let realtimeSyncChannel = null;
 
 // Download full remote state and update local state
@@ -11411,15 +11806,24 @@ async function loadStartupData() {
     if (!objectLists.custom_aar1e85) objectLists.custom_aar1e85 = [];
     if (!objectLists.dependencies) {
         objectLists.dependencies = {
+            project_system_map: {}, // project -> single system (1:1)
             codename_parents: {},   // codename -> system
             deployment_parents: {}, // deployment -> codename
-            subsystem_parents: {},  // subsystem -> system
-            project_links: {}       // project -> { codename, subsystem }
+            subsystem_parents: {},  // subsystem -> [systems]
+            project_links: {},      // project -> { codename, subsystem }
+            co_occurrences: {}      // co-occurrence counters
         };
     }
-    // Backward compatibility normalization for legacy project_parents / subsystem_parents
-    if (!objectLists.dependencies.project_links) {
-        objectLists.dependencies.project_links = {};
+    if (!objectLists.dependencies.project_system_map) objectLists.dependencies.project_system_map = {};
+    if (!objectLists.dependencies.codename_parents) objectLists.dependencies.codename_parents = {};
+    if (!objectLists.dependencies.deployment_parents) objectLists.dependencies.deployment_parents = {};
+    if (!objectLists.dependencies.subsystem_parents) objectLists.dependencies.subsystem_parents = {};
+    if (!objectLists.dependencies.project_links) objectLists.dependencies.project_links = {};
+    if (!objectLists.dependencies.co_occurrences) objectLists.dependencies.co_occurrences = {};
+    
+    // Auto-train self-learning frequency graph from raw tasks on startup if uninitialized
+    if (Object.keys(objectLists.dependencies.co_occurrences).length === 0) {
+        rebuildDependencyContextFromTasks();
     }
     
     rebuildPerformanceCaches();
@@ -13348,6 +13752,18 @@ function updateTaskPropFromSheet(id, prop, val) {
                 n.subsystem = val;
             }
         }
+
+        if (objectLists && objectLists.dependencies) {
+            const deps = objectLists.dependencies;
+            if (prop === 'project' || colDef?.label?.toLowerCase() === 'project') {
+                if (deps.project_system_map && deps.project_system_map[val]) {
+                    n.system = deps.project_system_map[val];
+                    const sysCol = sheetColumns.find(c => c.label.toLowerCase() === 'system');
+                    if (sysCol) n[sysCol.key] = n.system;
+                }
+            }
+            learnTaskRelationship(n);
+        }
         
         save();
         renderSheet();
@@ -13383,6 +13799,19 @@ function moveTaskProject(taskId, newProjId) {
         task.system = systemNode ? systemNode.title : '';
         task.subsystem = subsystemNode ? subsystemNode.title : '';
         
+        const deps = objectLists?.dependencies;
+        if (deps) {
+            if (deps.project_system_map && deps.project_system_map[task.project]) {
+                task.system = deps.project_system_map[task.project];
+            }
+            if (deps.project_links && deps.project_links[task.project]) {
+                const link = deps.project_links[task.project];
+                if (link.codename && !task.custom_zbal2zx) task.custom_zbal2zx = link.codename;
+                if (link.subsystem && !task.subsystem) task.subsystem = link.subsystem;
+            }
+            learnTaskRelationship(task);
+        }
+
         save();
         renderSheet();
     }
@@ -13421,10 +13850,9 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
             matchedProj.children.push(task);
             
             task.project = matchedProj.title;
+            if (systemNode) task.system = systemNode.title;
+            if (subsystemNode) task.subsystem = subsystemNode.title;
             task.updatedAt = new Date().toISOString();
-            
-            save();
-            renderSheet();
         }
     } else {
         // If Project doesn't exist, create it inside the current task's system & subsystem
@@ -13455,6 +13883,8 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
         }
         
         task.project = newProj.title;
+        task.system = currentSystemTitle;
+        task.subsystem = currentSubsystemTitle;
         task.updatedAt = new Date().toISOString();
 
         // Ensure new project is registered in Object Lists for autocompletion
@@ -13462,10 +13892,42 @@ function moveTaskProjectByTitle(taskId, newProjTitle) {
             objectLists.projects.push(newProj.title.trim());
             saveObjectLists();
         }
-        
-        save();
-        renderSheet();
     }
+
+    // Apply Project Anchor Invariant: single system auto-filled from learned graph if available
+    const deps = objectLists?.dependencies;
+    if (deps) {
+        if (deps.project_system_map && deps.project_system_map[task.project]) {
+            task.system = deps.project_system_map[task.project];
+        }
+        if (deps.project_links && deps.project_links[task.project]) {
+            const link = deps.project_links[task.project];
+            if (link.codename && !task.custom_zbal2zx) task.custom_zbal2zx = link.codename;
+            if (link.subsystem && !task.subsystem) task.subsystem = link.subsystem;
+        }
+        learnTaskRelationship(task);
+    }
+
+    // Mirror to sheet columns
+    sheetColumns.forEach(col => {
+        const l = col.label.toLowerCase();
+        if (l === 'system') task[col.key] = task.system;
+        else if (l === 'subsystem') task[col.key] = task.subsystem;
+        else if (l === 'codename' && task.custom_zbal2zx) task[col.key] = task.custom_zbal2zx;
+    });
+
+    // Update sidebar inputs if this node is currently selected
+    if (selectedId === taskId) {
+        const pSys = document.getElementById('prop-system');
+        if (pSys) pSys.value = task.system || '';
+        const pSub = document.getElementById('prop-subsystem');
+        if (pSub) pSub.value = task.subsystem || '';
+        const pProj = document.getElementById('prop-project');
+        if (pProj) pProj.value = task.project || '';
+    }
+
+    save();
+    renderSheet();
 }
 
 function updateTaskStatusFromSheet(id, val) {
@@ -14396,6 +14858,7 @@ function renderStructureSheet() {
     toolbar.style.cssText = 'padding: 0 0 12px 0; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);';
     toolbar.innerHTML = `
         <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn-secondary btn-sm" onclick="rebuildDependencyContextFromTasks(); renderSheet(); alert('Context & dependencies successfully analyzed and rebuilt from all tasks!');" style="max-width:200px;height:32px;background:rgba(99,102,241,0.15);color:#818cf8;border-color:rgba(99,102,241,0.3);">⚡ Rebuild from Tasks</button>
             <button class="btn-secondary btn-sm" onclick="clearAllDependenciesConfirm()" style="max-width:200px;height:32px;background:rgba(239,68,68,0.1);color:#ef4444;border-color:rgba(239,68,68,0.2);">⚠️ Reset All Dependencies</button>
         </div>
         <div style="font-size: 11px; color: var(--text-muted);">
@@ -14667,12 +15130,15 @@ function renderStructureSheet() {
             if (projs.length === 0) {
                 projsHtml = `<span style="color:var(--text-muted); font-style:italic;">No projects linked</span>`;
             } else {
-                projsHtml = projs.map(p => `
+                projsHtml = projs.map(p => {
+                    const sysTag = deps.project_system_map && deps.project_system_map[p] ? ` <span style="opacity:0.6; font-size:10px;">(${deps.project_system_map[p]})</span>` : '';
+                    return `
                     <div style="display:inline-flex; align-items:center; gap:4px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:4px; padding:3px 8px; margin:2px;">
-                        <span>${p}</span>
+                        <span>${p}${sysTag}</span>
                         <button onclick="inlineRemoveProjectLink('${p.replace(/'/g, "\\'")}')" class="btn-gantt-action" style="color:#f87171; font-size:12px; padding:0 2px;" title="Unlink Project">×</button>
                     </div>
-                `).join('');
+                    `;
+                }).join('');
             }
 
             t3Html += `
@@ -15517,99 +15983,60 @@ function processListsImportedData() {
 // Active Autocomplete Dropdown List Handler
 let activeAutocompleteEl = null;
 
-function showAutocomplete(inputEl, type, onSelect) {
+function showAutocomplete(inputEl, type, onSelect, nodeContext) {
     const val = inputEl.value.trim().toLowerCase();
     
-    // Map autocomplete names to our cached sets
-    let listSet = null;
-    if (type === 'assignees') listSet = cachedObjectLists.assignees;
-    else if (type === 'systems') listSet = cachedObjectLists.systems;
-    else if (type === 'subsystems') listSet = cachedObjectLists.subsystems;
-    else if (type === 'projects') listSet = cachedObjectLists.projects;
+    // Resolve node context for smart ranking
+    let n = nodeContext || (selectedId ? findNode(selectedId) : null);
     
-    // Fallback to legacy objectLists array if not cached
-    let list = listSet ? Array.from(listSet) : (objectLists[type] || []);
-    
-    // Top-down cascading dropdown filtering based on dependencies
-    if (objectLists && objectLists.dependencies && selectedId) {
-        const deps = objectLists.dependencies;
-        const n = findNode(selectedId);
-        if (n) {
-            const checkMatch = (dict, child, parent) => {
-                if (!dict || !child || !parent) return true;
-                const childParent = dict[Object.keys(dict).find(k => k.toLowerCase() === child.toLowerCase())];
-                return childParent ? childParent.toLowerCase() === parent.toLowerCase() : true;
-            };
-
-            // 0. System filtered by Subsystem (if Subsystem is selected)
-            if (type === 'systems') {
-                const activeSubsystem = n.subsystem || '';
-                if (activeSubsystem && deps.subsystem_parents) {
-                    const validSystems = getSubsystemParentSystems(activeSubsystem);
-                    if (validSystems.length > 0) {
-                        list = list.filter(item => validSystems.some(vs => vs.toLowerCase() === item.toLowerCase()));
-                    }
-                }
-            }
-            // 1. Codename (custom_zbal2zx) filtered by System
-            else if (type === 'custom_zbal2zx') {
-                const activeSystem = n.system || '';
-                if (activeSystem && deps.codename_parents) {
-                    list = list.filter(item => checkMatch(deps.codename_parents, item, activeSystem));
-                }
-            }
-            // 2. Deployment (custom_aar1e85) filtered by Codename
-            else if (type === 'custom_aar1e85') {
-                const activeCodename = n.custom_zbal2zx || '';
-                if (activeCodename && deps.deployment_parents) {
-                    list = list.filter(item => checkMatch(deps.deployment_parents, item, activeCodename));
-                }
-            }
-            // 3. Subsystem filtered by System (subsystems can belong to multiple systems)
-            else if (type === 'subsystems') {
-                const activeSystem = n.system || '';
-                if (activeSystem && deps.subsystem_parents) {
-                    list = list.filter(item => {
-                        const parents = getSubsystemParentSystems(item);
-                        return parents.length === 0 || parents.some(p => p.toLowerCase() === activeSystem.toLowerCase());
-                    });
-                }
-            }
-            // 4. Project filtered by (Codename and/or Subsystem)
-            else if (type === 'projects') {
-                const activeCodename = (n.custom_zbal2zx || '').toLowerCase();
-                const activeSubsystem = (n.subsystem || '').toLowerCase();
-                if ((activeCodename || activeSubsystem) && deps.project_links) {
-                    list = list.filter(proj => {
-                        const link = deps.project_links[Object.keys(deps.project_links).find(k => k.toLowerCase() === proj.toLowerCase())];
-                        if (!link) return true; // allow unlinked projects
-                        if (activeCodename && link.codename && link.codename.toLowerCase() !== activeCodename) return false;
-                        if (activeSubsystem && link.subsystem && link.subsystem.toLowerCase() !== activeSubsystem) return false;
-                        return true;
-                    });
-                }
-            }
+    // Normalize type if passed as dynamic custom sheet column
+    let lookupType = type;
+    if (type !== 'projects' && type !== 'systems' && type !== 'subsystems' && type !== 'assignees' && type !== 'custom_zbal2zx' && type !== 'custom_aar1e85') {
+        const colDef = sheetColumns.find(c => c.key === type);
+        if (colDef) {
+            const l = colDef.label.toLowerCase();
+            if (l === 'system') lookupType = 'systems';
+            else if (l === 'subsystem') lookupType = 'subsystems';
+            else if (l === 'codename') lookupType = 'custom_zbal2zx';
+            else if (l === 'deployment') lookupType = 'custom_aar1e85';
+            else if (l === 'assignee') lookupType = 'assignees';
+            else if (l === 'project') lookupType = 'projects';
         }
     }
-    
-    // Ensure the suggestion list contains unique case-insensitive values only
-    const uniqueList = [];
-    const seen = new Set();
-    list.forEach(item => {
-        const lower = item.toLowerCase();
-        if (!seen.has(lower)) {
-            seen.add(lower);
-            uniqueList.push(item);
-        }
-    });
 
-    // Suggest items matching typed keyword
-    const matches = uniqueList.filter(item => item.toLowerCase().includes(val));
+    // Map autocomplete names to fast cached sets for assignees/custom if needed
+    let listSet = null;
+    if (lookupType === 'assignees') listSet = cachedObjectLists.assignees;
+    else if (lookupType === 'systems') listSet = cachedObjectLists.systems;
+    else if (lookupType === 'subsystems') listSet = cachedObjectLists.subsystems;
+    else if (lookupType === 'projects') listSet = cachedObjectLists.projects;
+
+    // Get Partitioned ranked options: recommended (with hints & scores) vs others
+    const { recommended, others } = getContextRankedOptions(lookupType, n);
+
+    // If cache has extra unranked items not in objectLists, include them in others
+    if (listSet) {
+        listSet.forEach(cachedItem => {
+            const lower = cachedItem.toLowerCase();
+            if (!recommended.some(r => r.item.toLowerCase() === lower) && !others.some(o => o.toLowerCase() === lower)) {
+                others.push(cachedItem);
+            }
+        });
+    }
+
+    // Filter matching typed query
+    const matchedRecs = recommended.filter(r => r.item.toLowerCase().includes(val));
+    const matchedOthers = others.filter(item => item.toLowerCase().includes(val));
 
     // Remove any existing suggestion box if we are recreating it
     if (activeAutocompleteEl) {
         activeAutocompleteEl.remove();
         activeAutocompleteEl = null;
+    }
+
+    // If nothing to show and no typed value to add, exit
+    if (matchedRecs.length === 0 && matchedOthers.length === 0 && !val) {
+        return;
     }
 
     const box = document.createElement('div');
@@ -15619,58 +16046,97 @@ function showAutocomplete(inputEl, type, onSelect) {
     const rect = inputEl.getBoundingClientRect();
     box.style.left = rect.left + window.scrollX + 'px';
     box.style.top = (rect.bottom + window.scrollY) + 'px';
-    box.style.width = rect.width + 'px';
+    box.style.width = Math.max(rect.width, 220) + 'px';
 
-    matches.forEach(match => {
-        const div = document.createElement('div');
-        div.className = 'autocomplete-suggestion-item';
-        div.textContent = match;
-        div.onmousedown = (e) => {
-            e.preventDefault();
-            inputEl.value = match;
-            onSelect(match);
-            box.remove();
-            activeAutocompleteEl = null;
-        };
-        box.appendChild(div);
-    });
+    // 1. Recommended Section (Top ranked context recommendations)
+    if (matchedRecs.length > 0) {
+        const recHeader = document.createElement('div');
+        recHeader.className = 'autocomplete-section-header';
+        recHeader.innerHTML = `<span>✨ Context Suggestions</span>`;
+        box.appendChild(recHeader);
 
-    // Option to quickly add new option if typed string doesn't match exactly
-    if (val && !uniqueList.map(l => l.toLowerCase()).includes(val)) {
+        matchedRecs.forEach(rec => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-suggestion-item autocomplete-recommended';
+            div.innerHTML = `
+                <span style="font-weight: 500;">${rec.item}</span>
+                ${rec.hint ? `<span class="autocomplete-badge" title="${rec.hint}">${rec.hint}</span>` : ''}
+            `;
+            div.onmousedown = (e) => {
+                e.preventDefault();
+                inputEl.value = rec.item;
+                onSelect(rec.item);
+                if (n) learnTaskRelationship(n);
+                box.remove();
+                activeAutocompleteEl = null;
+            };
+            box.appendChild(div);
+        });
+    }
+
+    // 2. Others Section (All remaining options accessible)
+    if (matchedOthers.length > 0) {
+        if (matchedRecs.length > 0) {
+            const otherHeader = document.createElement('div');
+            otherHeader.className = 'autocomplete-section-header';
+            otherHeader.innerHTML = `<span>All Options</span>`;
+            box.appendChild(otherHeader);
+        }
+
+        matchedOthers.forEach(match => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-suggestion-item';
+            div.innerHTML = `<span>${match}</span>`;
+            div.onmousedown = (e) => {
+                e.preventDefault();
+                inputEl.value = match;
+                onSelect(match);
+                if (n) learnTaskRelationship(n);
+                box.remove();
+                activeAutocompleteEl = null;
+            };
+            box.appendChild(div);
+        });
+    }
+
+    // 3. Option to quickly add new option if typed string doesn't match existing exactly
+    const allKnown = [...recommended.map(r => r.item), ...others];
+    if (val && !allKnown.some(l => l.toLowerCase() === val)) {
         const addDiv = document.createElement('div');
         addDiv.className = 'autocomplete-suggestion-item autocomplete-suggestion-add';
-        addDiv.textContent = `+ Add "${inputEl.value}"`;
+        addDiv.textContent = `+ Add "${inputEl.value.trim()}"`;
         addDiv.onmousedown = (e) => {
             e.preventDefault();
             const originalVal = inputEl.value.trim();
             if (!originalVal) return;
             
             // Render user-facing list category name
-            const listCategoryName = type === 'assignees' ? 'Assignees' : (type === 'systems' ? 'Systems' : (type === 'subsystems' ? 'Subsystems' : (type === 'projects' ? 'Projects' : type)));
+            const listCategoryName = lookupType === 'assignees' ? 'Assignees' : (lookupType === 'systems' ? 'Systems' : (lookupType === 'subsystems' ? 'Subsystems' : (lookupType === 'projects' ? 'Projects' : lookupType)));
             
             // Require user confirmation before adding a new item to list definitions
             if (!confirm(`Are you sure you want to add "${originalVal}" as a new option to the ${listCategoryName} list?`)) {
                 return;
             }
             
-            if (!objectLists[type]) {
-                objectLists[type] = [];
+            if (!objectLists[lookupType]) {
+                objectLists[lookupType] = [];
             }
             // Check case-insensitive existence before adding
-            if (!objectLists[type].some(x => x.trim().toLowerCase() === originalVal.toLowerCase())) {
-                objectLists[type].push(originalVal);
-                objectLists[type].sort((a,b) => a.localeCompare(b));
+            if (!objectLists[lookupType].some(x => x.trim().toLowerCase() === originalVal.toLowerCase())) {
+                objectLists[lookupType].push(originalVal);
+                objectLists[lookupType].sort((a,b) => a.localeCompare(b));
                 saveObjectLists();
                 
                 // Sync new entry into our fast memory cache
-                if (type === 'assignees') cachedObjectLists.assignees.add(originalVal);
-                else if (type === 'systems') cachedObjectLists.systems.add(originalVal);
-                else if (type === 'subsystems') cachedObjectLists.subsystems.add(originalVal);
-                else if (type === 'projects') cachedObjectLists.projects.add(originalVal);
+                if (lookupType === 'assignees') cachedObjectLists.assignees.add(originalVal);
+                else if (lookupType === 'systems') cachedObjectLists.systems.add(originalVal);
+                else if (lookupType === 'subsystems') cachedObjectLists.subsystems.add(originalVal);
+                else if (lookupType === 'projects') cachedObjectLists.projects.add(originalVal);
             }
             
             inputEl.value = originalVal;
             onSelect(originalVal);
+            if (n) learnTaskRelationship(n);
             box.remove();
             activeAutocompleteEl = null;
         };
@@ -15679,7 +16145,7 @@ function showAutocomplete(inputEl, type, onSelect) {
 
     // Track inputs with active autocomplete
     inputEl.dataset.isAutocompleteInput = 'true';
-    inputEl.dataset.autocompleteType = type;
+    inputEl.dataset.autocompleteType = lookupType;
 
     // Attach keydown listener to inputEl to prevent Enter key auto-selecting/adding options
     // and blur the input field instead to restore original value without creation
@@ -16959,7 +17425,6 @@ function updateProp(prop,val) {
         const deps = objectLists.dependencies;
         let changed = false;
 
-        // Helper to find parent elements dynamically
         const getParent = (dict, child) => {
             if (!dict || !child) return null;
             const cLower = child.trim().toLowerCase();
@@ -16972,60 +17437,75 @@ function updateProp(prop,val) {
             const oldFieldVal = n[fieldKey] || '';
             if (oldFieldVal !== parentVal) {
                 n[fieldKey] = parentVal;
-                // Also mirror it to custom sheet columns if applicable
+                // Mirror to custom sheet columns if applicable
                 const matchingCol = sheetColumns.find(c => c.label.toLowerCase() === fieldKey || c.key === fieldKey);
                 if (matchingCol) {
                     n[matchingCol.key] = parentVal;
                 }
-                if (fieldKey === 'system') n.system = parentVal;
-                if (fieldKey === 'subsystem') n.subsystem = parentVal;
+                if (fieldKey === 'system') {
+                    n.system = parentVal;
+                    const sysInput = document.getElementById('prop-system');
+                    if (sysInput) sysInput.value = parentVal;
+                }
+                if (fieldKey === 'subsystem') {
+                    n.subsystem = parentVal;
+                    const subInput = document.getElementById('prop-subsystem');
+                    if (subInput) subInput.value = parentVal;
+                }
+                if (fieldKey === 'custom_zbal2zx') {
+                    const codeInput = document.querySelector(`input[placeholder="CODENAME"], input[placeholder="Codename"]`);
+                    if (codeInput) codeInput.value = parentVal;
+                }
+                if (fieldKey === 'custom_aar1e85') {
+                    const depInput = document.querySelector(`input[placeholder="DEPLOYMENT"], input[placeholder="Deployment"]`);
+                    if (depInput) depInput.value = parentVal;
+                }
                 changed = true;
             }
         };
 
-        // Bottom-up cascade matching the 3-table dependency graph:
-        // 1. If Project is set, auto-fill Codename and Subsystem from Table 3 (deps.project_links)
-        let currentProject = prop === 'project' ? sanitizedVal : (n.project || n.title || '');
-        if (currentProject && deps.project_links) {
-            const projKey = Object.keys(deps.project_links).find(k => k.toLowerCase() === currentProject.toLowerCase());
-            const link = projKey ? deps.project_links[projKey] : null;
-            if (link) {
-                if (link.codename) updatePropField('custom_zbal2zx', link.codename);
-                if (link.subsystem) updatePropField('subsystem', link.subsystem);
+        // 1. Project Anchor Invariant: A Project strictly maps to a single System
+        let currentProject = prop === 'project' ? sanitizedVal : (n.project || '');
+        if (currentProject) {
+            if (deps.project_system_map && deps.project_system_map[currentProject]) {
+                updatePropField('system', deps.project_system_map[currentProject]);
+            }
+            if (deps.project_links && deps.project_links[currentProject]) {
+                const link = deps.project_links[currentProject];
+                if (link.codename && !n.custom_zbal2zx) updatePropField('custom_zbal2zx', link.codename);
+                if (link.subsystem && !n.subsystem) updatePropField('subsystem', link.subsystem);
             }
         }
 
-        // 2. If Subsystem is set, auto-fill System if unambiguous or validate current system
+        // 2. If Subsystem is set, auto-fill System if unambiguous and system is empty
         let currentSubsystem = n.subsystem || '';
-        if (currentSubsystem && deps.subsystem_parents) {
+        if (currentSubsystem && deps.subsystem_parents && !n.system) {
             const validSystems = getSubsystemParentSystems(currentSubsystem);
             if (validSystems.length === 1) {
                 updatePropField('system', validSystems[0]);
-            } else if (validSystems.length > 1) {
-                // If current system is not among validSystems, clear it so user can pick from the filtered list
-                if (n.system && !validSystems.some(s => s.toLowerCase() === n.system.toLowerCase())) {
-                    updatePropField('system', '');
-                }
             }
         }
 
-        // 3. If Deployment is set, auto-fill Codename from Table 1 (deps.deployment_parents: Deployment -> Codename)
+        // 3. If Deployment is set, auto-fill Codename from Table 1 if blank
         let currentDeployment = n.custom_aar1e85 || '';
-        if (currentDeployment && deps.deployment_parents) {
+        if (currentDeployment && deps.deployment_parents && !n.custom_zbal2zx) {
             const resolvedCodename = getParent(deps.deployment_parents, currentDeployment);
             if (resolvedCodename) {
                 updatePropField('custom_zbal2zx', resolvedCodename);
             }
         }
 
-        // 4. If Codename is set, auto-fill System from Table 1 (deps.codename_parents: Codename -> System)
+        // 4. If Codename is set, auto-fill System from Table 1 if blank
         let currentCodename = n.custom_zbal2zx || '';
-        if (currentCodename && deps.codename_parents) {
+        if (currentCodename && deps.codename_parents && !n.system) {
             const resolvedSystem = getParent(deps.codename_parents, currentCodename);
             if (resolvedSystem) {
                 updatePropField('system', resolvedSystem);
             }
         }
+
+        // Incrementally learn relationship weights from this mutation
+        learnTaskRelationship(n);
     }
     
     if (isNewDraft) {
