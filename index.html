@@ -11014,55 +11014,122 @@ function toggleAutoSyncState(enabled) {
     }
 }
 
+let realtimeSyncChannel = null;
+
+// Download full remote state and update local state
+async function applyRemoteStateUpdate(remoteData) {
+    if (!remoteData || !remoteData.idealog) return;
+    const remoteTime = remoteData.idealog.updatedAt ? new Date(remoteData.idealog.updatedAt).getTime() : 0;
+    const localTime = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+
+    if (remoteTime > localTime) {
+        console.log("Applying newer state from Supabase cloud database...");
+        data = remoteData.idealog;
+        localStorage.setItem('idealog', JSON.stringify(data));
+        if (remoteData.sheetColumns) {
+            sheetColumns = remoteData.sheetColumns;
+            localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+        }
+        if (remoteData.objectLists) {
+            objectLists = remoteData.objectLists;
+            localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+        }
+        if (remoteData.collapsed && Array.isArray(remoteData.collapsed)) {
+            collapsed.clear();
+            remoteData.collapsed.forEach(id => collapsed.add(id));
+        }
+        pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
+        enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
+        rebuildPerformanceCaches();
+        redraw();
+        updateSupabaseStatusBadge('online', '● Cloud Online (Synced)');
+    }
+}
+
+// Fetch only full state when notified of an update
+async function fetchFullRemoteState() {
+    if (!supabaseClient) return;
+    try {
+        const { data: dbRowsArray, error } = await supabaseClient
+            .from('idealog_sync')
+            .select('data')
+            .eq('id', 'db_state');
+        const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null;
+        if (error || !dbRows || !dbRows.data) return;
+        await applyRemoteStateUpdate(dbRows.data);
+    } catch (e) {
+        console.warn("Fetch full state failed:", e);
+    }
+}
+
+// 1. Supabase Realtime Postgres Changes Subscription (Push Notification - 0 egress when idle)
+function setupSupabaseRealtimeSync() {
+    if (!supabaseClient) return;
+    if (realtimeSyncChannel) {
+        supabaseClient.removeChannel(realtimeSyncChannel);
+        realtimeSyncChannel = null;
+    }
+
+    realtimeSyncChannel = supabaseClient
+        .channel('idealog_db_changes')
+        .on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'idealog_sync',
+                filter: 'id=eq.db_state'
+            },
+            (payload) => {
+                console.log("Realtime Postgres change received on idealog_sync:", payload.eventType);
+                // If the new payload contains data directly, use it; otherwise fetch
+                if (payload.new && payload.new.data) {
+                    applyRemoteStateUpdate(payload.new.data);
+                } else {
+                    fetchFullRemoteState();
+                }
+            }
+        )
+        .subscribe((status) => {
+            console.log("Supabase Realtime Sync Channel Status:", status);
+        });
+}
+
+// 2. Ultra-Lightweight Polling Fallback (Checks only 30-byte updated_at timestamp every 30s)
 function startSyncPolling() {
     stopSyncPolling();
     if (!supabaseClient) return;
-    
+
+    // Set up push notifications first
+    setupSupabaseRealtimeSync();
+
     syncPollingInterval = setInterval(async () => {
-        if (!isAutoSyncEnabled || !supabaseClient) return;
-        
-        // Skip polling download check if we have a pending local save sync in progress
-        if (syncTimeout !== null) {
-            console.log("Polling check skipped: Local changes are currently queued for upload.");
+        // Skip polling if disabled, pending upload, or tab is hidden in background
+        if (!isAutoSyncEnabled || !supabaseClient || document.hidden || syncTimeout !== null) {
             return;
         }
-        
+
         try {
-            const { data: { user } } = await supabaseClient.auth.getUser();
-            if (!user) return;
-            
-            const { data: dbRowsArray, error } = await supabaseClient
+            // Fetch ONLY updated_at column (~30 bytes) instead of entire data payload (~300 KB)
+            const { data: rows, error } = await supabaseClient
                 .from('idealog_sync')
-                .select('data')
+                .select('updated_at')
                 .eq('id', 'db_state');
-                
-            const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null;
-            if (error || !dbRows || !dbRows.data || !dbRows.data.idealog) return;
-            
-            const remoteData = dbRows.data;
-            const remoteTime = remoteData.idealog.updatedAt ? new Date(remoteData.idealog.updatedAt).getTime() : 0;
-            const localTime = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
-            
-            if (remoteTime > localTime) {
-                console.log("Polling: Detected newer state on Supabase. Downloading...");
-                data = remoteData.idealog;
-                localStorage.setItem('idealog', JSON.stringify(data));
-                if (remoteData.sheetColumns) {
-                    sheetColumns = remoteData.sheetColumns;
-                    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
-                }
-                if (remoteData.objectLists) {
-                    objectLists = remoteData.objectLists;
-                    localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
-                }
-                rebuildPerformanceCaches();
-                redraw();
-                updateSupabaseStatusBadge('online', '● Cloud Online (Synced)');
+
+            if (error || !rows || rows.length === 0) return;
+
+            const remoteUpdated = rows[0].updated_at ? new Date(rows[0].updated_at).getTime() : 0;
+            const localUpdated = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+
+            // Only fetch full data payload if remote is actually newer
+            if (remoteUpdated > localUpdated) {
+                console.log("Lightweight poll detected remote update. Fetching full state...");
+                await fetchFullRemoteState();
             }
         } catch (e) {
-            console.warn("Polling fetch failed:", e);
+            console.warn("Lightweight timestamp check failed:", e);
         }
-    }, 2000); // Poll every 2 seconds
+    }, 30000); // Check timestamp every 30 seconds (reduces bandwidth by 99.9%)
 }
 
 function stopSyncPolling() {
@@ -11070,7 +11137,33 @@ function stopSyncPolling() {
         clearInterval(syncPollingInterval);
         syncPollingInterval = null;
     }
+    if (realtimeSyncChannel && supabaseClient) {
+        supabaseClient.removeChannel(realtimeSyncChannel);
+        realtimeSyncChannel = null;
+    }
 }
+
+// Pause/resume checks when browser tab visibility changes
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && isAutoSyncEnabled && supabaseClient) {
+        // Tab became active: do an immediate lightweight timestamp check
+        (async () => {
+            try {
+                const { data: rows } = await supabaseClient
+                    .from('idealog_sync')
+                    .select('updated_at')
+                    .eq('id', 'db_state');
+                if (rows && rows.length > 0) {
+                    const remoteUpdated = rows[0].updated_at ? new Date(rows[0].updated_at).getTime() : 0;
+                    const localUpdated = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+                    if (remoteUpdated > localUpdated) {
+                        await fetchFullRemoteState();
+                    }
+                }
+            } catch (e) {}
+        })();
+    }
+});
 
 // --- SUPABASE CONFIGURATION STATE ---
 let supabaseClient = null;
