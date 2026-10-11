@@ -1552,7 +1552,7 @@
         <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; align-items: center;">
             <div style="display: flex; gap: 6px;">
                 <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force upload local storage data to Supabase cloud? This will overwrite the cloud database state.')) { try { await pushStateToSupabase(); alert('State forced up to Supabase successfully!'); } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); color: #34d399;">Force Push</button>
-                <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force download data from Supabase cloud? This will overwrite your local browser storage state.')) { try { const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state'); const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null; if(error) throw error; if(dbRows && dbRows.data && dbRows.data.idealog) { data = dbRows.data.idealog; localStorage.setItem('idealog', JSON.stringify(data)); if (dbRows.data.sheetColumns) { sheetColumns = dbRows.data.sheetColumns; localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns)); } if (dbRows.data.objectLists) { objectLists = dbRows.data.objectLists; sanitizeObjectLists(); localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists)); } redraw(); alert('State forced down from Supabase successfully!'); } else { alert('No remote state found to pull.'); } } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
+                <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force download data from Supabase cloud? This will overwrite your local browser storage state.')) { try { const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state'); const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null; if(error) throw error; if(dbRows && dbRows.data && dbRows.data.idealog) { data = dbRows.data.idealog; localStorage.setItem('idealog', JSON.stringify(data)); if (dbRows.data.sheetColumns) { sheetColumns = dbRows.data.sheetColumns; localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns)); } if (dbRows.data.objectLists) { objectLists = dbRows.data.objectLists; sanitizeObjectLists(); localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists)); } if (dbRows.data.pivotHierarchy || dbRows.data.enabledPivotDims) { normalizeColumnStructure(dbRows.data.pivotHierarchy, dbRows.data.enabledPivotDims); } redraw(); alert('State forced down from Supabase successfully!'); } else { alert('No remote state found to pull.'); } } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
             </div>
             <button class="btn-sm btn-secondary" onclick="closeSupabaseSettingsModal()" style="max-width:80px;">Close</button>
         </div>
@@ -11797,6 +11797,90 @@ function getContextRankedOptions(type, n) {
     return { recommended, others };
 }
 
+// --- SPREADSHEET & PIVOT TABLE COLUMN PERSISTENCE ---
+let parsedCols = JSON.parse(localStorage.getItem('idealog_sheet_cols') || 'null');
+if (!Array.isArray(parsedCols)) {
+    parsedCols = [
+        { key: 'system', label: 'System' },
+        { key: 'subsystem', label: 'Subsystem' },
+        { key: 'custom_zbal2zx', label: 'CODENAME' },
+        { key: 'custom_aar1e85', label: 'DEPLOYMENT' }
+    ];
+}
+let sheetColumns = parsedCols.filter(col => col && col.label && col.label.toLowerCase() !== 'project');
+localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+
+let pivotHierarchy = [];
+let enabledPivotDims = [];
+
+function normalizeColumnStructure(savedHierarchy, savedEnabledDims) {
+    const allKnownDims = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
+    
+    // 1. Resolve hierarchy (position/ordering of columns)
+    if (Array.isArray(savedHierarchy) && savedHierarchy.length > 0) {
+        const validSaved = savedHierarchy.filter(k => allKnownDims.includes(k));
+        allKnownDims.forEach(k => {
+            if (!validSaved.includes(k)) validSaved.push(k);
+        });
+        pivotHierarchy = validSaved;
+    } else {
+        pivotHierarchy = [...allKnownDims];
+    }
+    
+    // 2. Resolve enabled dimensions (visible vs hidden columns)
+    if (Array.isArray(savedEnabledDims) && savedEnabledDims.length > 0) {
+        enabledPivotDims = savedEnabledDims.filter(k => pivotHierarchy.includes(k));
+        if (enabledPivotDims.length === 0) {
+            enabledPivotDims = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'].filter(k => pivotHierarchy.includes(k));
+        }
+    } else {
+        enabledPivotDims = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'].filter(k => pivotHierarchy.includes(k));
+    }
+    
+    localStorage.setItem('idealog_pivot_hierarchy', JSON.stringify(pivotHierarchy));
+    localStorage.setItem('idealog_enabled_pivot_dims', JSON.stringify(enabledPivotDims));
+}
+
+function saveColumnStructure() {
+    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+    localStorage.setItem('idealog_pivot_hierarchy', JSON.stringify(pivotHierarchy));
+    localStorage.setItem('idealog_enabled_pivot_dims', JSON.stringify(enabledPivotDims));
+    
+    // Update data.updatedAt timestamp so other devices recognize the newer state
+    if (typeof data !== 'undefined' && data) {
+        data.updatedAt = new Date().toISOString();
+        localStorage.setItem('idealog', JSON.stringify(data));
+    }
+    
+    if (typeof supabaseClient !== 'undefined' && supabaseClient && isAutoSyncEnabled) {
+        updateSupabaseStatusBadge('syncing', '● Sync Pending (1s)...', '#f59e0b');
+        clearTimeout(syncTimeout);
+        syncTimeout = setTimeout(async () => {
+            try {
+                const success = await pushStateToSupabase();
+                if (success) {
+                    updateSupabaseStatusBadge('online', '● Cloud Online (Synced)', '#10b981');
+                }
+            } catch (err) {
+                console.error("Delayed Supabase push failed on column structure save:", err);
+                updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
+            } finally {
+                syncTimeout = null;
+            }
+        }, 1000);
+    }
+}
+
+function saveSheetColumns() {
+    saveColumnStructure();
+}
+
+// Initial hydration from local storage
+normalizeColumnStructure(
+    JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null'),
+    JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null')
+);
+
 let realtimeSyncChannel = null;
 
 // Download full remote state and update local state
@@ -11823,8 +11907,7 @@ async function applyRemoteStateUpdate(remoteData) {
             remoteData.collapsed.forEach(id => collapsed.add(id));
         }
         migrateTreeAndCleanPlaceholders();
-        pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
-        enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
+        normalizeColumnStructure(remoteData.pivotHierarchy, remoteData.enabledPivotDims);
         rebuildPerformanceCaches();
         redraw();
         updateSupabaseStatusBadge('online', '● Cloud Online (Synced)');
@@ -12018,8 +12101,10 @@ async function loadStartupData() {
     migrateTreeAndCleanPlaceholders();
     
     // Recalculate hierarchy parameters dynamically with newly validated sheetColumns
-    pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
-    enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
+    normalizeColumnStructure(
+        JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null'),
+        JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null')
+    );
     
     redraw();
 
@@ -12127,8 +12212,7 @@ async function loadStartupData() {
                                     }
                                     migrateTreeAndCleanPlaceholders();
                                     // Recalculate hierarchy parameters dynamically on remote pull override
-                                    pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
-                                    enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
+                                    normalizeColumnStructure(remoteData.pivotHierarchy, remoteData.enabledPivotDims);
                                     rebuildPerformanceCaches();
                                     redraw();
                                 } else if (localTime > remoteTime) {
@@ -13027,18 +13111,6 @@ let pivotRowDim = 'project';
 let pivotColDim = 'status';
 // Dynamic column list stored in localStorage or default to system/subsystem/codename/deployment
 let activePivotColumnFilters = {}; // Maps dimension keys (e.g. project, status, assignee) to arrays of checked/allowed value strings
-let parsedCols = JSON.parse(localStorage.getItem('idealog_sheet_cols') || 'null');
-if (!Array.isArray(parsedCols)) {
-    parsedCols = [
-        { key: 'system', label: 'System' },
-        { key: 'subsystem', label: 'Subsystem' },
-        { key: 'custom_zbal2zx', label: 'CODENAME' },
-        { key: 'custom_aar1e85', label: 'DEPLOYMENT' }
-    ];
-}
-let sheetColumns = parsedCols.filter(col => col && col.label && col.label.toLowerCase() !== 'project');
-
-localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
 
 // Lists of entities that populate task dropdowns and autocompletes
 let objectLists = {
@@ -13119,16 +13191,6 @@ let objectLists = {
     }
 };
 
-function saveSheetColumns() {
-    localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
-    if (supabaseClient) {
-        pushStateToSupabase().catch(err => {
-            console.error("Supabase push failed on Sheet Columns save:", err);
-            updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
-        });
-    }
-}
-
 function saveObjectLists() {
     sanitizeObjectLists();
     localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
@@ -13140,8 +13202,6 @@ function saveObjectLists() {
     }
 }
 
-let pivotHierarchy = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
-let enabledPivotDims = JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
 let hideDoneFilter = localStorage.getItem('idealog_hide_done_filter') || 'none'; // 'none', 'all', '1day', '1week', '1month'
 let showTimestamps = localStorage.getItem('idealog_show_timestamps') === 'true'; // false by default
 let highlightDurationDays = parseFloat(localStorage.getItem('idealog_highlight_duration_days') || '1.0'); // default to 1 day highlight fade course
@@ -13313,7 +13373,7 @@ function togglePivotDim(dimKey) {
     } else {
         enabledPivotDims.push(dimKey);
     }
-    localStorage.setItem('idealog_enabled_pivot_dims', JSON.stringify(enabledPivotDims));
+    saveColumnStructure();
     renderPivotTable();
 }
 
@@ -14337,9 +14397,12 @@ function addSheetColumn() {
     const key = 'custom_' + Math.random().toString(36).slice(2, 9);
     sheetColumns.push({ key, label: label.trim() });
     
-    // Auto-append the new column to pivotHierarchy so it becomes instantly sortable
+    // Auto-append the new column to pivotHierarchy and enabledPivotDims so it becomes instantly sortable & visible
     if (!pivotHierarchy.includes(key)) {
         pivotHierarchy.push(key);
+    }
+    if (!enabledPivotDims.includes(key)) {
+        enabledPivotDims.push(key);
     }
     
     saveSheetColumns();
@@ -14358,8 +14421,9 @@ function deleteSheetColumn(idx) {
     const col = sheetColumns[idx];
     sheetColumns.splice(idx, 1);
     
-    // Also remove from pivotHierarchy options
+    // Also remove from pivotHierarchy and enabledPivotDims options
     pivotHierarchy = pivotHierarchy.filter(h => h !== col.key);
+    enabledPivotDims = enabledPivotDims.filter(h => h !== col.key);
     
     saveSheetColumns();
     renderSheet();
@@ -14448,13 +14512,15 @@ function processImportedData() {
                     objectLists = backup.objectLists;
                     sanitizeObjectLists();
                 }
-                if (backup.pivotHierarchy) pivotHierarchy = backup.pivotHierarchy;
-                if (backup.enabledPivotDims) enabledPivotDims = backup.enabledPivotDims;
+                if (backup.pivotHierarchy || backup.enabledPivotDims) {
+                    normalizeColumnStructure(backup.pivotHierarchy, backup.enabledPivotDims);
+                } else {
+                    normalizeColumnStructure(null, null);
+                }
 
                 save();
                 saveObjectLists();
                 saveSheetColumns();
-                localStorage.setItem('idealog_enabled_pivot_dims', JSON.stringify(enabledPivotDims));
                 
                 closeImportModal();
                 renderSheet();
@@ -17049,6 +17115,7 @@ function handlePivotDrop(e, idx) {
             if (oldMainIdx !== -1 && newMainIdx !== -1) {
                 const item = pivotHierarchy.splice(oldMainIdx, 1)[0];
                 pivotHierarchy.splice(newMainIdx, 0, item);
+                saveColumnStructure();
                 renderPivotTable();
             }
         }
@@ -17854,6 +17921,8 @@ function exportBackupData() {
         sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_cols')),
         objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
         collapsed: Array.from(collapsed),
+        pivotHierarchy: JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null') || pivotHierarchy,
+        enabledPivotDims: JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || enabledPivotDims,
         history: data.history || []
     };
     
@@ -17905,9 +17974,12 @@ function importBackupData(event) {
                 importedState.collapsed.forEach(id => collapsed.add(id));
             }
             
-            // Re-sync sheet headers definitions
+            // Re-sync sheet headers definitions and column structure
             if (importedState.sheetColumns) {
                 sheetColumns = importedState.sheetColumns;
+            }
+            if (importedState.pivotHierarchy || importedState.enabledPivotDims) {
+                normalizeColumnStructure(importedState.pivotHierarchy, importedState.enabledPivotDims);
             }
             
             alert("Backup restored successfully! Idealog has updated to the backup state.");
@@ -18029,7 +18101,9 @@ async function pushStateToSupabase() {
         idealog: JSON.parse(localStorage.getItem('idealog')),
         sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_cols')),
         objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
-        collapsed: Array.from(collapsed)
+        collapsed: Array.from(collapsed),
+        pivotHierarchy: JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null') || pivotHierarchy,
+        enabledPivotDims: JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || enabledPivotDims
     };
     
     const { error } = await supabaseClient
