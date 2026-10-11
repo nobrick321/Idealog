@@ -11799,17 +11799,70 @@ function getContextRankedOptions(type, n) {
 
 // --- SUPABASE CONFIGURATION STATE ---
 let supabaseClient = null;
+let currentAuthenticatedUser = null;
 
 // --- USER IDENTIFIERS & DISPLAY NAMES ---
 function getActiveUserObject() {
-    if (!supabaseClient) return null;
+    // 1. In-memory cached user
+    if (currentAuthenticatedUser) return currentAuthenticatedUser;
+
+    // 2. Read active Supabase v2 session directly from localStorage
     try {
-        const sessionObj = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
-        if (sessionObj && sessionObj.user) return sessionObj.user;
-        return supabaseClient.auth.currentUser || (supabaseClient.auth.user ? supabaseClient.auth.user() : null);
-    } catch (e) {
-        return null;
+        if (typeof localStorage !== 'undefined') {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && ((k.startsWith('sb-') && k.endsWith('-auth-token')) || k === 'supabase.auth.token')) {
+                    const raw = localStorage.getItem(k);
+                    if (raw) {
+                        const parsed = JSON.parse(raw);
+                        if (parsed) {
+                            if (parsed.user) {
+                                currentAuthenticatedUser = parsed.user;
+                                return parsed.user;
+                            }
+                            if (parsed.currentSession && parsed.currentSession.user) {
+                                currentAuthenticatedUser = parsed.currentSession.user;
+                                return parsed.currentSession.user;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e) {}
+
+    // 3. Fallback to Supabase client methods
+    if (typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.auth) {
+        try {
+            const sessionObj = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
+            if (sessionObj && sessionObj.user) {
+                currentAuthenticatedUser = sessionObj.user;
+                return sessionObj.user;
+            }
+            if (supabaseClient.auth.currentUser) {
+                currentAuthenticatedUser = supabaseClient.auth.currentUser;
+                return supabaseClient.auth.currentUser;
+            }
+            if (supabaseClient.auth.user) {
+                const u = supabaseClient.auth.user();
+                if (u) {
+                    currentAuthenticatedUser = u;
+                    return u;
+                }
+            }
+            // Background check for Supabase v2 getSession
+            if (supabaseClient.auth.getSession && !currentAuthenticatedUser) {
+                supabaseClient.auth.getSession().then(({ data }) => {
+                    if (data && data.session && data.session.user && !currentAuthenticatedUser) {
+                        currentAuthenticatedUser = data.session.user;
+                        if (typeof renderSheet === 'function') renderSheet();
+                    }
+                }).catch(() => {});
+            }
+        } catch (e) {}
     }
+
+    return null;
 }
 
 function getActiveUserKey() {
@@ -11822,38 +11875,60 @@ function getActiveUserKey() {
 }
 
 function getActiveUserDisplayName() {
-    if (typeof supabaseClient === 'undefined' || !supabaseClient) return 'User';
     const currentUserObj = getActiveUserObject();
     if (currentUserObj) {
         const userEmail = currentUserObj.email;
         if (userEmail) {
-            if (Array.isArray(userProfilesCache)) {
+            // 1. Check userProfilesCache for assignee_name or display_name
+            if (Array.isArray(userProfilesCache) && userProfilesCache.length > 0) {
                 const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === userEmail.toLowerCase());
-                if (mappedProfile && mappedProfile.assignee_name) {
-                    return mappedProfile.assignee_name;
-                }
-                if (mappedProfile && mappedProfile.display_name) {
-                    return mappedProfile.display_name;
+                if (mappedProfile) {
+                    if (mappedProfile.assignee_name && mappedProfile.assignee_name.trim()) {
+                        return mappedProfile.assignee_name.trim();
+                    }
+                    if (mappedProfile.display_name && mappedProfile.display_name.trim()) {
+                        return mappedProfile.display_name.trim();
+                    }
                 }
             }
+            // 2. Check user_metadata (Google OAuth full_name or name)
+            if (currentUserObj.user_metadata) {
+                if (currentUserObj.user_metadata.full_name && currentUserObj.user_metadata.full_name.trim()) {
+                    return currentUserObj.user_metadata.full_name.trim();
+                }
+                if (currentUserObj.user_metadata.name && currentUserObj.user_metadata.name.trim()) {
+                    return currentUserObj.user_metadata.name.trim();
+                }
+            }
+            // 3. Capitalized email prefix fallback (e.g. ritesh@morphle.in -> "Ritesh")
             const localPart = userEmail.split('@')[0];
             return localPart.charAt(0).toUpperCase() + localPart.slice(1);
         }
+        if (currentUserObj.user_metadata) {
+            if (currentUserObj.user_metadata.full_name && currentUserObj.user_metadata.full_name.trim()) {
+                return currentUserObj.user_metadata.full_name.trim();
+            }
+            if (currentUserObj.user_metadata.name && currentUserObj.user_metadata.name.trim()) {
+                return currentUserObj.user_metadata.name.trim();
+            }
+        }
     }
-    return 'User';
+    return '';
 }
 
 function resolveUserDisplayName(userKey, fallbackName) {
-    if (fallbackName && fallbackName.trim() && fallbackName !== 'User') return fallbackName;
-    if (!userKey || userKey === 'local_user') return 'Local User';
-    if (Array.isArray(userProfilesCache)) {
+    if (fallbackName && fallbackName.trim() && fallbackName.toLowerCase() !== 'user' && fallbackName.toLowerCase() !== 'local user') {
+        return fallbackName.trim();
+    }
+    if (!userKey || userKey === 'local_user') return 'Default';
+    if (Array.isArray(userProfilesCache) && userProfilesCache.length > 0) {
         const mapped = userProfilesCache.find(p => 
             (p.email && p.email.toLowerCase() === userKey.toLowerCase()) || 
             (p.id && p.id === userKey)
         );
         if (mapped) {
-            if (mapped.assignee_name) return mapped.assignee_name;
-            if (mapped.display_name) return mapped.display_name;
+            if (mapped.assignee_name && mapped.assignee_name.trim()) return mapped.assignee_name.trim();
+            if (mapped.display_name && mapped.display_name.trim()) return mapped.display_name.trim();
         }
     }
     if (userKey.includes('@')) {
@@ -12304,16 +12379,32 @@ async function loadStartupData() {
             // Listen for login/logout auth state transitions dynamically
             supabaseClient.auth.onAuthStateChange(async (event, session) => {
                 const user = session ? session.user : null;
+                currentAuthenticatedUser = user;
                 console.log("Supabase onAuthStateChange triggered. Event:", event, "User:", user ? user.email : "none");
                 updateGoogleAuthUIState(user);
                 
                 if (user) {
+                    const myKey = getActiveUserKey();
+                    // Migrate any layout previously saved under local_user
+                    if (myKey !== 'local_user' && userColumnStructures && userColumnStructures['local_user']) {
+                        if (!userColumnStructures[myKey]) {
+                            userColumnStructures[myKey] = Object.assign({}, userColumnStructures['local_user'], {
+                                userId: user.id || '',
+                                userEmail: user.email || '',
+                                userName: getActiveUserDisplayName() || 'Ritesh'
+                            });
+                        }
+                        delete userColumnStructures['local_user'];
+                        localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures));
+                    }
                     // Update user column structure for logged-in user if in live mode
                     if (!isTemporaryLayoutPreview) {
-                        const myKey = getActiveUserKey();
                         if (userColumnStructures && userColumnStructures[myKey]) {
                             normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims);
                         }
+                    }
+                    if (typeof renderSheet === 'function') {
+                        renderSheet();
                     }
                     updateSupabaseStatusBadge('syncing', 'Syncing...');
                     
@@ -16665,19 +16756,11 @@ function renderPivotTable() {
     
     // Resolve the logged-in user's assigned name mapping from userProfilesCache
     let loggedInAssigneeName = '';
-    if (supabaseClient) {
-        let currentUserObj = null;
-        const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
-        if (session && session.user) {
-            currentUserObj = session.user;
-        } else {
-            currentUserObj = supabaseClient.auth.user ? supabaseClient.auth.user() : null;
-        }
-        if (currentUserObj) {
-            const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === currentUserObj.email.toLowerCase());
-            if (mappedProfile && mappedProfile.assignee_name) {
-                loggedInAssigneeName = mappedProfile.assignee_name;
-            }
+    const currentUserObj = getActiveUserObject();
+    if (currentUserObj && currentUserObj.email) {
+        const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === currentUserObj.email.toLowerCase());
+        if (mappedProfile && mappedProfile.assignee_name) {
+            loggedInAssigneeName = mappedProfile.assignee_name;
         }
     }
     
@@ -16779,7 +16862,9 @@ function renderPivotTable() {
 
     // Resolve user layout dropdown choices
     const currentActiveUserKey = getActiveUserKey();
-    const currentActiveUserName = getActiveUserDisplayName();
+    const rawUserName = getActiveUserDisplayName();
+    const currentActiveUserName = (rawUserName && rawUserName.toLowerCase() !== 'user' && rawUserName.toLowerCase() !== 'local user') ? rawUserName : 'My';
+    const myLayoutOptionLabel = (currentActiveUserName === 'My') ? 'My Layout (Live)' : `${currentActiveUserName}'s Layout (Live)`;
     
     let otherUsersOptionsHtml = '';
     if (userColumnStructures && typeof userColumnStructures === 'object') {
@@ -16817,7 +16902,7 @@ function renderPivotTable() {
                 <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
                     <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Layout:</span>
                     <select onchange="switchPivotLayout(this.value)" style="background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; cursor: pointer;">
-                        <option value="mine" ${activeLayoutKey === 'mine' ? 'selected' : ''} style="background:#080c14;color:#fff;">${currentActiveUserName}'s Layout (Live)</option>
+                        <option value="mine" ${activeLayoutKey === 'mine' ? 'selected' : ''} style="background:#080c14;color:#fff;">${myLayoutOptionLabel}</option>
                         ${otherUsersOptionsHtml ? `<optgroup label="Other Users' Layouts">${otherUsersOptionsHtml}</optgroup>` : ''}
                         <optgroup label="Presets">
                             <option value="default" ${activeLayoutKey === 'default' ? 'selected' : ''} style="background:#080c14;color:#fff;">Default Workspace Layout</option>
@@ -17378,14 +17463,11 @@ function togglePivotColumnFilterDropdown(event, dimKey) {
     
     // Resolve logged in user mapping
     let loggedInAssigneeName = '';
-    if (supabaseClient) {
-        const session = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
-        const currentUserObj = session ? session.user : (supabaseClient.auth.user ? supabaseClient.auth.user() : null);
-        if (currentUserObj) {
-            const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === currentUserObj.email.toLowerCase());
-            if (mappedProfile && mappedProfile.assignee_name) {
-                loggedInAssigneeName = mappedProfile.assignee_name;
-            }
+    const currentUserObj = getActiveUserObject();
+    if (currentUserObj && currentUserObj.email) {
+        const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === currentUserObj.email.toLowerCase());
+        if (mappedProfile && mappedProfile.assignee_name) {
+            loggedInAssigneeName = mappedProfile.assignee_name;
         }
     }
     
@@ -18269,6 +18351,7 @@ async function signOutGoogle() {
 }
 
 function updateGoogleAuthUIState(user) {
+    currentAuthenticatedUser = user;
     const appEl = document.getElementById('app');
     const authContainer = document.getElementById('auth-container');
     
