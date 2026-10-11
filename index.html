@@ -1552,7 +1552,7 @@
         <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; align-items: center;">
             <div style="display: flex; gap: 6px;">
                 <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force upload local storage data to Supabase cloud? This will overwrite the cloud database state.')) { try { await pushStateToSupabase(); alert('State forced up to Supabase successfully!'); } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); color: #34d399;">Force Push</button>
-                <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force download data from Supabase cloud? This will overwrite your local browser storage state.')) { try { const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state'); const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null; if(error) throw error; if(dbRows && dbRows.data && dbRows.data.idealog) { data = dbRows.data.idealog; localStorage.setItem('idealog', JSON.stringify(data)); if (dbRows.data.sheetColumns) { sheetColumns = dbRows.data.sheetColumns; localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns)); } if (dbRows.data.objectLists) { objectLists = dbRows.data.objectLists; sanitizeObjectLists(); localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists)); } if (dbRows.data.pivotHierarchy || dbRows.data.enabledPivotDims) { normalizeColumnStructure(dbRows.data.pivotHierarchy, dbRows.data.enabledPivotDims); } redraw(); alert('State forced down from Supabase successfully!'); } else { alert('No remote state found to pull.'); } } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
+                <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force download data from Supabase cloud? This will overwrite your local browser storage state.')) { try { const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state'); const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null; if(error) throw error; if(dbRows && dbRows.data && dbRows.data.idealog) { data = dbRows.data.idealog; localStorage.setItem('idealog', JSON.stringify(data)); if (dbRows.data.sheetColumns) { sheetColumns = dbRows.data.sheetColumns; localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns)); } if (dbRows.data.objectLists) { objectLists = dbRows.data.objectLists; sanitizeObjectLists(); localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists)); } if (dbRows.data.userColumnStructures && typeof dbRows.data.userColumnStructures === 'object') { userColumnStructures = dbRows.data.userColumnStructures; localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures)); } if (!isTemporaryLayoutPreview) { const myKey = getActiveUserKey(); if (userColumnStructures && userColumnStructures[myKey]) { normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims); } else if (dbRows.data.pivotHierarchy || dbRows.data.enabledPivotDims) { normalizeColumnStructure(dbRows.data.pivotHierarchy, dbRows.data.enabledPivotDims); } } redraw(); alert('State forced down from Supabase successfully!'); } else { alert('No remote state found to pull.'); } } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
             </div>
             <button class="btn-sm btn-secondary" onclick="closeSupabaseSettingsModal()" style="max-width:80px;">Close</button>
         </div>
@@ -11797,6 +11797,72 @@ function getContextRankedOptions(type, n) {
     return { recommended, others };
 }
 
+// --- SUPABASE CONFIGURATION STATE ---
+let supabaseClient = null;
+
+// --- USER IDENTIFIERS & DISPLAY NAMES ---
+function getActiveUserObject() {
+    if (!supabaseClient) return null;
+    try {
+        const sessionObj = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
+        if (sessionObj && sessionObj.user) return sessionObj.user;
+        return supabaseClient.auth.currentUser || (supabaseClient.auth.user ? supabaseClient.auth.user() : null);
+    } catch (e) {
+        return null;
+    }
+}
+
+function getActiveUserKey() {
+    const userObj = getActiveUserObject();
+    if (userObj) {
+        if (userObj.email) return userObj.email.toLowerCase().trim();
+        if (userObj.id) return userObj.id;
+    }
+    return 'local_user';
+}
+
+function getActiveUserDisplayName() {
+    if (typeof supabaseClient === 'undefined' || !supabaseClient) return 'User';
+    const currentUserObj = getActiveUserObject();
+    if (currentUserObj) {
+        const userEmail = currentUserObj.email;
+        if (userEmail) {
+            if (Array.isArray(userProfilesCache)) {
+                const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === userEmail.toLowerCase());
+                if (mappedProfile && mappedProfile.assignee_name) {
+                    return mappedProfile.assignee_name;
+                }
+                if (mappedProfile && mappedProfile.display_name) {
+                    return mappedProfile.display_name;
+                }
+            }
+            const localPart = userEmail.split('@')[0];
+            return localPart.charAt(0).toUpperCase() + localPart.slice(1);
+        }
+    }
+    return 'User';
+}
+
+function resolveUserDisplayName(userKey, fallbackName) {
+    if (fallbackName && fallbackName.trim() && fallbackName !== 'User') return fallbackName;
+    if (!userKey || userKey === 'local_user') return 'Local User';
+    if (Array.isArray(userProfilesCache)) {
+        const mapped = userProfilesCache.find(p => 
+            (p.email && p.email.toLowerCase() === userKey.toLowerCase()) || 
+            (p.id && p.id === userKey)
+        );
+        if (mapped) {
+            if (mapped.assignee_name) return mapped.assignee_name;
+            if (mapped.display_name) return mapped.display_name;
+        }
+    }
+    if (userKey.includes('@')) {
+        const localPart = userKey.split('@')[0];
+        return localPart.charAt(0).toUpperCase() + localPart.slice(1);
+    }
+    return userKey;
+}
+
 // --- SPREADSHEET & PIVOT TABLE COLUMN PERSISTENCE ---
 let parsedCols = JSON.parse(localStorage.getItem('idealog_sheet_cols') || 'null');
 if (!Array.isArray(parsedCols)) {
@@ -11812,6 +11878,21 @@ localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
 
 let pivotHierarchy = [];
 let enabledPivotDims = [];
+
+// Per-user column structure dictionaries & preview state
+let userColumnStructures = {};
+try {
+    const storedStructures = localStorage.getItem('idealog_user_column_structures');
+    if (storedStructures) userColumnStructures = JSON.parse(storedStructures);
+} catch (e) {
+    userColumnStructures = {};
+}
+if (!userColumnStructures || typeof userColumnStructures !== 'object') {
+    userColumnStructures = {};
+}
+
+let activeLayoutKey = localStorage.getItem('idealog_active_layout_key') || 'mine';
+let isTemporaryLayoutPreview = (activeLayoutKey !== 'mine');
 
 function normalizeColumnStructure(savedHierarchy, savedEnabledDims) {
     const allKnownDims = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
@@ -11846,6 +11927,28 @@ function saveColumnStructure() {
     localStorage.setItem('idealog_pivot_hierarchy', JSON.stringify(pivotHierarchy));
     localStorage.setItem('idealog_enabled_pivot_dims', JSON.stringify(enabledPivotDims));
     
+    if (isTemporaryLayoutPreview) {
+        // Temporary preview: ONLY store on this device locally, DO NOT modify userColumnStructures, DO NOT push to cloud
+        console.log("Column structure modified in temporary preview mode - isolated to this device.");
+        return;
+    }
+
+    // Live mode: update current user's profile in userColumnStructures
+    const myKey = getActiveUserKey();
+    const myName = getActiveUserDisplayName();
+    const userObj = getActiveUserObject();
+    
+    if (!userColumnStructures || typeof userColumnStructures !== 'object') userColumnStructures = {};
+    userColumnStructures[myKey] = {
+        userId: userObj ? userObj.id : '',
+        userEmail: userObj ? userObj.email : (myKey.includes('@') ? myKey : ''),
+        userName: myName,
+        pivotHierarchy: [...pivotHierarchy],
+        enabledPivotDims: [...enabledPivotDims],
+        updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures));
+    
     // Update data.updatedAt timestamp so other devices recognize the newer state
     if (typeof data !== 'undefined' && data) {
         data.updatedAt = new Date().toISOString();
@@ -11875,11 +11978,70 @@ function saveSheetColumns() {
     saveColumnStructure();
 }
 
+function switchPivotLayout(targetKey) {
+    if (targetKey === 'mine') {
+        revertToLiveLayout();
+        return;
+    }
+    
+    activeLayoutKey = targetKey;
+    isTemporaryLayoutPreview = true;
+    localStorage.setItem('idealog_active_layout_key', targetKey);
+    
+    let targetHierarchy = null;
+    let targetEnabledDims = null;
+    
+    if (targetKey === 'default') {
+        const allKnownDims = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee', 'created_on', 'modified_on'];
+        targetHierarchy = [...allKnownDims];
+        targetEnabledDims = ['project', ...sheetColumns.map(c => c.key), 'status', 'assignee'];
+    } else if (userColumnStructures && userColumnStructures[targetKey]) {
+        targetHierarchy = userColumnStructures[targetKey].pivotHierarchy;
+        targetEnabledDims = userColumnStructures[targetKey].enabledPivotDims;
+    }
+    
+    if (targetHierarchy && targetEnabledDims) {
+        normalizeColumnStructure(targetHierarchy, targetEnabledDims);
+    }
+    
+    renderPivotTable();
+}
+window.switchPivotLayout = switchPivotLayout;
+
+function revertToLiveLayout() {
+    activeLayoutKey = 'mine';
+    isTemporaryLayoutPreview = false;
+    localStorage.setItem('idealog_active_layout_key', 'mine');
+    
+    const myKey = getActiveUserKey();
+    if (userColumnStructures && userColumnStructures[myKey]) {
+        normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims);
+    } else {
+        normalizeColumnStructure(
+            JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null'),
+            JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null')
+        );
+    }
+    
+    renderPivotTable();
+}
+window.revertToLiveLayout = revertToLiveLayout;
+
 // Initial hydration from local storage
-normalizeColumnStructure(
-    JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null'),
-    JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null')
-);
+(function hydrateInitialColumnStructure() {
+    const myKey = getActiveUserKey();
+    if (!isTemporaryLayoutPreview && userColumnStructures && userColumnStructures[myKey]) {
+        normalizeColumnStructure(
+            userColumnStructures[myKey].pivotHierarchy,
+            userColumnStructures[myKey].enabledPivotDims
+        );
+    } else {
+        normalizeColumnStructure(
+            JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null'),
+            JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null')
+        );
+    }
+})();
 
 let realtimeSyncChannel = null;
 
@@ -11906,8 +12068,22 @@ async function applyRemoteStateUpdate(remoteData) {
             collapsed.clear();
             remoteData.collapsed.forEach(id => collapsed.add(id));
         }
+        if (remoteData.userColumnStructures && typeof remoteData.userColumnStructures === 'object') {
+            userColumnStructures = Object.assign({}, userColumnStructures, remoteData.userColumnStructures);
+            localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures));
+        }
         migrateTreeAndCleanPlaceholders();
-        normalizeColumnStructure(remoteData.pivotHierarchy, remoteData.enabledPivotDims);
+        
+        // Only update local column structure if this device is NOT in temporary preview mode
+        if (!isTemporaryLayoutPreview) {
+            const myKey = getActiveUserKey();
+            if (userColumnStructures && userColumnStructures[myKey]) {
+                normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims);
+            } else if (remoteData.pivotHierarchy || remoteData.enabledPivotDims) {
+                normalizeColumnStructure(remoteData.pivotHierarchy, remoteData.enabledPivotDims);
+            }
+        }
+        
         rebuildPerformanceCaches();
         redraw();
         updateSupabaseStatusBadge('online', '● Cloud Online (Synced)');
@@ -12034,7 +12210,6 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // --- SUPABASE CONFIGURATION STATE ---
-let supabaseClient = null;
 const sbUrl = 'https://pprgomclbxmonnogdnrr.supabase.co';
 const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcmdvbWNsYnhtb25ub2dkbnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNDI3MzUsImV4cCI6MjA5ODkxODczNX0.po4AqnZ64AMacf7CAloNsIGb3ILZJ1hGU2exnmYj4oY';
 
@@ -12101,10 +12276,17 @@ async function loadStartupData() {
     migrateTreeAndCleanPlaceholders();
     
     // Recalculate hierarchy parameters dynamically with newly validated sheetColumns
-    normalizeColumnStructure(
-        JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null'),
-        JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null')
-    );
+    if (!isTemporaryLayoutPreview) {
+        const myKey = getActiveUserKey();
+        if (userColumnStructures && userColumnStructures[myKey]) {
+            normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims);
+        } else {
+            normalizeColumnStructure(
+                JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null'),
+                JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null')
+            );
+        }
+    }
     
     redraw();
 
@@ -12126,6 +12308,13 @@ async function loadStartupData() {
                 updateGoogleAuthUIState(user);
                 
                 if (user) {
+                    // Update user column structure for logged-in user if in live mode
+                    if (!isTemporaryLayoutPreview) {
+                        const myKey = getActiveUserKey();
+                        if (userColumnStructures && userColumnStructures[myKey]) {
+                            normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims);
+                        }
+                    }
                     updateSupabaseStatusBadge('syncing', 'Syncing...');
                     
                     if (isAutoSyncEnabled) {
@@ -12210,9 +12399,20 @@ async function loadStartupData() {
                                         collapsed.clear();
                                         remoteData.collapsed.forEach(id => collapsed.add(id));
                                     }
+                                    if (remoteData.userColumnStructures && typeof remoteData.userColumnStructures === 'object') {
+                                        userColumnStructures = Object.assign({}, userColumnStructures, remoteData.userColumnStructures);
+                                        localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures));
+                                    }
                                     migrateTreeAndCleanPlaceholders();
                                     // Recalculate hierarchy parameters dynamically on remote pull override
-                                    normalizeColumnStructure(remoteData.pivotHierarchy, remoteData.enabledPivotDims);
+                                    if (!isTemporaryLayoutPreview) {
+                                        const myKey = getActiveUserKey();
+                                        if (userColumnStructures && userColumnStructures[myKey]) {
+                                            normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims);
+                                        } else {
+                                            normalizeColumnStructure(remoteData.pivotHierarchy, remoteData.enabledPivotDims);
+                                        }
+                                    }
                                     rebuildPerformanceCaches();
                                     redraw();
                                 } else if (localTime > remoteTime) {
@@ -14253,36 +14453,6 @@ function updateTaskStatusFromSheet(id, val) {
     }
 }
 
-function getActiveUserDisplayName() {
-    if (!supabaseClient) return 'User';
-    let currentUserObj = null;
-    
-    // Check v2 getUser first (cached in session wrapper), then session(), then user() fallback
-    const sessionObj = supabaseClient.auth.session ? supabaseClient.auth.session() : null;
-    if (sessionObj && sessionObj.user) {
-        currentUserObj = sessionObj.user;
-    } else {
-        currentUserObj = supabaseClient.auth.currentUser || (supabaseClient.auth.user ? supabaseClient.auth.user() : null);
-    }
-    
-    if (currentUserObj) {
-        const userEmail = currentUserObj.email;
-        if (userEmail) {
-            // Case-insensitive profile cache matching
-            const mappedProfile = userProfilesCache.find(p => p.email && p.email.toLowerCase() === userEmail.toLowerCase());
-            if (mappedProfile && mappedProfile.assignee_name) {
-                return mappedProfile.assignee_name;
-            }
-            if (mappedProfile && mappedProfile.display_name) {
-                return mappedProfile.display_name;
-            }
-            // Fallback: Use capitalized email segment
-            const localPart = userEmail.split('@')[0];
-            return localPart.charAt(0).toUpperCase() + localPart.slice(1);
-        }
-    }
-    return 'User';
-}
 
 function deleteSheetTask(taskId) {
     const parent = findParent(taskId);
@@ -14480,7 +14650,8 @@ function exportFullBackupJSON() {
         sheetColumns: sheetColumns,
         objectLists: objectLists,
         pivotHierarchy: pivotHierarchy,
-        enabledPivotDims: enabledPivotDims
+        enabledPivotDims: enabledPivotDims,
+        userColumnStructures: userColumnStructures
     };
     const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json;charset=utf-8;' });
     const link = document.createElement('a');
@@ -14511,6 +14682,10 @@ function processImportedData() {
                 if (backup.objectLists) {
                     objectLists = backup.objectLists;
                     sanitizeObjectLists();
+                }
+                if (backup.userColumnStructures && typeof backup.userColumnStructures === 'object') {
+                    userColumnStructures = backup.userColumnStructures;
+                    localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures));
                 }
                 if (backup.pivotHierarchy || backup.enabledPivotDims) {
                     normalizeColumnStructure(backup.pivotHierarchy, backup.enabledPivotDims);
@@ -16602,10 +16777,53 @@ function renderPivotTable() {
         `;
     });
 
+    // Resolve user layout dropdown choices
+    const currentActiveUserKey = getActiveUserKey();
+    const currentActiveUserName = getActiveUserDisplayName();
+    
+    let otherUsersOptionsHtml = '';
+    if (userColumnStructures && typeof userColumnStructures === 'object') {
+        Object.keys(userColumnStructures).forEach(uKey => {
+            if (uKey === currentActiveUserKey) return; // Skip own profile, listed at top
+            const uStruct = userColumnStructures[uKey];
+            if (!uStruct) return;
+            const uDisplayName = resolveUserDisplayName(uKey, uStruct.userName);
+            const isSel = (activeLayoutKey === uKey) ? 'selected' : '';
+            otherUsersOptionsHtml += `<option value="${uKey}" ${isSel} style="background:#080c14;color:#fff;">${uDisplayName}'s Layout</option>`;
+        });
+    }
+
+    let previewTargetName = 'Other User';
+    if (activeLayoutKey === 'default') {
+        previewTargetName = 'Default Workspace';
+    } else if (userColumnStructures && userColumnStructures[activeLayoutKey]) {
+        previewTargetName = resolveUserDisplayName(activeLayoutKey, userColumnStructures[activeLayoutKey].userName);
+    }
+
+    const previewBannerHtml = isTemporaryLayoutPreview ? `
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 6px 12px; margin-top: 8px; font-size: 11.5px; color: #fbbf24;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 14px;">👁️</span>
+                <span>Viewing <strong>${previewTargetName}'s</strong> layout (Device-only temporary preview). Modifications stay local to this tab/device and will not affect other devices.</span>
+            </div>
+            <button onclick="revertToLiveLayout()" style="background: rgba(245, 158, 11, 0.2); border: 1px solid #fbbf24; border-radius: 5px; color: #fff; font-size: 11px; font-weight: 600; padding: 3px 10px; cursor: pointer; white-space: nowrap; transition: background 0.15s;">Revert to My Layout (Live)</button>
+        </div>
+    ` : '';
+
     const toolbarDisplay = isPivotToolbarCollapsed ? 'display: none;' : 'display: flex;';
     const configBarHtml = `
         <div class="pivot-config-bar" style="${toolbarDisplay} align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px;">
-            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; width: 100%;">
+                <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
+                    <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Layout:</span>
+                    <select onchange="switchPivotLayout(this.value)" style="background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; cursor: pointer;">
+                        <option value="mine" ${activeLayoutKey === 'mine' ? 'selected' : ''} style="background:#080c14;color:#fff;">${currentActiveUserName}'s Layout (Live)</option>
+                        ${otherUsersOptionsHtml ? `<optgroup label="Other Users' Layouts">${otherUsersOptionsHtml}</optgroup>` : ''}
+                        <optgroup label="Presets">
+                            <option value="default" ${activeLayoutKey === 'default' ? 'selected' : ''} style="background:#080c14;color:#fff;">Default Workspace Layout</option>
+                        </optgroup>
+                    </select>
+                </div>
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                     <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; margin-right: 4px;">Columns:</span>
                     ${checkboxesHtml}
@@ -16644,6 +16862,7 @@ function renderPivotTable() {
                     Freeze Headers
                 </label>
             </div>
+            ${previewBannerHtml}
         </div>
     `;
 
@@ -17923,6 +18142,7 @@ function exportBackupData() {
         collapsed: Array.from(collapsed),
         pivotHierarchy: JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null') || pivotHierarchy,
         enabledPivotDims: JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || enabledPivotDims,
+        userColumnStructures: JSON.parse(localStorage.getItem('idealog_user_column_structures') || '{}') || userColumnStructures,
         history: data.history || []
     };
     
@@ -17963,6 +18183,10 @@ function importBackupData(event) {
                 objectLists = importedState.objectLists;
                 sanitizeObjectLists();
                 localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+            }
+            if (importedState.userColumnStructures && typeof importedState.userColumnStructures === 'object') {
+                userColumnStructures = importedState.userColumnStructures;
+                localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures));
             }
             
             // Update in-memory workspace variables
@@ -18103,7 +18327,8 @@ async function pushStateToSupabase() {
         objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
         collapsed: Array.from(collapsed),
         pivotHierarchy: JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null') || pivotHierarchy,
-        enabledPivotDims: JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || enabledPivotDims
+        enabledPivotDims: JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || enabledPivotDims,
+        userColumnStructures: userColumnStructures || {}
     };
     
     const { error } = await supabaseClient
