@@ -12102,6 +12102,21 @@ function revertToLiveLayout() {
 }
 window.revertToLiveLayout = revertToLiveLayout;
 
+function useCurrentPreviewLayout() {
+    activeLayoutKey = 'mine';
+    isTemporaryLayoutPreview = false;
+    localStorage.setItem('idealog_active_layout_key', 'mine');
+    
+    normalizeColumnStructure(pivotHierarchy, enabledPivotDims);
+    saveColumnStructure();
+    renderPivotTable();
+    
+    if (typeof showUndoToast === 'function') {
+        showUndoToast("Layout adopted as your live layout.");
+    }
+}
+window.useCurrentPreviewLayout = useCurrentPreviewLayout;
+
 // Initial hydration from local storage
 (function hydrateInitialColumnStructure() {
     const myKey = getActiveUserKey();
@@ -16886,12 +16901,15 @@ function renderPivotTable() {
     }
 
     const previewBannerHtml = isTemporaryLayoutPreview ? `
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 6px 12px; margin-top: 8px; font-size: 11.5px; color: #fbbf24;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 6px 12px; margin-top: 8px; font-size: 11.5px; color: #fbbf24; flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <span style="font-size: 14px;">👁️</span>
                 <span>Viewing <strong>${previewTargetName}'s</strong> layout (Device-only temporary preview). Modifications stay local to this tab/device and will not affect other devices.</span>
             </div>
-            <button onclick="revertToLiveLayout()" style="background: rgba(245, 158, 11, 0.2); border: 1px solid #fbbf24; border-radius: 5px; color: #fff; font-size: 11px; font-weight: 600; padding: 3px 10px; cursor: pointer; white-space: nowrap; transition: background 0.15s;">Revert to My Layout (Live)</button>
+            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                <button onclick="useCurrentPreviewLayout()" style="background: #6366f1; border: 1px solid #818cf8; border-radius: 5px; color: #fff; font-size: 11px; font-weight: 600; padding: 3px 10px; cursor: pointer; white-space: nowrap; transition: all 0.15s; box-shadow: 0 1px 4px rgba(99,102,241,0.3);">Use this layout</button>
+                <button onclick="revertToLiveLayout()" style="background: rgba(245, 158, 11, 0.2); border: 1px solid #fbbf24; border-radius: 5px; color: #fff; font-size: 11px; font-weight: 600; padding: 3px 10px; cursor: pointer; white-space: nowrap; transition: background 0.15s;">Revert to My Layout (Live)</button>
+            </div>
         </div>
     ` : '';
 
