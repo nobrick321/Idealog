@@ -12377,7 +12377,7 @@ async function loadStartupData() {
             );
         }
     }
-    
+    initPivotStructureSnapshot(true);
     redraw();
 
     // Sync toggle UI initial checkbox state
@@ -12520,6 +12520,7 @@ async function loadStartupData() {
                                         }
                                     }
                                     rebuildPerformanceCaches();
+                                    initPivotStructureSnapshot(true);
                                     redraw();
                                 } else if (localTime > remoteTime) {
                                     console.log("Local state is newer than Supabase. Pushing local changes to Supabase...");
@@ -13560,6 +13561,109 @@ function setPivotOnlyAssignedToMe(checked) {
     renderPivotTable();
 }
 
+// --- PIVOT TABLE RESTRUCTURE MODE ---
+// When true, changing/updating tasks does not shift or rearrange the pivot table structure until page refresh
+let pivotRestructureOnRefresh = localStorage.getItem('idealog_pivot_restructure_on_refresh') !== 'false';
+let pivotStructureSnapshot = null;
+
+function captureTaskStructure(t) {
+    if (!t) return null;
+    const parent = findParent(t.id);
+    const snap = {
+        id: t.id,
+        project: (parent && parent.title) ? parent.title.trim() : (t.project || 'Unassigned'),
+        status: t.status || 'todo',
+        assignee: t.assignee ? t.assignee.trim() : 'Unassigned',
+        title: t.title || '',
+        createdAt: t.createdAt || '',
+        updatedAt: t.updatedAt || '',
+        doneAt: t.doneAt || null
+    };
+    if (sheetColumns && Array.isArray(sheetColumns)) {
+        sheetColumns.forEach(c => {
+            let val = t[c.key];
+            if (val === undefined || val === '') {
+                const lowerL = c.label.toLowerCase();
+                if (lowerL === 'system') val = t.system;
+                else if (lowerL === 'subsystem') val = t.subsystem;
+            }
+            snap[c.key] = (val !== undefined && val !== null && val !== '') ? val.toString().trim() : '';
+        });
+    }
+    return snap;
+}
+
+function initPivotStructureSnapshot(force = false) {
+    if (pivotStructureSnapshot && !force) return;
+    pivotStructureSnapshot = {};
+    if (!data) return;
+    const rawTasks = allNodes(data).filter(n => n && n.id && getDepth(n.id) === 4);
+    rawTasks.forEach(t => {
+        if (t && t.id) {
+            pivotStructureSnapshot[t.id] = captureTaskStructure(t);
+        }
+    });
+}
+
+function getTaskStructureSnapshot(task) {
+    if (!task) return null;
+    if (!pivotStructureSnapshot) {
+        initPivotStructureSnapshot();
+    }
+    if (task.id && !pivotStructureSnapshot[task.id]) {
+        pivotStructureSnapshot[task.id] = captureTaskStructure(task);
+    }
+    return (task.id && pivotStructureSnapshot[task.id]) ? pivotStructureSnapshot[task.id] : task;
+}
+
+function isTaskStructureModified(t) {
+    if (!pivotRestructureOnRefresh || !pivotStructureSnapshot || !t || !pivotStructureSnapshot[t.id]) return false;
+    const snap = pivotStructureSnapshot[t.id];
+    if ((t.status || 'todo') !== (snap.status || 'todo')) return true;
+    if ((t.assignee || '').trim() !== (snap.assignee || '').trim()) return true;
+    if ((t.title || '').trim() !== (snap.title || '').trim()) return true;
+    const parent = findParent(t.id);
+    const proj = (parent && parent.title) ? parent.title.trim() : (t.project || 'Unassigned');
+    if (proj !== snap.project) return true;
+    if (sheetColumns && Array.isArray(sheetColumns)) {
+        for (let c of sheetColumns) {
+            let curVal = t[c.key];
+            if (curVal === undefined || curVal === '') {
+                const lowerL = c.label.toLowerCase();
+                if (lowerL === 'system') curVal = t.system;
+                else if (lowerL === 'subsystem') curVal = t.subsystem;
+            }
+            curVal = (curVal !== undefined && curVal !== null) ? curVal.toString().trim() : '';
+            if (curVal !== (snap[c.key] || '')) return true;
+        }
+    }
+    if (globalPivotSort && globalPivotSort.startsWith('modified') && t.updatedAt !== snap.updatedAt) return true;
+    return false;
+}
+
+function togglePivotRestructureMode(val) {
+    const isRefreshMode = (typeof val === 'boolean') ? val : (val === 'refresh' || val === true);
+    pivotRestructureOnRefresh = isRefreshMode;
+    localStorage.setItem('idealog_pivot_restructure_on_refresh', isRefreshMode ? 'true' : 'false');
+    if (isRefreshMode) {
+        initPivotStructureSnapshot(true);
+    }
+    renderPivotTable();
+    if (typeof showUndoToast === 'function') {
+        showUndoToast(isRefreshMode ? "Pivot restructuring: On page refresh." : "Pivot restructuring: Live on edits.");
+    }
+}
+window.togglePivotRestructureMode = togglePivotRestructureMode;
+
+function refreshPivotStructure() {
+    initPivotStructureSnapshot(true);
+    renderPivotTable();
+    if (typeof showUndoToast === 'function') {
+        showUndoToast("Pivot table structure refreshed to latest data.");
+    }
+}
+window.refreshPivotStructure = refreshPivotStructure;
+
 // Track active selection highlights in the Pivot Table
 let activePivotHighlightDim = null; // e.g. 'system'
 let activePivotHighlightValue = null; // e.g. 'LP'
@@ -14566,6 +14670,9 @@ function deleteSheetTask(taskId) {
         parent.children = parent.children.filter(c => c.id !== taskId);
         if (data.history) {
             data.history = data.history.filter(ev => ev.taskId !== taskId);
+        }
+        if (pivotStructureSnapshot) {
+            delete pivotStructureSnapshot[taskId];
         }
         save();
         renderSheet();
@@ -16767,6 +16874,10 @@ function renderPivotTable() {
     const area = document.getElementById('sheet-content-area');
     area.innerHTML = '';
 
+    if (pivotRestructureOnRefresh && !pivotStructureSnapshot) {
+        initPivotStructureSnapshot();
+    }
+
     const rawTasks = allNodes(data).filter(n => getDepth(n.id) === 4);
     
     // Resolve the logged-in user's assigned name mapping from userProfilesCache
@@ -16779,43 +16890,56 @@ function renderPivotTable() {
         }
     }
     
-    let tasks = rawTasks.filter(t => !shouldHideTask(t));
+    let tasks = rawTasks.filter(t => {
+        if (pivotRestructureOnRefresh) {
+            const snap = getTaskStructureSnapshot(t);
+            return !shouldHideTask(snap);
+        }
+        return !shouldHideTask(t);
+    });
     if (pivotOnlyAssignedToMe) {
         // Filter tasks down to the active user's mapped assignee name
         // (if not mapped or not logged in, treat assignee mapping as empty so it filters out tasks)
-        tasks = tasks.filter(t => t.assignee === loggedInAssigneeName);
+        tasks = tasks.filter(t => {
+            const assignee = pivotRestructureOnRefresh ? getTaskStructureSnapshot(t).assignee : t.assignee;
+            return assignee === loggedInAssigneeName;
+        });
     }
     
     const projects = getProjectsList();
 
     function getTaskDimVal(task, dim) {
+        const target = (pivotRestructureOnRefresh) ? getTaskStructureSnapshot(task) : task;
+        if (!target) return 'Unassigned';
+
         if (dim === 'project') {
+            if (target.project) return target.project.trim();
             const parent = findParent(task.id);
-            return parent ? parent.title.trim() : 'Unassigned';
+            return (parent && parent.title) ? parent.title.trim() : 'Unassigned';
         }
         if (dim === 'assignee') {
-            return task.assignee ? task.assignee.trim() : 'Unassigned';
+            return target.assignee ? target.assignee.trim() : 'Unassigned';
         }
         if (dim === 'status') {
-            return task.status || 'todo';
+            return target.status || 'todo';
         }
         if (dim === 'created_on') {
-            return task.createdAt ? new Date(task.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unassigned';
+            return target.createdAt ? new Date(target.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unassigned';
         }
         if (dim === 'modified_on') {
-            return task.updatedAt ? new Date(task.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unassigned';
+            return target.updatedAt ? new Date(target.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unassigned';
         }
         // Custom or dynamic columns (with fallback to static system/subsystem keys)
-        let val = task[dim];
+        let val = target[dim];
         if (val === undefined || val === '') {
             const colDef = sheetColumns.find(c => c.key === dim);
             if (colDef) {
                 const lowerL = colDef.label.toLowerCase();
-                if (lowerL === 'system') val = task.system;
-                else if (lowerL === 'subsystem') val = task.subsystem;
+                if (lowerL === 'system') val = target.system;
+                else if (lowerL === 'subsystem') val = target.subsystem;
             }
         }
-        return val ? val.toString().trim() : 'Unassigned';
+        return (val !== undefined && val !== null && val !== '') ? val.toString().trim() : 'Unassigned';
     }
 
     // Apply active spreadsheet column filters to tasks list
@@ -16964,6 +17088,18 @@ function renderPivotTable() {
                     <input type="checkbox" ${freezeHeaders ? 'checked' : ''} onchange="setFreezeHeaders(this.checked)" style="accent-color: var(--accent); cursor: pointer;">
                     Freeze Headers
                 </label>
+                <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 6px; padding: 0 8px; height: 28px;">
+                    <span style="font-size: 10px; font-weight: bold; color: var(--text-muted); text-transform: uppercase; white-space: nowrap;">Restructure:</span>
+                    <select onchange="togglePivotRestructureMode(this.value === 'refresh')" style="background: transparent; border: none; outline: none; color: var(--text); font-size: 11px; cursor: pointer;">
+                        <option value="refresh" ${pivotRestructureOnRefresh ? 'selected' : ''} style="background:#080c14;color:#fff;">On Page Refresh</option>
+                        <option value="live" ${!pivotRestructureOnRefresh ? 'selected' : ''} style="background:#080c14;color:#fff;">Live on Edit</option>
+                    </select>
+                </div>
+                ${pivotRestructureOnRefresh ? `
+                    <button onclick="refreshPivotStructure()" title="Recalculate and restructure table now with latest changes" style="display: flex; align-items: center; gap: 4px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: 6px; padding: 0 8px; height: 28px; color: #818cf8; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.15s;">
+                        <span style="font-size: 12px;">⟳</span> Refresh Structure
+                    </button>
+                ` : ''}
             </div>
             ${previewBannerHtml}
         </div>
@@ -16975,24 +17111,26 @@ function renderPivotTable() {
             // Sort tasks array at the leaf node level using globalPivotSort
             const sortedTasks = [...tasksList];
             sortedTasks.sort((a, b) => {
-                let valA = a.title || '';
-                let valB = b.title || '';
+                const itemA = pivotRestructureOnRefresh ? getTaskStructureSnapshot(a) : a;
+                const itemB = pivotRestructureOnRefresh ? getTaskStructureSnapshot(b) : b;
+                let valA = itemA.title || '';
+                let valB = itemB.title || '';
                 
                 if (globalPivotSort === 'created_desc') {
-                    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    const timeA = itemA.createdAt ? new Date(itemA.createdAt).getTime() : 0;
+                    const timeB = itemB.createdAt ? new Date(itemB.createdAt).getTime() : 0;
                     return timeB - timeA;
                 } else if (globalPivotSort === 'created_asc') {
-                    const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                    const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    const timeA = itemA.createdAt ? new Date(itemA.createdAt).getTime() : 0;
+                    const timeB = itemB.createdAt ? new Date(itemB.createdAt).getTime() : 0;
                     return timeA - timeB;
                 } else if (globalPivotSort === 'modified_desc') {
-                    const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-                    const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+                    const timeA = itemA.updatedAt ? new Date(itemA.updatedAt).getTime() : 0;
+                    const timeB = itemB.updatedAt ? new Date(itemB.updatedAt).getTime() : 0;
                     return timeB - timeA;
                 } else if (globalPivotSort === 'modified_asc') {
-                    const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-                    const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+                    const timeA = itemA.updatedAt ? new Date(itemA.updatedAt).getTime() : 0;
+                    const timeB = itemB.updatedAt ? new Date(itemB.updatedAt).getTime() : 0;
                     return timeA - timeB;
                 } else if (globalPivotSort === 'alpha_desc') {
                     return valB.localeCompare(valA);
@@ -17009,7 +17147,7 @@ function renderPivotTable() {
         tasksList.forEach(t => {
             let key = getTaskDimVal(t, dim);
             if (dim === 'status') {
-                key = sLabel(t.status);
+                key = sLabel(getTaskDimVal(t, 'status'));
             }
             if (!group[key]) group[key] = [];
             group[key].push(t);
@@ -17042,7 +17180,8 @@ function renderPivotTable() {
                 globalPivotSort === 'modified_desc' || globalPivotSort === 'modified_asc') {
                 
                 const getEpoch = (t, type) => {
-                    const dateStr = (type === 'created') ? t.createdAt : t.updatedAt;
+                    const item = pivotRestructureOnRefresh ? getTaskStructureSnapshot(t) : t;
+                    const dateStr = (type === 'created') ? item.createdAt : item.updatedAt;
                     return dateStr ? new Date(dateStr).getTime() : 0;
                 };
                 
@@ -17181,6 +17320,7 @@ function renderPivotTable() {
                             <span contenteditable="true" onblur="updateTaskTitleFromSheet('${t.id}', this.innerText)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
                                 ${t.title}
                             </span>
+                            ${isTaskStructureModified(t) ? `<span title="Pending restructure: this task will move to its updated position after page refresh" style="display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; background:rgba(245,158,11,0.25); border:1px solid #f59e0b; color:#fbbf24; font-size:9px; font-weight:bold; margin-left:6px; flex-shrink:0; cursor:help;">⟳</span>` : ''}
                             <button class="btn-gantt-action" style="padding:0;color:#f87171;" onclick="event.stopPropagation(); deleteSheetTask('${t.id}')">×</button>
                         </div>
                     </td>
@@ -18214,9 +18354,13 @@ function addFollowupTask() {
 function deleteSelected() {
     if(!selectedId||selectedId==='root') return;
     const parent=findParent(selectedId); if(!parent) return;
-    parent.children=parent.children.filter(c=>c.id!==selectedId);
+    const deletedId = selectedId;
+    parent.children=parent.children.filter(c=>c.id!==deletedId);
     if (data.history) {
-        data.history = data.history.filter(ev => ev.taskId !== selectedId);
+        data.history = data.history.filter(ev => ev.taskId !== deletedId);
+    }
+    if (pivotStructureSnapshot) {
+        delete pivotStructureSnapshot[deletedId];
     }
     isNewDraft = false;
     save(); selectedId=null;
