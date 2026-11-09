@@ -373,7 +373,7 @@
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: 3000;
+            z-index: 100000;
         }
         .modal-overlay.open {
             display: flex !important;
@@ -1169,21 +1169,40 @@
 </head>
 <body>
 <div id="auth-container">
-    <div class="auth-card">
+    <div class="auth-card" style="max-width: 440px; width: 100%;">
         <div class="auth-logo">&#10022;</div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
             <h1 class="auth-title">Welcome to Idealog</h1>
-            <p class="auth-subtitle">A mind map project manager. Sign in to view and collaborate on your tasks.</p>
+            <p class="auth-subtitle">A mind map project manager. Sign in to collaborate across devices, or continue locally in offline mode.</p>
         </div>
-        <button id="btn-auth-signin" onclick="signInWithGoogle()" class="btn-sm" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 220px; height: 38px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; font-size: 12.5px; cursor: pointer; transition: all 0.15s ease;">
-            <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px;">
-                <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.23 2.673 1.24 6.55l4.026 3.215z"/>
-                <path fill="#4285F4" d="M23.64 12.273c0-.818-.073-1.609-.208-2.373H12v4.582h6.527C18.245 15.655 17.02 17 15.26 18.173v3.018h9.082c5.309-4.882 8.355-12.073 8.355-14.882z"/>
-                <path fill="#FBBC05" d="M5.266 14.235 1.24 17.45A12.002 12.002 0 0 1 0 12c0-1.927.455-3.755 1.24-5.45l4.026 3.215a7.042 7.042 0 0 0-.25 2.235c0 .818.09 1.6.25 2.235z"/>
-                <path fill="#34A853" d="M12 24c3.24 0 5.973-1.073 7.964-2.918l-3.082-3.018c-.855.573-1.955.918-3.136.918-3.136 0-5.782-2.118-6.732-4.964L1.24 17.45C3.23 21.327 7.27 24 12 24z"/>
-            </svg>
-            Sign in with Google
-        </button>
+
+        <!-- Warning banner if cloud is offline / quota exceeded -->
+        <div id="auth-cloud-warning" style="display: none; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 10px 14px; text-align: left; font-size: 11.5px; line-height: 1.45; color: #fca5a5;">
+            <div style="font-weight: 600; color: #f87171; margin-bottom: 2px;">⚠️ Cloud Service Offline / Quota Exceeded</div>
+            Supabase is currently unreachable. You can continue working uninterrupted in <strong>Offline Mode</strong> (all local data is preserved).
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; align-items: center; margin-top: 6px;">
+            <button id="btn-auth-signin" onclick="signInWithGoogle()" class="btn-sm" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: 260px; height: 38px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; font-size: 12.5px; cursor: pointer; transition: all 0.15s ease;">
+                <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px;">
+                    <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.23 2.673 1.24 6.55l4.026 3.215z"/>
+                    <path fill="#4285F4" d="M23.64 12.273c0-.818-.073-1.609-.208-2.373H12v4.582h6.527C18.245 15.655 17.02 17 15.26 18.173v3.018h9.082c5.309-4.882 8.355-12.073 8.355-14.882z"/>
+                    <path fill="#FBBC05" d="M5.266 14.235 1.24 17.45A12.002 12.002 0 0 1 0 12c0-1.927.455-3.755 1.24-5.45l4.026 3.215a7.042 7.042 0 0 0-.25 2.235c0 .818.09 1.6.25 2.235z"/>
+                    <path fill="#34A853" d="M12 24c3.24 0 5.973-1.073 7.964-2.918l-3.082-3.018c-.855.573-1.955.918-3.136.918-3.136 0-5.782-2.118-6.732-4.964L1.24 17.45C3.23 21.327 7.27 24 12 24z"/>
+                </svg>
+                Sign in with Google
+            </button>
+
+            <button id="btn-auth-offline" onclick="enterOfflineMode()" class="btn-sm" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; max-width: 260px; height: 38px; border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.4); background: rgba(99, 102, 241, 0.15); color: #a5b4fc; font-weight: 600; font-size: 12.5px; cursor: pointer; transition: all 0.15s ease;">
+                💾 Continue in Offline Mode
+            </button>
+        </div>
+
+        <div style="margin-top: 12px; font-size: 11.5px;">
+            <a href="#" onclick="event.preventDefault(); openSupabaseSettingsModal();" style="color: var(--accent); text-decoration: none; opacity: 0.85; transition: opacity 0.15s ease;">
+                ⚙️ Supabase Cloud Settings
+            </a>
+        </div>
     </div>
 </div>
 <div id="app">
@@ -1519,40 +1538,79 @@
 
 <!-- Supabase Configuration Modal -->
 <div class="modal-overlay" id="supabase-config-modal">
-    <div class="modal-box" style="width: 580px;">
+    <div class="modal-box" style="width: 580px; max-width: 95vw;">
         <div class="modal-header">
             <h3>⚙️ Supabase Cloud Configuration</h3>
             <button class="panel-close" onclick="closeSupabaseSettingsModal()">×</button>
         </div>
-        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; text-align: center; padding: 20px 10px;">
-            <p style="font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px;">
-                Connect Idealog directly to your personal **Supabase** database instance. Data will synchronize automatically in the background across all devices.
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 18px 16px;">
+            <p style="font-size: 12px; color: var(--text-dim); line-height: 1.5; margin: 0;">
+                Connect Idealog to your Supabase project for real-time collaboration. If Supabase is offline or quota exceeded, you can work safely in <strong>Offline Mode</strong> with all data stored locally.
             </p>
             
-            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 5px 0; display: flex; flex-direction: column; align-items: center; gap: 10px;">
-                <div id="google-auth-status" style="font-size: 12px; color: var(--text-muted); font-weight: 500;">
+            <!-- Mode Switcher Banner -->
+            <div id="cfg-mode-banner" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div>
+                    <div id="cfg-mode-status" style="font-size: 12px; font-weight: 600; color: #f59e0b;">
+                        ● Mode: Checking...
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">
+                        Edits persist locally in your browser at all times.
+                    </div>
+                </div>
+                <button id="btn-cfg-mode-toggle" class="btn-sm" onclick="toggleOfflineModeManual()" style="height: 30px; font-size: 11px; border-radius: 6px; padding: 0 12px; font-weight: 600; cursor: pointer; white-space: nowrap;">
+                    Switch Mode
+                </button>
+            </div>
+
+            <!-- Supabase Custom Project URL and Anon Key -->
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px; text-align: left;">
+                <div style="font-size: 11.5px; font-weight: 600; color: var(--text); display: flex; justify-content: space-between; align-items: center;">
+                    <span>Project Credentials</span>
+                    <button class="btn-sm btn-secondary" onclick="resetSupabaseConfig()" style="font-size: 10px; height: 22px; padding: 0 8px;">Reset Defaults</button>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <label style="font-size: 11px; color: var(--text-dim); font-weight: 500;">Supabase Project URL</label>
+                    <input type="text" id="cfg-supabase-url" placeholder="https://your-project.supabase.co" style="width: 100%; height: 32px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; color: var(--text); font-size: 11.5px; font-family: monospace;">
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <label style="font-size: 11px; color: var(--text-dim); font-weight: 500;">Anon Public Key (JWT)</label>
+                    <textarea id="cfg-supabase-key" rows="2" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; color: var(--text); font-size: 11px; font-family: monospace; resize: vertical;"></textarea>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-sm btn-primary" onclick="saveSupabaseConfig()" style="height: 28px; font-size: 11px; padding: 0 12px;">Save & Reconnect</button>
+                        <button class="btn-sm btn-secondary" onclick="testSupabaseConnection()" style="height: 28px; font-size: 11px; padding: 0 10px;">Test Ping</button>
+                    </div>
+                    <span id="cfg-test-result" style="font-size: 11px; font-weight: 500;"></span>
+                </div>
+            </div>
+            
+            <!-- Google Authentication Section -->
+            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                <div id="google-auth-status" style="font-size: 11.5px; color: var(--text-muted); font-weight: 500;">
                     Checking connection status...
                 </div>
-                <button id="btn-google-signin" class="btn-sm" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 220px; height: 38px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; font-size: 12.5px; cursor: pointer; transition: all 0.15s ease;">
+                <button id="btn-google-signin" class="btn-sm" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 220px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-weight: 500; font-size: 12px; cursor: pointer; transition: all 0.15s ease;">
                     Sign in with Google
                 </button>
             </div>
             
             <!-- Auto-Sync Toggle Control -->
-            <label style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; height: 34px; font-size: 12px; font-weight: 600; color: var(--text-dim); user-select: none; margin: 0 auto; max-width: 220px; width: 100%;">
+            <label style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; height: 32px; font-size: 11.5px; font-weight: 600; color: var(--text-dim); user-select: none; margin: 0 auto; max-width: 220px; width: 100%;">
                 <input type="checkbox" id="sync-active-toggle" checked onchange="toggleAutoSyncState(this.checked)" style="accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; margin: 0;">
                 Enable Auto-Sync
             </label>
             
             <!-- Admin Manage Users Section Trigger Link -->
-            <div id="admin-users-link-container" style="display: none; font-size: 11.5px; margin-top: 5px;">
+            <div id="admin-users-link-container" style="display: none; font-size: 11.5px; text-align: center;">
                 <a href="#" onclick="event.preventDefault(); openUserRolesManagementModal();" style="color: var(--accent); text-decoration: underline;">👥 Manage Org Roles & Permissions (Admin)</a>
             </div>
         </div>
         <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; align-items: center;">
             <div style="display: flex; gap: 6px;">
-                <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force upload local storage data to Supabase cloud? This will overwrite the cloud database state.')) { try { await pushStateToSupabase(); alert('State forced up to Supabase successfully!'); } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); color: #34d399;">Force Push</button>
-                <button class="btn-sm btn-secondary" onclick="(async () => { if(confirm('Force download data from Supabase cloud? This will overwrite your local browser storage state.')) { try { const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state'); const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null; if(error) throw error; if(dbRows && dbRows.data && dbRows.data.idealog) { data = dbRows.data.idealog; localStorage.setItem('idealog', JSON.stringify(data)); if (dbRows.data.sheetColumns) { sheetColumns = dbRows.data.sheetColumns; localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns)); } if (dbRows.data.objectLists) { objectLists = dbRows.data.objectLists; sanitizeObjectLists(); localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists)); } if (dbRows.data.userColumnStructures && typeof dbRows.data.userColumnStructures === 'object') { userColumnStructures = dbRows.data.userColumnStructures; localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures)); } if (!isTemporaryLayoutPreview) { const myKey = getActiveUserKey(); if (userColumnStructures && userColumnStructures[myKey]) { normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims); } else if (dbRows.data.pivotHierarchy || dbRows.data.enabledPivotDims) { normalizeColumnStructure(dbRows.data.pivotHierarchy, dbRows.data.enabledPivotDims); } } redraw(); alert('State forced down from Supabase successfully!'); } else { alert('No remote state found to pull.'); } } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
+                <button class="btn-sm btn-secondary" onclick="(async () => { if (isOfflineMode || isSupabaseBlockedOrOffline || !supabaseClient) { alert('Cannot Push: Idealog is currently in Offline Mode or Supabase cloud is unreachable.'); return; } if(confirm('Force upload local storage data to Supabase cloud? This will overwrite the cloud database state.')) { try { await pushStateToSupabase(); alert('State forced up to Supabase successfully!'); } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); color: #34d399;">Force Push</button>
+                <button class="btn-sm btn-secondary" onclick="(async () => { if (isOfflineMode || isSupabaseBlockedOrOffline || !supabaseClient) { alert('Cannot Pull: Idealog is currently in Offline Mode or Supabase cloud is unreachable.'); return; } if(confirm('Force download data from Supabase cloud? This will overwrite your local browser storage state.')) { try { const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state'); const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null; if(error) throw error; if(dbRows && dbRows.data && dbRows.data.idealog) { data = dbRows.data.idealog; localStorage.setItem('idealog', JSON.stringify(data)); if (dbRows.data.sheetColumns) { sheetColumns = dbRows.data.sheetColumns; localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns)); } if (dbRows.data.objectLists) { objectLists = dbRows.data.objectLists; sanitizeObjectLists(); localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists)); } if (dbRows.data.userColumnStructures && typeof dbRows.data.userColumnStructures === 'object') { userColumnStructures = dbRows.data.userColumnStructures; localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures)); } if (!isTemporaryLayoutPreview) { const myKey = getActiveUserKey(); if (userColumnStructures && userColumnStructures[myKey]) { normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims); } else if (dbRows.data.pivotHierarchy || dbRows.data.enabledPivotDims) { normalizeColumnStructure(dbRows.data.pivotHierarchy, dbRows.data.enabledPivotDims); } } redraw(); alert('State forced down from Supabase successfully!'); } else { alert('No remote state found to pull.'); } } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
             </div>
             <button class="btn-sm btn-secondary" onclick="closeSupabaseSettingsModal()" style="max-width:80px;">Close</button>
         </div>
@@ -11800,11 +11858,23 @@ function getContextRankedOptions(type, n) {
 // --- SUPABASE CONFIGURATION STATE ---
 let supabaseClient = null;
 let currentAuthenticatedUser = null;
+let isOfflineMode = (typeof localStorage !== 'undefined' && localStorage.getItem('idealog_offline_mode') === 'true');
+let isSupabaseBlockedOrOffline = false;
 
 // --- USER IDENTIFIERS & DISPLAY NAMES ---
 function getActiveUserObject() {
     // 1. In-memory cached user
     if (currentAuthenticatedUser) return currentAuthenticatedUser;
+
+    // In offline mode, supply the active local admin profile
+    if (isOfflineMode) {
+        currentAuthenticatedUser = {
+            id: 'local_admin',
+            email: 'ritesh@morphle.in',
+            user_metadata: { full_name: 'Ritesh', name: 'Ritesh' }
+        };
+        return currentAuthenticatedUser;
+    }
 
     // 2. Read active Supabase v2 session directly from localStorage
     try {
@@ -12030,7 +12100,7 @@ function saveColumnStructure() {
         localStorage.setItem('idealog', JSON.stringify(data));
     }
     
-    if (typeof supabaseClient !== 'undefined' && supabaseClient && isAutoSyncEnabled) {
+    if (typeof supabaseClient !== 'undefined' && supabaseClient && isAutoSyncEnabled && !isOfflineMode && !isSupabaseBlockedOrOffline) {
         updateSupabaseStatusBadge('syncing', '● Sync Pending (1s)...', '#f59e0b');
         clearTimeout(syncTimeout);
         syncTimeout = setTimeout(async () => {
@@ -12232,7 +12302,7 @@ function setupSupabaseRealtimeSync() {
 // 2. Ultra-Lightweight Polling Fallback (Checks only 30-byte updated_at timestamp every 30s)
 function startSyncPolling() {
     stopSyncPolling();
-    if (!supabaseClient) return;
+    if (!supabaseClient || isOfflineMode || isSupabaseBlockedOrOffline) return;
 
     // Set up push notifications first
     setupSupabaseRealtimeSync();
@@ -12279,7 +12349,7 @@ function stopSyncPolling() {
 
 // Pause/resume checks when browser tab visibility changes
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && isAutoSyncEnabled && supabaseClient) {
+    if (!document.hidden && isAutoSyncEnabled && supabaseClient && !isOfflineMode && !isSupabaseBlockedOrOffline) {
         // Tab became active: do an immediate lightweight timestamp check
         (async () => {
             try {
@@ -12299,9 +12369,43 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
-// --- SUPABASE CONFIGURATION STATE ---
-const sbUrl = 'https://pprgomclbxmonnogdnrr.supabase.co';
-const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcmdvbWNsYnhtb25ub2dkbnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNDI3MzUsImV4cCI6MjA5ODkxODczNX0.po4AqnZ64AMacf7CAloNsIGb3ILZJ1hGU2exnmYj4oY';
+// --- SUPABASE CONFIGURATION STATE & KEYS ---
+const DEFAULT_SB_URL = 'https://pprgomclbxmonnogdnrr.supabase.co';
+const DEFAULT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwcmdvbWNsYnhtb25ub2dkbnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzNDI3MzUsImV4cCI6MjA5ODkxODczNX0.po4AqnZ64AMacf7CAloNsIGb3ILZJ1hGU2exnmYj4oY';
+
+let sbUrl = (typeof localStorage !== 'undefined' && localStorage.getItem('idealog_supabase_url')) || DEFAULT_SB_URL;
+let sbKey = (typeof localStorage !== 'undefined' && localStorage.getItem('idealog_supabase_key')) || DEFAULT_SB_KEY;
+
+// Fast reachability check to test if Supabase is alive or blocked/paused
+async function checkSupabaseReachability(url, timeoutMs = 2500) {
+    if (!url) return false;
+    try {
+        let pingUrl = url.trim().replace(/\/+$/, '');
+        if (!pingUrl.startsWith('http://') && !pingUrl.startsWith('https://')) {
+            pingUrl = 'https://' + pingUrl;
+        }
+        pingUrl += '/auth/v1/health';
+
+        let signal;
+        if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+            signal = AbortSignal.timeout(timeoutMs);
+        } else {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), timeoutMs);
+            signal = controller.signal;
+        }
+
+        await fetch(pingUrl, {
+            method: 'GET',
+            mode: 'no-cors',
+            signal: signal,
+            cache: 'no-store'
+        });
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
 
 // Load database state from Supabase or localStorage on startup
 async function loadStartupData() {
@@ -12384,8 +12488,35 @@ async function loadStartupData() {
     const toggleEl = document.getElementById('sync-active-toggle');
     if (toggleEl) toggleEl.checked = isAutoSyncEnabled;
 
+    // Load userProfilesCache from local storage if available
+    const localProfiles = localStorage.getItem('idealog_user_profiles_cache');
+    if (localProfiles) {
+        try {
+            userProfilesCache = JSON.parse(localProfiles);
+        } catch(e) {}
+    }
+
+    // Check if offline mode is already active
+    if (isOfflineMode) {
+        console.log("Starting in Offline Mode (persisted preference).");
+        enterOfflineMode(true);
+        return;
+    }
+
     // 2. Initialize Supabase if configuration keys are present
     if (sbUrl && sbKey) {
+        // Fast reachability check to prevent hanging or dead-redirect crashes
+        const isReachable = await checkSupabaseReachability(sbUrl, 2000);
+        if (!isReachable) {
+            console.warn("Supabase project is unreachable (quota exceeded or network error). Auto-entering Offline Mode.");
+            isSupabaseBlockedOrOffline = true;
+            enterOfflineMode(true);
+            const authWarning = document.getElementById('auth-cloud-warning');
+            if (authWarning) authWarning.style.display = 'block';
+            updateSupabaseStatusBadge('offline', '● Offline Mode (Quota Exceeded)', '#f59e0b');
+            return;
+        }
+
         try {
             console.log("Initializing Supabase Client...");
             supabaseClient = supabase.createClient(sbUrl, sbKey);
@@ -12393,6 +12524,7 @@ async function loadStartupData() {
             
             // Listen for login/logout auth state transitions dynamically
             supabaseClient.auth.onAuthStateChange(async (event, session) => {
+                if (isOfflineMode) return;
                 const user = session ? session.user : null;
                 currentAuthenticatedUser = user;
                 console.log("Supabase onAuthStateChange triggered. Event:", event, "User:", user ? user.email : "none");
@@ -12565,7 +12697,7 @@ const save = (isUndoRedoAction = false) => {
     localStorage.setItem('idealog', JSON.stringify(data));
     rebuildPerformanceCaches();
     
-    if (supabaseClient && isAutoSyncEnabled) {
+    if (supabaseClient && isAutoSyncEnabled && !isOfflineMode && !isSupabaseBlockedOrOffline) {
         updateSupabaseStatusBadge('syncing', '● Sync Pending (2s)...', '#f59e0b');
         clearTimeout(syncTimeout);
         syncTimeout = setTimeout(async () => {
@@ -18462,11 +18594,177 @@ function importBackupData(event) {
 
 // --- SUPABASE CLOUD SYNC DIRECT CONTROLS ---
 function openSupabaseSettingsModal() {
-    document.getElementById('supabase-config-modal').classList.add('open');
+    const modal = document.getElementById('supabase-config-modal');
+    if (!modal) return;
+    
+    // Populate credentials
+    const urlInput = document.getElementById('cfg-supabase-url');
+    const keyInput = document.getElementById('cfg-supabase-key');
+    if (urlInput) urlInput.value = sbUrl || '';
+    if (keyInput) keyInput.value = sbKey || '';
+    
+    const testRes = document.getElementById('cfg-test-result');
+    if (testRes) testRes.textContent = '';
+    
+    updateSupabaseModalUI();
+    modal.classList.add('open');
 }
 
 function closeSupabaseSettingsModal() {
-    document.getElementById('supabase-config-modal').classList.remove('open');
+    const modal = document.getElementById('supabase-config-modal');
+    if (modal) modal.classList.remove('open');
+}
+
+function updateSupabaseModalUI() {
+    const modeStatus = document.getElementById('cfg-mode-status');
+    const modeToggleBtn = document.getElementById('btn-cfg-mode-toggle');
+    if (!modeStatus || !modeToggleBtn) return;
+    
+    if (isOfflineMode) {
+        modeStatus.innerHTML = `<span style="color: #f59e0b;">● Offline Mode Active</span> ${isSupabaseBlockedOrOffline ? '<span style="font-size:10px; color:#f87171;">(Cloud Quota Blocked)</span>' : ''}`;
+        modeToggleBtn.textContent = 'Switch to Cloud Mode';
+        modeToggleBtn.style.color = '#38bdf8';
+        modeToggleBtn.style.borderColor = 'rgba(56, 189, 248, 0.3)';
+        modeToggleBtn.style.background = 'rgba(56, 189, 248, 0.08)';
+    } else if (isSupabaseBlockedOrOffline) {
+        modeStatus.innerHTML = `<span style="color: #f87171;">● Cloud Unreachable / Quota Blocked</span>`;
+        modeToggleBtn.textContent = 'Switch to Offline Mode';
+        modeToggleBtn.style.color = '#f59e0b';
+        modeToggleBtn.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+        modeToggleBtn.style.background = 'rgba(245, 158, 11, 0.08)';
+    } else {
+        modeStatus.innerHTML = `<span style="color: #34d399;">● Cloud Mode Connected</span>`;
+        modeToggleBtn.textContent = 'Work in Offline Mode';
+        modeToggleBtn.style.color = '#94a3b8';
+        modeToggleBtn.style.borderColor = 'var(--border)';
+        modeToggleBtn.style.background = 'transparent';
+    }
+}
+
+function toggleOfflineModeManual() {
+    if (isOfflineMode) {
+        exitOfflineMode();
+    } else {
+        enterOfflineMode();
+        updateSupabaseModalUI();
+    }
+}
+
+function saveSupabaseConfig() {
+    const urlInput = document.getElementById('cfg-supabase-url');
+    const keyInput = document.getElementById('cfg-supabase-key');
+    if (!urlInput || !keyInput) return;
+
+    let newUrl = urlInput.value.trim();
+    let newKey = keyInput.value.trim();
+
+    if (!newUrl || !newKey) {
+        alert("Please enter both a Supabase Project URL and Anon Public Key.");
+        return;
+    }
+
+    if (!newUrl.startsWith('http://') && !newUrl.startsWith('https://')) {
+        newUrl = 'https://' + newUrl;
+    }
+    newUrl = newUrl.replace(/\/+$/, '');
+
+    localStorage.setItem('idealog_supabase_url', newUrl);
+    localStorage.setItem('idealog_supabase_key', newKey);
+    localStorage.removeItem('idealog_offline_mode');
+    isOfflineMode = false;
+    sbUrl = newUrl;
+    sbKey = newKey;
+
+    showUndoToast("Supabase credentials saved. Reconnecting...", true);
+    setTimeout(() => {
+        location.reload();
+    }, 600);
+}
+
+function resetSupabaseConfig() {
+    if (confirm("Reset Supabase settings to default configuration?")) {
+        localStorage.removeItem('idealog_supabase_url');
+        localStorage.removeItem('idealog_supabase_key');
+        localStorage.removeItem('idealog_offline_mode');
+        sbUrl = DEFAULT_SB_URL;
+        sbKey = DEFAULT_SB_KEY;
+        isOfflineMode = false;
+        showUndoToast("Reset to default configuration. Reloading...", true);
+        setTimeout(() => {
+            location.reload();
+        }, 600);
+    }
+}
+
+async function testSupabaseConnection() {
+    const resEl = document.getElementById('cfg-test-result');
+    const urlInput = document.getElementById('cfg-supabase-url');
+    const testUrl = (urlInput ? urlInput.value.trim() : sbUrl) || sbUrl;
+    
+    if (resEl) {
+        resEl.textContent = 'Pinging...';
+        resEl.style.color = '#fbbf24';
+    }
+
+    const reachable = await checkSupabaseReachability(testUrl, 3000);
+    if (reachable) {
+        if (resEl) {
+            resEl.textContent = '✓ Connected!';
+            resEl.style.color = '#34d399';
+        }
+    } else {
+        if (resEl) {
+            resEl.textContent = '✗ Unreachable / Blocked';
+            resEl.style.color = '#f87171';
+        }
+    }
+}
+
+function enterOfflineMode(silent = false) {
+    isOfflineMode = true;
+    localStorage.setItem('idealog_offline_mode', 'true');
+    currentUserRole = 'admin';
+    
+    if (!currentAuthenticatedUser) {
+        currentAuthenticatedUser = {
+            id: 'local_admin',
+            email: 'ritesh@morphle.in',
+            user_metadata: { full_name: 'Ritesh', name: 'Ritesh' }
+        };
+    }
+    
+    const appEl = document.getElementById('app');
+    const authContainer = document.getElementById('auth-container');
+    if (appEl) appEl.style.display = 'flex';
+    if (authContainer) authContainer.style.display = 'none';
+    
+    stopSyncPolling();
+    
+    const badgeText = isSupabaseBlockedOrOffline ? '● Offline Mode (Quota Exceeded)' : '● Offline Mode';
+    updateSupabaseStatusBadge('offline', badgeText, '#f59e0b');
+    
+    const headerAdminBtn = document.getElementById('btn-header-admin-users');
+    if (headerAdminBtn) headerAdminBtn.style.display = 'inline-flex';
+    
+    const myKey = getActiveUserKey();
+    if (!isTemporaryLayoutPreview) {
+        if (userColumnStructures && userColumnStructures[myKey]) {
+            normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims);
+        }
+    }
+    
+    if (typeof renderSheet === 'function') renderSheet();
+    redraw();
+    
+    if (!silent) {
+        showUndoToast("Operating in Offline Mode. All edits saved to local browser storage.", true);
+    }
+}
+
+function exitOfflineMode() {
+    isOfflineMode = false;
+    localStorage.removeItem('idealog_offline_mode');
+    location.reload();
 }
 
 function updateSupabaseStatusBadge(status, text, colorOverride = null) {
@@ -18488,7 +18786,35 @@ function updateSupabaseStatusBadge(status, text, colorOverride = null) {
 
 // Google OAuth Helpers
 async function signInWithGoogle() {
-    if (!supabaseClient) return;
+    if (isOfflineMode) {
+        if (!confirm("You are currently in Offline Mode. Do you want to switch to Cloud Mode and sign in with Google?")) {
+            return;
+        }
+        isOfflineMode = false;
+        localStorage.removeItem('idealog_offline_mode');
+    }
+
+    if (isSupabaseBlockedOrOffline) {
+        alert("The Supabase cloud service is unreachable (the project may be paused or its free tier quota exhausted).\n\nContinuing in Offline Mode so your local work is not interrupted.");
+        enterOfflineMode();
+        return;
+    }
+
+    if (!supabaseClient) {
+        alert("Supabase client is not initialized. Please verify your Project URL and Anon Key in Cloud Settings.");
+        openSupabaseSettingsModal();
+        return;
+    }
+
+    // Fast pre-flight check before triggering redirect so browser tab doesn't crash on dead domain
+    const reachable = await checkSupabaseReachability(sbUrl, 1500);
+    if (!reachable) {
+        isSupabaseBlockedOrOffline = true;
+        alert("Cannot connect to Supabase at " + sbUrl + ".\n\nProject may be paused or quota exhausted. Entering Offline Mode.");
+        enterOfflineMode();
+        return;
+    }
+
     try {
         const { error } = await supabaseClient.auth.signInWithOAuth({
             provider: 'google',
@@ -18498,7 +18824,8 @@ async function signInWithGoogle() {
         });
         if (error) throw error;
     } catch (e) {
-        alert("Error starting Google Sign-in: " + e.message);
+        alert("Error starting Google Sign-in: " + e.message + "\n\nEntering Offline Mode.");
+        enterOfflineMode();
     }
 }
 
@@ -18516,13 +18843,28 @@ function updateGoogleAuthUIState(user) {
     currentAuthenticatedUser = user;
     const appEl = document.getElementById('app');
     const authContainer = document.getElementById('auth-container');
+    const authWarning = document.getElementById('auth-cloud-warning');
     
+    if (isOfflineMode) {
+        if (appEl) appEl.style.display = 'flex';
+        if (authContainer) authContainer.style.display = 'none';
+        return;
+    }
+
     if (user) {
         if (appEl) appEl.style.display = 'flex';
         if (authContainer) authContainer.style.display = 'none';
     } else {
+        // If Supabase is unreachable/blocked, automatically enter offline mode rather than locking user out
+        if (isSupabaseBlockedOrOffline) {
+            enterOfflineMode(true);
+            return;
+        }
         if (appEl) appEl.style.display = 'none';
         if (authContainer) authContainer.style.display = 'flex';
+        if (authWarning) {
+            authWarning.style.display = isSupabaseBlockedOrOffline ? 'block' : 'none';
+        }
     }
 
     const statusLabel = document.getElementById('google-auth-status');
@@ -18537,7 +18879,7 @@ function updateGoogleAuthUIState(user) {
         authBtn.style.borderColor = 'rgba(239, 68, 68, 0.2)';
         authBtn.style.background = 'rgba(239, 68, 68, 0.04)';
     } else {
-        statusLabel.textContent = 'Not signed in with Google';
+        statusLabel.textContent = isOfflineMode ? 'Offline Mode (Local Storage)' : 'Not signed in with Google';
         authBtn.innerHTML = `
             <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right: 4px;">
                 <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.23 2.673 1.24 6.55l4.026 3.215z"/>
@@ -18556,33 +18898,38 @@ function updateGoogleAuthUIState(user) {
 
 // Push local state into Supabase cloud table row
 async function pushStateToSupabase() {
-    if (!supabaseClient) return false;
+    if (isOfflineMode || isSupabaseBlockedOrOffline || !supabaseClient) return false;
     
-    // Verify user session is authenticated before pushing database sync payloads
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-        console.warn("Attempted to sync with Supabase while not logged in.");
-        updateSupabaseStatusBadge('offline', '● Cloud Offline (Sign In)', '#94a3b8');
+    try {
+        // Verify user session is authenticated before pushing database sync payloads
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        if (!user) {
+            console.warn("Attempted to sync with Supabase while not logged in.");
+            updateSupabaseStatusBadge('offline', '● Cloud Offline (Sign In)', '#94a3b8');
+            return false;
+        }
+        
+        const dbPayload = {
+            idealog: JSON.parse(localStorage.getItem('idealog')),
+            sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_cols')),
+            objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
+            collapsed: Array.from(collapsed),
+            pivotHierarchy: JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null') || pivotHierarchy,
+            enabledPivotDims: JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || enabledPivotDims,
+            userColumnStructures: userColumnStructures || {}
+        };
+        
+        const { error } = await supabaseClient
+            .from('idealog_sync')
+            .upsert({ id: 'db_state', data: dbPayload, updated_at: new Date().toISOString() });
+            
+        if (error) throw error;
+        console.log("State pushed to Supabase cloud successfully.");
+        return true;
+    } catch (e) {
+        console.warn("pushStateToSupabase error:", e);
         return false;
     }
-    
-    const dbPayload = {
-        idealog: JSON.parse(localStorage.getItem('idealog')),
-        sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_cols')),
-        objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
-        collapsed: Array.from(collapsed),
-        pivotHierarchy: JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null') || pivotHierarchy,
-        enabledPivotDims: JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || enabledPivotDims,
-        userColumnStructures: userColumnStructures || {}
-    };
-    
-    const { error } = await supabaseClient
-        .from('idealog_sync')
-        .upsert({ id: 'db_state', data: dbPayload, updated_at: new Date().toISOString() });
-        
-    if (error) throw error;
-    console.log("State pushed to Supabase cloud successfully.");
-    return true;
 }
 
 // Dynamic Data Schema Migration Script
@@ -18597,6 +18944,9 @@ async function verifyAndMigrateDataSchema() {
             .select('*');
         if (profiles) {
             userProfilesCache = profiles;
+            try {
+                localStorage.setItem('idealog_user_profiles_cache', JSON.stringify(userProfilesCache));
+            } catch(e) {}
             console.log("User profiles loaded:", userProfilesCache.length);
         }
 
@@ -18923,7 +19273,7 @@ let realtimeLockChannel = null;
 const LOCK_EXPIRY_TIMEOUT_MS = 15 * 60 * 1000; // 15 Minutes autolock release timeout
 
 function setupSupabaseRealtimePresenceLocks(user) {
-    if (!supabaseClient) return;
+    if (!supabaseClient || isOfflineMode || isSupabaseBlockedOrOffline) return;
     
     // Subscribe to task_locks broadcast channel
     realtimeLockChannel = supabaseClient.channel('task_locks', {
