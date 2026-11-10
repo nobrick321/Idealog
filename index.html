@@ -9,6 +9,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <!-- Google Firebase Compat SDKs (App, Auth, Firestore) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1536,18 +1540,14 @@
     </div>
 </div>
 
-<!-- Supabase Configuration Modal -->
+<!-- Cloud Configuration Modal (Firebase & Supabase) -->
 <div class="modal-overlay" id="supabase-config-modal">
-    <div class="modal-box" style="width: 580px; max-width: 95vw;">
+    <div class="modal-box" style="width: 600px; max-width: 95vw;">
         <div class="modal-header">
-            <h3>⚙️ Supabase Cloud Configuration</h3>
+            <h3>⚙️ Cloud Synchronization & Storage</h3>
             <button class="panel-close" onclick="closeSupabaseSettingsModal()">×</button>
         </div>
-        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 18px 16px;">
-            <p style="font-size: 12px; color: var(--text-dim); line-height: 1.5; margin: 0;">
-                Connect Idealog to your Supabase project for real-time collaboration. If Supabase is offline or quota exceeded, you can work safely in <strong>Offline Mode</strong> with all data stored locally.
-            </p>
-            
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 18px 16px; max-height: 80vh; overflow-y: auto;">
             <!-- Mode Switcher Banner -->
             <div id="cfg-mode-banner" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
                 <div>
@@ -1563,29 +1563,40 @@
                 </button>
             </div>
 
-            <!-- Supabase Custom Project URL and Anon Key -->
-            <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px; text-align: left;">
-                <div style="font-size: 11.5px; font-weight: 600; color: var(--text); display: flex; justify-content: space-between; align-items: center;">
-                    <span>Project Credentials</span>
-                    <button class="btn-sm btn-secondary" onclick="resetSupabaseConfig()" style="font-size: 10px; height: 22px; padding: 0 8px;">Reset Defaults</button>
+            <!-- Google Firebase Configuration Section (Primary & Recommended) -->
+            <div style="background: rgba(99, 102, 241, 0.04); border: 1px solid rgba(99, 102, 241, 0.35); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 10px; text-align: left;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 12.5px; font-weight: 600; color: #a5b4fc; display: flex; align-items: center; gap: 6px;">
+                        🔥 Google Firebase Firestore <span style="font-size: 10px; padding: 2px 6px; background: rgba(52, 211, 153, 0.15); color: #34d399; border-radius: 4px; font-weight: 600;">Recommended • Never Pauses</span>
+                    </span>
+                    <button id="btn-remove-firebase" class="btn-sm btn-secondary" onclick="removeFirebaseConfig()" style="font-size: 10px; height: 22px; padding: 0 8px; display: none;">Disconnect</button>
                 </div>
+                <p style="font-size: 11px; color: var(--text-dim); line-height: 1.45; margin: 0;">
+                    Free forever from Google, never pauses on inactivity, no monthly egress limits. Paste the <code>firebaseConfig</code> snippet from your Firebase project below:
+                </p>
                 <div style="display: flex; flex-direction: column; gap: 4px;">
-                    <label style="font-size: 11px; color: var(--text-dim); font-weight: 500;">Supabase Project URL</label>
-                    <input type="text" id="cfg-supabase-url" placeholder="https://your-project.supabase.co" style="width: 100%; height: 32px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; color: var(--text); font-size: 11.5px; font-family: monospace;">
+                    <textarea id="cfg-firebase-config" rows="4" placeholder="const firebaseConfig = {&#10;  apiKey: &quot;AIzaSy...&quot;,&#10;  authDomain: &quot;your-project.firebaseapp.com&quot;,&#10;  projectId: &quot;your-project&quot;&#10;};" style="width: 100%; background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; color: var(--text); font-size: 11px; font-family: monospace; resize: vertical; line-height: 1.4;"></textarea>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 4px;">
-                    <label style="font-size: 11px; color: var(--text-dim); font-weight: 500;">Anon Public Key (JWT)</label>
-                    <textarea id="cfg-supabase-key" rows="2" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; color: var(--text); font-size: 11px; font-family: monospace; resize: vertical;"></textarea>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <button class="btn-sm" onclick="saveFirebaseConfig()" style="height: 30px; font-size: 11.5px; padding: 0 16px; background: #6366f1; color: white; border: none; font-weight: 600; border-radius: 6px; cursor: pointer;">
+                        Save & Connect Firebase
+                    </button>
+                    <span id="cfg-firebase-status-label" style="font-size: 11px; font-weight: 600;"></span>
                 </div>
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn-sm btn-primary" onclick="saveSupabaseConfig()" style="height: 28px; font-size: 11px; padding: 0 12px;">Save & Reconnect</button>
-                        <button class="btn-sm btn-secondary" onclick="testSupabaseConnection()" style="height: 28px; font-size: 11px; padding: 0 10px;">Test Ping</button>
-                    </div>
-                    <span id="cfg-test-result" style="font-size: 11px; font-weight: 500;"></span>
-                </div>
+                
+                <!-- Quick 4-Step Setup Guide Accordion -->
+                <details style="font-size: 11px; color: var(--text-dim); border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px; margin-top: 4px;">
+                    <summary style="cursor: pointer; color: var(--accent); font-weight: 500;">📖 2-Minute Firebase Setup Instructions</summary>
+                    <ol style="padding-left: 18px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px; line-height: 1.45;">
+                        <li>Go to <a href="https://console.firebase.google.com" target="_blank" style="color: #38bdf8;">console.firebase.google.com</a> and click <strong>Add project</strong> (e.g. <em>Idealog</em>).</li>
+                        <li>Click the <strong>Web icon &lt;/&gt;</strong> on the project overview page to register a web app and copy the <code>firebaseConfig</code> snippet.</li>
+                        <li>In the sidebar under <strong>Build &gt; Firestore Database</strong>, click <strong>Create database</strong> (choose Start in test mode or allow read/write).</li>
+                        <li>Under <strong>Build &gt; Authentication</strong>, click <strong>Get started</strong> and enable <strong>Google</strong> as a Sign-in provider.</li>
+                        <li>Paste your snippet above and click <strong>Save & Connect Firebase</strong>!</li>
+                    </ol>
+                </details>
             </div>
-            
+
             <!-- Google Authentication Section -->
             <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
                 <div id="google-auth-status" style="font-size: 11.5px; color: var(--text-muted); font-weight: 500;">
@@ -1595,13 +1606,38 @@
                     Sign in with Google
                 </button>
             </div>
-            
+
             <!-- Auto-Sync Toggle Control -->
             <label style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; height: 32px; font-size: 11.5px; font-weight: 600; color: var(--text-dim); user-select: none; margin: 0 auto; max-width: 220px; width: 100%;">
                 <input type="checkbox" id="sync-active-toggle" checked onchange="toggleAutoSyncState(this.checked)" style="accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; margin: 0;">
                 Enable Auto-Sync
             </label>
             
+            <!-- Supabase (Legacy / Alternative) Collapsible Accordion -->
+            <details style="border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: rgba(255, 255, 255, 0.01);">
+                <summary style="font-size: 11.5px; font-weight: 600; color: var(--text-dim); cursor: pointer;">
+                    ⚡ Supabase Configuration (Alternative)
+                </summary>
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; text-align: left;">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <label style="font-size: 11px; color: var(--text-dim); font-weight: 500;">Supabase Project URL</label>
+                        <input type="text" id="cfg-supabase-url" placeholder="https://your-project.supabase.co" style="width: 100%; height: 30px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; color: var(--text); font-size: 11px; font-family: monospace;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <label style="font-size: 11px; color: var(--text-dim); font-weight: 500;">Anon Public Key (JWT)</label>
+                        <textarea id="cfg-supabase-key" rows="2" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; color: var(--text); font-size: 10.5px; font-family: monospace; resize: vertical;"></textarea>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+                        <div style="display: flex; gap: 6px;">
+                            <button class="btn-sm btn-secondary" onclick="saveSupabaseConfig()" style="height: 26px; font-size: 10.5px; padding: 0 10px;">Save Supabase</button>
+                            <button class="btn-sm btn-secondary" onclick="testSupabaseConnection()" style="height: 26px; font-size: 10.5px; padding: 0 10px;">Test Ping</button>
+                            <button class="btn-sm btn-secondary" onclick="resetSupabaseConfig()" style="height: 26px; font-size: 10.5px; padding: 0 8px;">Reset</button>
+                        </div>
+                        <span id="cfg-test-result" style="font-size: 10.5px; font-weight: 500;"></span>
+                    </div>
+                </div>
+            </details>
+
             <!-- Admin Manage Users Section Trigger Link -->
             <div id="admin-users-link-container" style="display: none; font-size: 11.5px; text-align: center;">
                 <a href="#" onclick="event.preventDefault(); openUserRolesManagementModal();" style="color: var(--accent); text-decoration: underline;">👥 Manage Org Roles & Permissions (Admin)</a>
@@ -1609,8 +1645,8 @@
         </div>
         <div class="modal-footer" style="display: flex; justify-content: space-between; gap: 10px; align-items: center;">
             <div style="display: flex; gap: 6px;">
-                <button class="btn-sm btn-secondary" onclick="(async () => { if (isOfflineMode || isSupabaseBlockedOrOffline || !supabaseClient) { alert('Cannot Push: Idealog is currently in Offline Mode or Supabase cloud is unreachable.'); return; } if(confirm('Force upload local storage data to Supabase cloud? This will overwrite the cloud database state.')) { try { await pushStateToSupabase(); alert('State forced up to Supabase successfully!'); } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); color: #34d399;">Force Push</button>
-                <button class="btn-sm btn-secondary" onclick="(async () => { if (isOfflineMode || isSupabaseBlockedOrOffline || !supabaseClient) { alert('Cannot Pull: Idealog is currently in Offline Mode or Supabase cloud is unreachable.'); return; } if(confirm('Force download data from Supabase cloud? This will overwrite your local browser storage state.')) { try { const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state'); const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null; if(error) throw error; if(dbRows && dbRows.data && dbRows.data.idealog) { data = dbRows.data.idealog; localStorage.setItem('idealog', JSON.stringify(data)); if (dbRows.data.sheetColumns) { sheetColumns = dbRows.data.sheetColumns; localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns)); } if (dbRows.data.objectLists) { objectLists = dbRows.data.objectLists; sanitizeObjectLists(); localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists)); } if (dbRows.data.userColumnStructures && typeof dbRows.data.userColumnStructures === 'object') { userColumnStructures = dbRows.data.userColumnStructures; localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures)); } if (!isTemporaryLayoutPreview) { const myKey = getActiveUserKey(); if (userColumnStructures && userColumnStructures[myKey]) { normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims); } else if (dbRows.data.pivotHierarchy || dbRows.data.enabledPivotDims) { normalizeColumnStructure(dbRows.data.pivotHierarchy, dbRows.data.enabledPivotDims); } } redraw(); alert('State forced down from Supabase successfully!'); } else { alert('No remote state found to pull.'); } } catch(e) { alert('Error: ' + e.message); } } })()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
+                <button class="btn-sm btn-secondary" onclick="executeForcePushToActiveCloud()" style="max-width:110px; font-size:10px; border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.05); color: #34d399;">Force Push</button>
+                <button class="btn-sm btn-secondary" onclick="executeForcePullFromActiveCloud()" style="max-width:110px; font-size:10px; border-color: rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05); color: #fbbf24;">Force Pull</button>
             </div>
             <button class="btn-sm btn-secondary" onclick="closeSupabaseSettingsModal()" style="max-width:80px;">Close</button>
         </div>
@@ -11855,16 +11891,74 @@ function getContextRankedOptions(type, n) {
     return { recommended, others };
 }
 
-// --- SUPABASE CONFIGURATION STATE ---
+// --- CLOUD BACKEND CONFIGURATION STATE (FIREBASE & SUPABASE) ---
+let firebaseApp = null;
+let firestoreDb = null;
+let firebaseAuth = null;
+let isFirebaseConfigured = false;
+let realtimeFirestoreUnsubscribe = null;
+
 let supabaseClient = null;
 let currentAuthenticatedUser = null;
 let isOfflineMode = (typeof localStorage !== 'undefined' && localStorage.getItem('idealog_offline_mode') === 'true');
 let isSupabaseBlockedOrOffline = false;
 
+// Initialize Google Firebase if configuration is present in localStorage
+function initFirebaseClient() {
+    try {
+        const rawConfig = typeof localStorage !== 'undefined' ? localStorage.getItem('idealog_firebase_config') : null;
+        if (!rawConfig) {
+            isFirebaseConfigured = false;
+            return false;
+        }
+        const config = JSON.parse(rawConfig);
+        if (!config || !config.apiKey || !config.projectId) {
+            isFirebaseConfigured = false;
+            return false;
+        }
+        if (typeof firebase !== 'undefined') {
+            if (!firebase.apps || !firebase.apps.length) {
+                firebaseApp = firebase.initializeApp(config);
+            } else {
+                firebaseApp = firebase.app();
+            }
+            firestoreDb = firebase.firestore();
+            firebaseAuth = firebase.auth();
+            isFirebaseConfigured = true;
+            console.log("Firebase initialized successfully with project:", config.projectId);
+            return true;
+        }
+    } catch(e) {
+        console.warn("Failed to initialize Firebase:", e);
+        isFirebaseConfigured = false;
+    }
+    return false;
+}
+
 // --- USER IDENTIFIERS & DISPLAY NAMES ---
 function getActiveUserObject() {
     // 1. In-memory cached user
     if (currentAuthenticatedUser) return currentAuthenticatedUser;
+
+    // Check Firebase Auth currentUser directly
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+        try {
+            const fbUser = firebase.auth().currentUser;
+            if (fbUser) {
+                currentAuthenticatedUser = {
+                    id: fbUser.uid,
+                    uid: fbUser.uid,
+                    email: fbUser.email,
+                    displayName: fbUser.displayName || (fbUser.email ? fbUser.email.split('@')[0] : 'User'),
+                    user_metadata: {
+                        full_name: fbUser.displayName,
+                        name: fbUser.displayName
+                    }
+                };
+                return currentAuthenticatedUser;
+            }
+        } catch(e) {}
+    }
 
     // In offline mode, supply the active local admin profile
     if (isOfflineMode) {
@@ -12496,14 +12590,50 @@ async function loadStartupData() {
         } catch(e) {}
     }
 
-    // Check if offline mode is already active
+    // 1. Try initializing Google Firebase first (Primary & Recommended)
+    const hasFirebase = initFirebaseClient();
+    if (hasFirebase && !isOfflineMode) {
+        firebaseAuth.onAuthStateChanged(async (user) => {
+            if (isOfflineMode) return;
+            console.log("Firebase onAuthStateChanged:", user ? user.email : "none");
+            if (user) {
+                currentAuthenticatedUser = {
+                    id: user.uid,
+                    uid: user.uid,
+                    email: user.email,
+                    displayName: user.displayName || user.email.split('@')[0],
+                    user_metadata: { full_name: user.displayName, name: user.displayName }
+                };
+                currentUserRole = (user.email && user.email.toLowerCase() === 'ritesh@morphle.in') ? 'admin' : 'viewer';
+                updateGoogleAuthUIState(currentAuthenticatedUser);
+                await toggleAdminLinkContainer();
+                
+                const myKey = getActiveUserKey();
+                if (!isTemporaryLayoutPreview) {
+                    if (userColumnStructures && userColumnStructures[myKey]) {
+                        normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims);
+                    }
+                }
+                if (typeof renderSheet === 'function') renderSheet();
+                updateSupabaseStatusBadge('online', '● Firebase Online', '#34d399');
+                setupFirestoreRealtimeSync();
+            } else {
+                currentAuthenticatedUser = null;
+                updateGoogleAuthUIState(null);
+                updateSupabaseStatusBadge('offline', '● Firebase (Sign In)', '#94a3b8');
+            }
+        });
+        return;
+    }
+
+    // Check if offline mode is active or requested
     if (isOfflineMode) {
         console.log("Starting in Offline Mode (persisted preference).");
         enterOfflineMode(true);
         return;
     }
 
-    // 2. Initialize Supabase if configuration keys are present
+    // 2. Fallback to Supabase if configuration keys are present
     if (sbUrl && sbKey) {
         // Fast reachability check to prevent hanging or dead-redirect crashes
         const isReachable = await checkSupabaseReachability(sbUrl, 2000);
@@ -12697,7 +12827,23 @@ const save = (isUndoRedoAction = false) => {
     localStorage.setItem('idealog', JSON.stringify(data));
     rebuildPerformanceCaches();
     
-    if (supabaseClient && isAutoSyncEnabled && !isOfflineMode && !isSupabaseBlockedOrOffline) {
+    if (isFirebaseConfigured && firestoreDb && isAutoSyncEnabled && !isOfflineMode) {
+        updateSupabaseStatusBadge('syncing', '● Firebase Syncing...', '#f59e0b');
+        clearTimeout(syncTimeout);
+        syncTimeout = setTimeout(async () => {
+            try {
+                const success = await pushStateToFirebase();
+                if (success) {
+                    updateSupabaseStatusBadge('online', '● Firebase Synced', '#10b981');
+                }
+            } catch (err) {
+                console.error("Delayed Firebase push failed:", err);
+                updateSupabaseStatusBadge('offline', '● Firebase Sync Retry', '#ef4444');
+            } finally {
+                syncTimeout = null;
+            }
+        }, 1200);
+    } else if (supabaseClient && isAutoSyncEnabled && !isOfflineMode && !isSupabaseBlockedOrOffline) {
         updateSupabaseStatusBadge('syncing', '● Sync Pending (2s)...', '#f59e0b');
         clearTimeout(syncTimeout);
         syncTimeout = setTimeout(async () => {
@@ -12712,7 +12858,7 @@ const save = (isUndoRedoAction = false) => {
             } finally {
                 syncTimeout = null;
             }
-        }, 2000); // Wait 2 seconds before executing sync
+        }, 2000);
     }
 };
 
@@ -18592,7 +18738,225 @@ function importBackupData(event) {
     input.value = ''; // Reset file input
 }
 
-// --- SUPABASE CLOUD SYNC DIRECT CONTROLS ---
+// --- FIREBASE SYNC & REALTIME LISTENERS ---
+function parseFirebaseConfigInput(text) {
+    if (!text || !text.trim()) return null;
+    let raw = text.trim();
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) raw = match[0];
+    try {
+        return JSON.parse(raw);
+    } catch(e) {}
+    try {
+        const fn = new Function('return ' + raw + ';');
+        const obj = fn();
+        if (obj && typeof obj === 'object') return obj;
+    } catch(e) {}
+    return null;
+}
+
+function saveFirebaseConfig() {
+    const textarea = document.getElementById('cfg-firebase-config');
+    if (!textarea) return;
+    const rawVal = textarea.value;
+    const parsed = parseFirebaseConfigInput(rawVal);
+    if (!parsed || !parsed.apiKey || !parsed.projectId) {
+        alert("Invalid Firebase configuration format.\n\nPlease copy the 'const firebaseConfig = { ... }' object from your Firebase Console and paste it here.");
+        return;
+    }
+    localStorage.setItem('idealog_firebase_config', JSON.stringify(parsed));
+    localStorage.removeItem('idealog_offline_mode');
+    showUndoToast("Firebase configuration saved! Connecting...", true);
+    setTimeout(() => {
+        location.reload();
+    }, 600);
+}
+
+function removeFirebaseConfig() {
+    if (confirm("Disconnect and remove your Firebase configuration?")) {
+        localStorage.removeItem('idealog_firebase_config');
+        showUndoToast("Firebase disconnected. Reloading...", true);
+        setTimeout(() => {
+            location.reload();
+        }, 600);
+    }
+}
+
+function setupFirestoreRealtimeSync() {
+    if (!firestoreDb || !isAutoSyncEnabled || isOfflineMode) return;
+    if (realtimeFirestoreUnsubscribe) {
+        realtimeFirestoreUnsubscribe();
+        realtimeFirestoreUnsubscribe = null;
+    }
+
+    const docRef = firestoreDb.collection('idealog_sync').doc('db_state');
+    realtimeFirestoreUnsubscribe = docRef.onSnapshot(async (docSnapshot) => {
+        if (!docSnapshot.exists) {
+            console.log("Firestore doc 'db_state' does not exist yet. Seeding with current local state...");
+            await pushStateToFirebase();
+            return;
+        }
+        const remoteData = docSnapshot.data();
+        if (!remoteData || !remoteData.idealog) return;
+
+        const remoteTime = remoteData.updatedAt ? new Date(remoteData.updatedAt).getTime() : 0;
+        const localDb = localStorage.getItem('idealog');
+        const localTime = data && data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+
+        if (remoteTime > localTime || !localDb || !data.children || data.children.length === 0) {
+            console.log("Applying newer remote state from Firebase Firestore...");
+            data = remoteData.idealog;
+            localStorage.setItem('idealog', JSON.stringify(data));
+            if (remoteData.sheetColumns) {
+                sheetColumns = remoteData.sheetColumns;
+                localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+            }
+            if (remoteData.objectLists) {
+                objectLists = remoteData.objectLists;
+                sanitizeObjectLists();
+                localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+            }
+            if (remoteData.userColumnStructures && typeof remoteData.userColumnStructures === 'object') {
+                userColumnStructures = Object.assign({}, userColumnStructures, remoteData.userColumnStructures);
+                localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures));
+            }
+            migrateTreeAndCleanPlaceholders();
+            if (!isTemporaryLayoutPreview) {
+                const myKey = getActiveUserKey();
+                if (userColumnStructures && userColumnStructures[myKey]) {
+                    normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims);
+                } else if (remoteData.pivotHierarchy || remoteData.enabledPivotDims) {
+                    normalizeColumnStructure(remoteData.pivotHierarchy, remoteData.enabledPivotDims);
+                }
+            }
+            rebuildPerformanceCaches();
+            initPivotStructureSnapshot(true);
+            redraw();
+            updateSupabaseStatusBadge('online', '● Firebase Synced', '#10b981');
+        }
+    }, (err) => {
+        console.error("Firestore onSnapshot sync error:", err);
+        updateSupabaseStatusBadge('offline', '● Firebase Sync Error', '#ef4444');
+    });
+}
+
+async function pushStateToFirebase() {
+    if (!firestoreDb || isOfflineMode) return false;
+    try {
+        const dbPayload = {
+            idealog: JSON.parse(localStorage.getItem('idealog')),
+            sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_cols')),
+            objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
+            collapsed: Array.from(collapsed),
+            pivotHierarchy: JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null') || pivotHierarchy,
+            enabledPivotDims: JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || enabledPivotDims,
+            userColumnStructures: userColumnStructures || {},
+            updatedAt: new Date().toISOString()
+        };
+        await firestoreDb.collection('idealog_sync').doc('db_state').set(dbPayload);
+        console.log("State pushed to Firebase Firestore successfully.");
+        return true;
+    } catch(e) {
+        console.error("Error pushing state to Firebase:", e);
+        return false;
+    }
+}
+
+async function executeForcePushToActiveCloud() {
+    if (isOfflineMode) {
+        alert("Cannot Push: Currently in Offline Mode.");
+        return;
+    }
+    if (isFirebaseConfigured && firestoreDb) {
+        if (confirm("Force upload local storage data to Google Firebase Firestore?")) {
+            const ok = await pushStateToFirebase();
+            if (ok) alert("Data successfully pushed to Google Firebase!");
+            else alert("Push failed. Please check your Firebase permissions.");
+        }
+        return;
+    }
+    if (supabaseClient && !isSupabaseBlockedOrOffline) {
+        if (confirm("Force upload local storage data to Supabase cloud?")) {
+            try {
+                await pushStateToSupabase();
+                alert("State forced up to Supabase successfully!");
+            } catch(e) {
+                alert("Error: " + e.message);
+            }
+        }
+        return;
+    }
+    alert("Cannot Push: No active cloud provider is connected.");
+}
+
+async function executeForcePullFromActiveCloud() {
+    if (isOfflineMode) {
+        alert("Cannot Pull: Currently in Offline Mode.");
+        return;
+    }
+    if (isFirebaseConfigured && firestoreDb) {
+        if (confirm("Force download data from Google Firebase Firestore? This will overwrite local browser state.")) {
+            try {
+                const doc = await firestoreDb.collection('idealog_sync').doc('db_state').get();
+                if (doc.exists && doc.data() && doc.data().idealog) {
+                    const remoteData = doc.data();
+                    data = remoteData.idealog;
+                    localStorage.setItem('idealog', JSON.stringify(data));
+                    if (remoteData.sheetColumns) {
+                        sheetColumns = remoteData.sheetColumns;
+                        localStorage.setItem('idealog_sheet_cols', JSON.stringify(sheetColumns));
+                    }
+                    if (remoteData.objectLists) {
+                        objectLists = remoteData.objectLists;
+                        sanitizeObjectLists();
+                        localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
+                    }
+                    if (remoteData.userColumnStructures && typeof remoteData.userColumnStructures === 'object') {
+                        userColumnStructures = remoteData.userColumnStructures;
+                        localStorage.setItem('idealog_user_column_structures', JSON.stringify(userColumnStructures));
+                    }
+                    if (!isTemporaryLayoutPreview) {
+                        const myKey = getActiveUserKey();
+                        if (userColumnStructures && userColumnStructures[myKey]) {
+                            normalizeColumnStructure(userColumnStructures[myKey].pivotHierarchy, userColumnStructures[myKey].enabledPivotDims);
+                        } else if (remoteData.pivotHierarchy || remoteData.enabledPivotDims) {
+                            normalizeColumnStructure(remoteData.pivotHierarchy, remoteData.enabledPivotDims);
+                        }
+                    }
+                    redraw();
+                    alert("State forced down from Google Firebase Firestore successfully!");
+                } else {
+                    alert("No remote state found in Firebase Firestore.");
+                }
+            } catch(e) {
+                alert("Error pulling from Firebase: " + e.message);
+            }
+        }
+        return;
+    }
+    if (supabaseClient && !isSupabaseBlockedOrOffline) {
+        // Fallback to Supabase pull
+        if (confirm("Force download data from Supabase cloud?")) {
+            try {
+                const { data: dbRowsArray, error } = await supabaseClient.from('idealog_sync').select('data').eq('id', 'db_state');
+                const dbRows = dbRowsArray && dbRowsArray.length > 0 ? dbRowsArray[0] : null;
+                if (error) throw error;
+                if (dbRows && dbRows.data && dbRows.data.idealog) {
+                    data = dbRows.data.idealog;
+                    localStorage.setItem('idealog', JSON.stringify(data));
+                    redraw();
+                    alert("State forced down from Supabase successfully!");
+                }
+            } catch(e) {
+                alert("Error: " + e.message);
+            }
+        }
+        return;
+    }
+    alert("Cannot Pull: No active cloud provider is connected.");
+}
+
+// --- CLOUD SYNC DIRECT CONTROLS ---
 function openSupabaseSettingsModal() {
     const modal = document.getElementById('supabase-config-modal');
     if (!modal) return;
@@ -18603,6 +18967,27 @@ function openSupabaseSettingsModal() {
     if (urlInput) urlInput.value = sbUrl || '';
     if (keyInput) keyInput.value = sbKey || '';
     
+    const fbTextarea = document.getElementById('cfg-firebase-config');
+    const fbRemoveBtn = document.getElementById('btn-remove-firebase');
+    const fbStatusLabel = document.getElementById('cfg-firebase-status-label');
+    const storedFb = localStorage.getItem('idealog_firebase_config');
+    
+    if (storedFb) {
+        if (fbTextarea) fbTextarea.value = storedFb;
+        if (fbRemoveBtn) fbRemoveBtn.style.display = 'inline-block';
+        if (fbStatusLabel) {
+            fbStatusLabel.textContent = '✓ Configured & Active';
+            fbStatusLabel.style.color = '#34d399';
+        }
+    } else {
+        if (fbTextarea) fbTextarea.value = '';
+        if (fbRemoveBtn) fbRemoveBtn.style.display = 'none';
+        if (fbStatusLabel) {
+            fbStatusLabel.textContent = 'Not configured';
+            fbStatusLabel.style.color = 'var(--text-muted)';
+        }
+    }
+
     const testRes = document.getElementById('cfg-test-result');
     if (testRes) testRes.textContent = '';
     
@@ -18621,19 +19006,25 @@ function updateSupabaseModalUI() {
     if (!modeStatus || !modeToggleBtn) return;
     
     if (isOfflineMode) {
-        modeStatus.innerHTML = `<span style="color: #f59e0b;">● Offline Mode Active</span> ${isSupabaseBlockedOrOffline ? '<span style="font-size:10px; color:#f87171;">(Cloud Quota Blocked)</span>' : ''}`;
+        modeStatus.innerHTML = `<span style="color: #f59e0b;">● Offline Mode Active</span> ${!isFirebaseConfigured && isSupabaseBlockedOrOffline ? '<span style="font-size:10px; color:#f87171;">(Supabase Quota Blocked)</span>' : ''}`;
         modeToggleBtn.textContent = 'Switch to Cloud Mode';
         modeToggleBtn.style.color = '#38bdf8';
         modeToggleBtn.style.borderColor = 'rgba(56, 189, 248, 0.3)';
         modeToggleBtn.style.background = 'rgba(56, 189, 248, 0.08)';
+    } else if (isFirebaseConfigured) {
+        modeStatus.innerHTML = `<span style="color: #34d399;">● Google Firebase Connected (Never Pauses)</span>`;
+        modeToggleBtn.textContent = 'Work in Offline Mode';
+        modeToggleBtn.style.color = '#94a3b8';
+        modeToggleBtn.style.borderColor = 'var(--border)';
+        modeToggleBtn.style.background = 'transparent';
     } else if (isSupabaseBlockedOrOffline) {
-        modeStatus.innerHTML = `<span style="color: #f87171;">● Cloud Unreachable / Quota Blocked</span>`;
+        modeStatus.innerHTML = `<span style="color: #f87171;">● Supabase Unreachable / Quota Blocked</span>`;
         modeToggleBtn.textContent = 'Switch to Offline Mode';
         modeToggleBtn.style.color = '#f59e0b';
         modeToggleBtn.style.borderColor = 'rgba(245, 158, 11, 0.3)';
         modeToggleBtn.style.background = 'rgba(245, 158, 11, 0.08)';
     } else {
-        modeStatus.innerHTML = `<span style="color: #34d399;">● Cloud Mode Connected</span>`;
+        modeStatus.innerHTML = `<span style="color: #34d399;">● Cloud Connected</span>`;
         modeToggleBtn.textContent = 'Work in Offline Mode';
         modeToggleBtn.style.color = '#94a3b8';
         modeToggleBtn.style.borderColor = 'var(--border)';
@@ -18787,26 +19178,45 @@ function updateSupabaseStatusBadge(status, text, colorOverride = null) {
 // Google OAuth Helpers
 async function signInWithGoogle() {
     if (isOfflineMode) {
-        if (!confirm("You are currently in Offline Mode. Do you want to switch to Cloud Mode and sign in with Google?")) {
-            return;
-        }
         isOfflineMode = false;
         localStorage.removeItem('idealog_offline_mode');
     }
 
-    if (isSupabaseBlockedOrOffline) {
-        alert("The Supabase cloud service is unreachable (the project may be paused or its free tier quota exhausted).\n\nContinuing in Offline Mode so your local work is not interrupted.");
+    // 1. Prioritize Google Firebase if configured
+    if (isFirebaseConfigured && firebaseAuth) {
+        try {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
+            const result = await firebaseAuth.signInWithPopup(provider);
+            if (result && result.user) {
+                showUndoToast("Signed in as " + result.user.email, true);
+            }
+            return;
+        } catch(e) {
+            console.warn("Firebase popup sign-in failed, trying redirect:", e);
+            if (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request') {
+                try {
+                    const provider = new firebase.auth.GoogleAuthProvider();
+                    await firebaseAuth.signInWithRedirect(provider);
+                    return;
+                } catch(re) {
+                    alert("Google Sign-In error: " + re.message);
+                }
+            } else {
+                alert("Google Sign-In error: " + e.message);
+            }
+            return;
+        }
+    }
+
+    // 2. If neither Firebase nor a working Supabase instance is available
+    if (!isFirebaseConfigured && (!supabaseClient || isSupabaseBlockedOrOffline)) {
+        alert("No active cloud provider configured (Supabase quota is exhausted).\n\nOpening in Offline Mode so you can work locally. You can configure Google Firebase in Cloud Settings anytime.");
         enterOfflineMode();
         return;
     }
 
-    if (!supabaseClient) {
-        alert("Supabase client is not initialized. Please verify your Project URL and Anon Key in Cloud Settings.");
-        openSupabaseSettingsModal();
-        return;
-    }
-
-    // Fast pre-flight check before triggering redirect so browser tab doesn't crash on dead domain
+    // 3. Fallback to Supabase if configured and reachable
     const reachable = await checkSupabaseReachability(sbUrl, 1500);
     if (!reachable) {
         isSupabaseBlockedOrOffline = true;
@@ -18830,12 +19240,20 @@ async function signInWithGoogle() {
 }
 
 async function signOutGoogle() {
-    if (!supabaseClient) return;
-    try {
-        await supabaseClient.auth.signOut();
-        location.reload();
-    } catch (e) {
-        alert("Error signing out: " + e.message);
+    if (firebaseAuth) {
+        try {
+            await firebaseAuth.signOut();
+            location.reload();
+            return;
+        } catch(e) {}
+    }
+    if (supabaseClient) {
+        try {
+            await supabaseClient.auth.signOut();
+            location.reload();
+        } catch (e) {
+            alert("Error signing out: " + e.message);
+        }
     }
 }
 
