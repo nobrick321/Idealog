@@ -1,0 +1,65 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: idealog_sync
+// Document: db_state
+// Fields:
+//   - idealog: map (the hierarchical project mind map tree)
+//   - sheetColumns: list of maps
+//   - objectLists: map
+//   - userColumnStructures: map
+//   - updatedAt: string or timestamp
+//
+// Collection: user_profiles
+// Document: {userId}
+// Fields:
+//   - email: string
+//   - displayName: string
+//   - role: string ('admin', 'editor', 'viewer')
+//
+// Collection: task_locks
+// Document: {lockId}
+// Fields:
+//   - taskId: string
+//   - userId: string
+//   - userName: string
+//   - timestamp: string or timestamp
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. Idealog Sync Document (Main synchronized workspace state)
+    match /idealog_sync/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // 2. User Profiles
+    match /user_profiles/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    // 3. Task Realtime Locks
+    match /task_locks/{lockId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

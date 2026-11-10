@@ -1,0 +1,19 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Idealog",
+        "supportEmail": "ritesh@morphle.in",
+        "authorizedRedirectUris": [
+          "https://idealog-6301e.firebaseapp.com/__/auth/handler",
+          "https://nobrick321.github.io/Idealog/",
+          "http://localhost"
+        ]
+      }
+    }
+  }
+}

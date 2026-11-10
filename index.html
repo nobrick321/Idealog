@@ -11892,6 +11892,15 @@ function getContextRankedOptions(type, n) {
 }
 
 // --- CLOUD BACKEND CONFIGURATION STATE (FIREBASE & SUPABASE) ---
+const DEFAULT_FIREBASE_CONFIG = {
+    projectId: "idealog-6301e",
+    appId: "1:756678872709:web:2ec676bdef9883f1b163ec",
+    storageBucket: "idealog-6301e.firebasestorage.app",
+    apiKey: "AIzaSyCGYMftL8R4gf9HoZ4YJrrN20Z_iPa-s0M",
+    authDomain: "idealog-6301e.firebaseapp.com",
+    messagingSenderId: "756678872709"
+};
+
 let firebaseApp = null;
 let firestoreDb = null;
 let firebaseAuth = null;
@@ -11903,20 +11912,18 @@ let currentAuthenticatedUser = null;
 let isOfflineMode = (typeof localStorage !== 'undefined' && localStorage.getItem('idealog_offline_mode') === 'true');
 let isSupabaseBlockedOrOffline = false;
 
-// Initialize Google Firebase if configuration is present in localStorage
+// Initialize Google Firebase if configuration is present in localStorage or use default project
 function initFirebaseClient() {
     try {
+        let config = null;
         const rawConfig = typeof localStorage !== 'undefined' ? localStorage.getItem('idealog_firebase_config') : null;
-        if (!rawConfig) {
-            isFirebaseConfigured = false;
-            return false;
+        if (rawConfig) {
+            try { config = JSON.parse(rawConfig); } catch(e) {}
         }
-        const config = JSON.parse(rawConfig);
-        if (!config || !config.apiKey || !config.projectId) {
-            isFirebaseConfigured = false;
-            return false;
+        if (!config || !config.apiKey) {
+            config = DEFAULT_FIREBASE_CONFIG;
         }
-        if (typeof firebase !== 'undefined') {
+        if (config && config.apiKey && typeof firebase !== 'undefined') {
             if (!firebase.apps || !firebase.apps.length) {
                 firebaseApp = firebase.initializeApp(config);
             } else {
@@ -18970,22 +18977,12 @@ function openSupabaseSettingsModal() {
     const fbTextarea = document.getElementById('cfg-firebase-config');
     const fbRemoveBtn = document.getElementById('btn-remove-firebase');
     const fbStatusLabel = document.getElementById('cfg-firebase-status-label');
-    const storedFb = localStorage.getItem('idealog_firebase_config');
-    
-    if (storedFb) {
-        if (fbTextarea) fbTextarea.value = storedFb;
-        if (fbRemoveBtn) fbRemoveBtn.style.display = 'inline-block';
-        if (fbStatusLabel) {
-            fbStatusLabel.textContent = '✓ Configured & Active';
-            fbStatusLabel.style.color = '#34d399';
-        }
-    } else {
-        if (fbTextarea) fbTextarea.value = '';
-        if (fbRemoveBtn) fbRemoveBtn.style.display = 'none';
-        if (fbStatusLabel) {
-            fbStatusLabel.textContent = 'Not configured';
-            fbStatusLabel.style.color = 'var(--text-muted)';
-        }
+    const storedFb = localStorage.getItem('idealog_firebase_config') || JSON.stringify(DEFAULT_FIREBASE_CONFIG, null, 2);
+    if (fbTextarea) fbTextarea.value = storedFb;
+    if (fbRemoveBtn) fbRemoveBtn.style.display = localStorage.getItem('idealog_firebase_config') ? 'inline-block' : 'none';
+    if (fbStatusLabel) {
+        fbStatusLabel.textContent = '✓ Connected to idealog-6301e';
+        fbStatusLabel.style.color = '#34d399';
     }
 
     const testRes = document.getElementById('cfg-test-result');
