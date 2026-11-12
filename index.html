@@ -12202,8 +12202,24 @@ function saveColumnStructure() {
         localStorage.setItem('idealog', JSON.stringify(data));
     }
     
-    if (typeof supabaseClient !== 'undefined' && supabaseClient && isAutoSyncEnabled && !isOfflineMode && !isSupabaseBlockedOrOffline) {
-        updateSupabaseStatusBadge('syncing', '● Sync Pending (1s)...', '#f59e0b');
+    if (isFirebaseConfigured && firestoreDb && isAutoSyncEnabled && !isOfflineMode) {
+        updateSupabaseStatusBadge('syncing', '● Firebase Sync Pending (10s)...', '#f59e0b');
+        clearTimeout(syncTimeout);
+        syncTimeout = setTimeout(async () => {
+            try {
+                const success = await pushStateToFirebase();
+                if (success) {
+                    updateSupabaseStatusBadge('online', '● Firebase Synced', '#10b981');
+                }
+            } catch (err) {
+                console.error("Delayed Firebase push failed on column structure save:", err);
+                updateSupabaseStatusBadge('offline', '● Firebase Sync Retry', '#ef4444');
+            } finally {
+                syncTimeout = null;
+            }
+        }, 10000);
+    } else if (typeof supabaseClient !== 'undefined' && supabaseClient && isAutoSyncEnabled && !isOfflineMode && !isSupabaseBlockedOrOffline) {
+        updateSupabaseStatusBadge('syncing', '● Sync Pending (10s)...', '#f59e0b');
         clearTimeout(syncTimeout);
         syncTimeout = setTimeout(async () => {
             try {
@@ -12217,7 +12233,7 @@ function saveColumnStructure() {
             } finally {
                 syncTimeout = null;
             }
-        }, 1000);
+        }, 10000);
     }
 }
 
@@ -12836,7 +12852,7 @@ const save = (isUndoRedoAction = false) => {
     rebuildPerformanceCaches();
     
     if (isFirebaseConfigured && firestoreDb && isAutoSyncEnabled && !isOfflineMode) {
-        updateSupabaseStatusBadge('syncing', '● Firebase Syncing...', '#f59e0b');
+        updateSupabaseStatusBadge('syncing', '● Firebase Sync Pending (10s)...', '#f59e0b');
         clearTimeout(syncTimeout);
         syncTimeout = setTimeout(async () => {
             try {
@@ -12850,9 +12866,9 @@ const save = (isUndoRedoAction = false) => {
             } finally {
                 syncTimeout = null;
             }
-        }, 1200);
+        }, 10000);
     } else if (supabaseClient && isAutoSyncEnabled && !isOfflineMode && !isSupabaseBlockedOrOffline) {
-        updateSupabaseStatusBadge('syncing', '● Sync Pending (2s)...', '#f59e0b');
+        updateSupabaseStatusBadge('syncing', '● Sync Pending (10s)...', '#f59e0b');
         clearTimeout(syncTimeout);
         syncTimeout = setTimeout(async () => {
             try {
@@ -12866,7 +12882,7 @@ const save = (isUndoRedoAction = false) => {
             } finally {
                 syncTimeout = null;
             }
-        }, 2000);
+        }, 10000);
     }
 };
 
@@ -13787,11 +13803,38 @@ let objectLists = {
 function saveObjectLists() {
     sanitizeObjectLists();
     localStorage.setItem('idealog_object_lists', JSON.stringify(objectLists));
-    if (supabaseClient) {
-        pushStateToSupabase().catch(err => {
-            console.error("Supabase push failed on Object Lists save:", err);
-            updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
-        });
+    if (isFirebaseConfigured && firestoreDb && isAutoSyncEnabled && !isOfflineMode) {
+        updateSupabaseStatusBadge('syncing', '● Firebase Sync Pending (10s)...', '#f59e0b');
+        clearTimeout(syncTimeout);
+        syncTimeout = setTimeout(async () => {
+            try {
+                const success = await pushStateToFirebase();
+                if (success) {
+                    updateSupabaseStatusBadge('online', '● Firebase Synced', '#10b981');
+                }
+            } catch (err) {
+                console.error("Delayed Firebase push failed on Object Lists save:", err);
+                updateSupabaseStatusBadge('offline', '● Firebase Sync Retry', '#ef4444');
+            } finally {
+                syncTimeout = null;
+            }
+        }, 10000);
+    } else if (supabaseClient && isAutoSyncEnabled && !isOfflineMode && !isSupabaseBlockedOrOffline) {
+        updateSupabaseStatusBadge('syncing', '● Sync Pending (10s)...', '#f59e0b');
+        clearTimeout(syncTimeout);
+        syncTimeout = setTimeout(async () => {
+            try {
+                const success = await pushStateToSupabase();
+                if (success) {
+                    updateSupabaseStatusBadge('online', '● Cloud Online (Synced)', '#10b981');
+                }
+            } catch (err) {
+                console.error("Delayed Supabase push failed on Object Lists save:", err);
+                updateSupabaseStatusBadge('offline', '● Cloud Offline (Retry)', '#ef4444');
+            } finally {
+                syncTimeout = null;
+            }
+        }, 10000);
     }
 }
 
