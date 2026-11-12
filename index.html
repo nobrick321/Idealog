@@ -11906,6 +11906,7 @@ let firestoreDb = null;
 let firebaseAuth = null;
 let isFirebaseConfigured = false;
 let realtimeFirestoreUnsubscribe = null;
+const CLIENT_INSTANCE_ID = 'client_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
 
 let supabaseClient = null;
 let currentAuthenticatedUser = null;
@@ -18798,6 +18799,11 @@ function setupFirestoreRealtimeSync() {
 
     const docRef = firestoreDb.collection('idealog_sync').doc('db_state');
     realtimeFirestoreUnsubscribe = docRef.onSnapshot(async (docSnapshot) => {
+        // Ignore local uncommitted writes or echoes if client is actively pushing
+        if (docSnapshot.metadata && docSnapshot.metadata.hasPendingWrites) {
+            return;
+        }
+
         if (!docSnapshot.exists) {
             console.log("Firestore doc 'db_state' does not exist yet. Seeding with current local state...");
             await pushStateToFirebase();
@@ -18805,6 +18811,12 @@ function setupFirestoreRealtimeSync() {
         }
         const remoteData = docSnapshot.data();
         if (!remoteData || !remoteData.idealog) return;
+
+        // Skip echo if the update originated from this client session
+        if (remoteData.sourceClientId === CLIENT_INSTANCE_ID) {
+            updateSupabaseStatusBadge('online', '● Firebase Synced', '#10b981');
+            return;
+        }
 
         const remoteTime = remoteData.updatedAt ? new Date(remoteData.updatedAt).getTime() : 0;
         const localDb = localStorage.getItem('idealog');
@@ -18837,7 +18849,9 @@ function setupFirestoreRealtimeSync() {
                 }
             }
             rebuildPerformanceCaches();
-            initPivotStructureSnapshot(true);
+            if (!pivotRestructureOnRefresh) {
+                initPivotStructureSnapshot(true);
+            }
             redraw();
             updateSupabaseStatusBadge('online', '● Firebase Synced', '#10b981');
         }
@@ -18858,6 +18872,7 @@ async function pushStateToFirebase() {
             pivotHierarchy: JSON.parse(localStorage.getItem('idealog_pivot_hierarchy') || 'null') || pivotHierarchy,
             enabledPivotDims: JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || enabledPivotDims,
             userColumnStructures: userColumnStructures || {},
+            sourceClientId: CLIENT_INSTANCE_ID,
             updatedAt: new Date().toISOString()
         };
         await firestoreDb.collection('idealog_sync').doc('db_state').set(dbPayload);
