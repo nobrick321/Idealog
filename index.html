@@ -18833,6 +18833,8 @@ function removeFirebaseConfig() {
     }
 }
 
+let isPushingToFirebase = false;
+
 function setupFirestoreRealtimeSync() {
     if (!firestoreDb || !isAutoSyncEnabled || isOfflineMode) return;
     if (realtimeFirestoreUnsubscribe) {
@@ -18844,6 +18846,13 @@ function setupFirestoreRealtimeSync() {
     realtimeFirestoreUnsubscribe = docRef.onSnapshot(async (docSnapshot) => {
         // Ignore local uncommitted writes or echoes if client is actively pushing
         if (docSnapshot.metadata && docSnapshot.metadata.hasPendingWrites) {
+            return;
+        }
+
+        // If a local modification is pending upload in debounce window or push is in-flight,
+        // DO NOT overwrite local state with incoming cloud snapshot
+        if (syncTimeout !== null || isPushingToFirebase) {
+            console.log("Firestore snapshot ignored: local modifications are queued or pushing.");
             return;
         }
 
@@ -18906,9 +18915,11 @@ function setupFirestoreRealtimeSync() {
 
 async function pushStateToFirebase() {
     if (!firestoreDb || isOfflineMode) return false;
+    isPushingToFirebase = true;
     try {
+        const currentData = JSON.parse(localStorage.getItem('idealog')) || data;
         const dbPayload = {
-            idealog: JSON.parse(localStorage.getItem('idealog')),
+            idealog: currentData,
             sheetColumns: JSON.parse(localStorage.getItem('idealog_sheet_cols')),
             objectLists: JSON.parse(localStorage.getItem('idealog_object_lists')),
             collapsed: Array.from(collapsed),
@@ -18916,7 +18927,7 @@ async function pushStateToFirebase() {
             enabledPivotDims: JSON.parse(localStorage.getItem('idealog_enabled_pivot_dims') || 'null') || enabledPivotDims,
             userColumnStructures: userColumnStructures || {},
             sourceClientId: CLIENT_INSTANCE_ID,
-            updatedAt: new Date().toISOString()
+            updatedAt: (currentData && currentData.updatedAt) ? currentData.updatedAt : new Date().toISOString()
         };
         await firestoreDb.collection('idealog_sync').doc('db_state').set(dbPayload);
         console.log("State pushed to Firebase Firestore successfully.");
@@ -18924,6 +18935,8 @@ async function pushStateToFirebase() {
     } catch(e) {
         console.error("Error pushing state to Firebase:", e);
         return false;
+    } finally {
+        isPushingToFirebase = false;
     }
 }
 
