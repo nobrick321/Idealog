@@ -1323,16 +1323,17 @@
                         <input class="tags-input" id="prop-tags-input" type="text" placeholder="tag, press Enter" onkeydown="handleTagInput(event)">
                     </div>
                 </div>
-                <div class="prop-group" style="flex: 1; min-height: 200px; display: flex; flex-direction: column; gap: 8px;">
+                <div class="prop-group" style="display: flex; flex-direction: column; gap: 8px;">
                     <div class="prop-label">Comments Chat</div>
-                    <!-- Comments Container Feed -->
-                    <div id="comments-feed-container" style="flex: 1; min-height: 120px; max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px;"></div>
                     
-                    <!-- Comments Input Form Section -->
+                    <!-- Comments Input Form Section (shown first) -->
                     <div style="display: flex; gap: 6px; align-items: center;">
                         <input class="prop-input" id="comment-add-input" type="text" placeholder="Send a comment…" style="flex: 1;" onkeydown="if(event.key==='Enter') { event.preventDefault(); addNewComment(); }">
                         <button onclick="addNewComment()" style="background: var(--accent); border: none; color: white; border-radius: 8px; padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s ease;">Send</button>
                     </div>
+
+                    <!-- Comments Container Feed (expanded in panel, natural flow as user scrolls down panel) -->
+                    <div id="comments-feed-container" style="display: flex; flex-direction: column; gap: 8px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; padding: 10px;"></div>
                 </div>
             </div>
             <div class="panel-actions">
